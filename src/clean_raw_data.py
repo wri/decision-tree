@@ -8,47 +8,56 @@ import math
 
 ### Cleans the tropical tree cover statistics for polygons ###
 
-def classify_canopy(project, thresh):
-    closed_canopy = (project['ttc'] > thresh).sum()
-    open_canopy = (project['ttc'] <= thresh).sum()
-    return 'open' if open_canopy > closed_canopy else 'closed'
+def classify_canopy(project: pd.DataFrame, thresh: int):
+    """
+    Determines the canopy classification ('open', 'closed', or 'unknown') 
+    for a project.
+    
+    Parameters:
+    - project: DataFrame containing rows for a single project.
+    - thresh: Tree cover threshold for determining open or closed canopy.
+    
+    Returns:
+    - A string: 'open', 'closed', or 'unknown'.
+    """
+    closed_canopy = (project['tree_cover'] > thresh).sum()
+    open_canopy = (project['tree_cover'] <= thresh).sum()
 
-def clean_ttc_csv(csv: str,
-                  canopy_thresh: int):
+    if open_canopy > closed_canopy:
+        return 'open'
+    elif closed_canopy > open_canopy:
+        return 'closed'
+    else:
+        return 'unknown'
+
+def clean_ttc_csv(csv: str, canopy_thresh: int):
     
     '''
-    Performs cleaning steps on ttc statistics.
-    TTC tree cover
-    Canopy column is at the project scale. Some polygons might have closed ttc, 
-    but if the majority of polygons in a project are open canopy, it will be
-    classified as open.
+    Performs cleaning steps on tree cover stats.
+    "Open" or "closed" canopy is defined at the project scale. Some polygons may meet 
+    the closed definition, but if the majority of polygons in a project are open canopy,
+    it will be classified as open. Each project will have a single designation.
     '''
 
-    ttc_raw = pd.read_excel(csv)
-    to_keep = ['Percent Tree Cover 2020', 'Project', 'SiteName', 'poly_name']
-    ttc = ttc_raw[to_keep]
-    ttc.columns = ttc.columns.map(lambda x: re.sub(' ', '_', x.lower().strip()))
-    ttc = ttc.rename(columns={'percent_tree_cover_2020': 'ttc'})
-    print(f"Dropping {len(ttc[ttc['ttc'] == 'TTC_NA'])} null values for TTC \n")
+    ttc_raw = pd.read_csv(csv)
+    ttc = ttc_raw[['tree_cover', 'project_name', 'site_name', 'poly_name']]
+    print(f"Dropping {len(ttc[ttc['tree_cover'].isna()])} rows with null TTC values.\n")
+    ttc[ttc.tree_cover.isna()].to_csv('../data/qaqc/ttc_nulls.csv')
+    ttc = ttc.dropna(subset=['tree_cover'])
 
-    ttc = ttc[ttc['ttc'] != 'TTC_NA']
-    ttc['ttc'] = ttc['ttc'].astype('float')
-    ttc['ttc'] = ttc['ttc'].round()
-    
-    assert ttc['ttc'].min() >= 0.0, print(ttc['ttc'].min())
-    assert ttc['ttc'].max() <= 100.0, print(ttc['ttc'].max())
+    ttc['tree_cover'] = ttc['tree_cover'].round()
+    assert ttc['tree_cover'].min() >= 0.0, f"Invalid min tree_cover: {ttc['tree_cover'].min()}"
+    assert ttc['tree_cover'].max() <= 100.0, f"Invalid max tree_cover: {ttc['tree_cover'].max()}"
 
-    print("Polygon Cover Distribution:")
-    print(f"Total polys <={canopy_thresh}% cover: {len(ttc[ttc.ttc <= canopy_thresh])}")
-    print(f"Total polys >{canopy_thresh}% cover: {len(ttc[ttc.ttc > canopy_thresh])} \n")
+    def apply_canopy_classification(project_df):
+        canopy_classification = classify_canopy(project_df, canopy_thresh)
+        project_df['canopy'] = canopy_classification
+        return project_df
 
-    # .transform() method in pandas is used to apply a function to a group or subset of a df and 
-    # return an aligned result, meaning the output has the same shape as the input.
-    ttc['canopy'] = ttc.groupby('project')['ttc'].transform(lambda x: classify_canopy(ttc[ttc['project'] == x.name], 
-                                                                                      canopy_thresh
-                                                                                      ))
-    print("Project Cover Distribution:")
-    print(ttc.canopy.value_counts())
+    ttc = ttc.groupby('project_name').apply(apply_canopy_classification)
+    ttc = ttc.reset_index(drop=True)
+    assert ttc.groupby('project_name')['canopy'].nunique().max() == 1, \
+        "Each project must have a single canopy designation."
 
     return ttc
 
@@ -71,16 +80,18 @@ def clean_polygon_csv(original_csv, new_csv):
                         how='inner', 
                         on=['Project', 'SiteName', 'poly_name']).drop_duplicates()
 
-    # around 2k rows are duplicates between colums_to_match
-    # these can be dropped since we don't use slope/aspect yet.
+    # Identify all duplicates, including the first occurrence, then
+    # count and drop, keeping the first occurence
     columns_to_match = ['Project', 'SiteName', 'poly_name', 'plantstart', 'Area_ha']
-    dups = ft_poly_new.duplicated(subset=columns_to_match, keep=False)
-    print(f"\n{dups.sum()} remaining duplicates will be dropped.")
-    ft_poly_new = ft_poly_new.drop_duplicates(subset=columns_to_match)
-    ft_poly_new.columns = ft_poly_new.columns.map(lambda x: re.sub(' ', '_', x.lower().strip()))
+    ft_poly_new_cleaned = ft_poly_new.drop_duplicates(subset=columns_to_match)
+    rows_dropped = len(ft_poly_new) - len(ft_poly_new_cleaned)
+    print(f"Dropping {rows_dropped} duplicate polygon rows.\n")
+    ft_poly_new_cleaned.columns = ft_poly_new_cleaned.columns.map(lambda x: re.sub(' ', '_', x.lower().strip()))
     feats = ft_poly_new.rename(columns={'available_baseline_images': 'baseline_img',
-                                              'available_ev_images':'ev_img'})
-    
+                                        'available_ev_images':'ev_img',
+                                        'Project': 'project_name',
+                                        'SiteName': 'site_name'
+                                        })
     # manually clean target sys and intervention columns
     feats['target_sys'] = feats['target_sys'].str.replace(r'\briparian-area-or-wetland\b', 'wetland', regex=True)
     feats['target_sys'] = feats['target_sys'].str.replace(r'\briparian-or-wetland\b', 'wetland', regex=True)
@@ -92,25 +103,28 @@ def clean_polygon_csv(original_csv, new_csv):
         'assisted-natural-regeneration,tree-planting':'tree-planting,assisted-natural-regeneration',
         'assisted-natural-regeneration,direct-seeding':'direct-seeding,assisted-natural-regeneration',
     })
-
     feats['practice'] = feats['practice'].str.replace(r'\bassisted-natural-regeneration\b', 'ANR', regex=True)
 
+    # drop target systems that are null
+    null_sys = feats[feats['target_sys'].isna()]
+    print(f"Dropping {len(null_sys)} rows with NaN target system.\n")
+    feats = feats.dropna(subset=['target_sys'])
     lcs = list(set(feats.target_sys))
-    print(f"\n{len(lcs)} target systems:")
-    print(lcs)
-    
+    print(f"{len(lcs)} target systems: {lcs}\n")
     return feats
 
 def clean_combine_inputs(ttc_csv, 
-                         canopy_thresh,
                          original_feats_csv, 
                          new_feats_csv,
+                         canopy_thresh,
                          outpath='../data/decision_tree_data_clean.csv'):
+    '''
+    cleans ttc and polygon csvs
+    '''
 
     ttc = clean_ttc_csv(ttc_csv, canopy_thresh)
     feats = clean_polygon_csv(original_feats_csv, new_feats_csv)
-
-    comb = pd.merge(feats, ttc, on=['project', 'sitename', 'poly_name'])
+    comb = pd.merge(feats, ttc, on=['project_name', 'site_name', 'poly_name']) ## empty dataframe
     comb.to_csv(outpath)
-
-    return comb
+    print(f"Cleaned input data saved at {outpath}")
+    return ttc, feats

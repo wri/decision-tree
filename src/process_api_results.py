@@ -30,53 +30,97 @@ def clean_datetime_column(df, column_name):
     missing_count = df[column_name].isna().sum()
     print(f"Number of rows missing a '{column_name}' date: {missing_count}/{len(df)}")
     return df
-    
+
+def missing_planting_dates(df):
+    '''
+    Identifies where there are missing planting dates for 
+    a polygon, hindering maxar metadata retrieval
+    '''
+    # count how rows are missing start and end dates
+    missing_both = df['plantstart'].isna() & df['plantend'].isna()
+    print(f"⚠️ Total rows missing start and end plant date: {missing_both.sum()}")
+
+    # Count total polygons per project before filtering
+    project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
+    missing_start = df[df['plantstart'].isna()]
+    num_projects_dropped = missing_start['project_id'].nunique()
+    num_polygons_dropped = missing_start['poly_id'].nunique()
+    print(f"⚠️ Total projects missing 'plantstart': {num_projects_dropped}")
+    print(f"⚠️ Total polygons missing 'plantstart': {num_polygons_dropped}")
+     
+    # Identify projects where all or partial polys are removed
+    dropped_polys = missing_start.groupby('project_id')['poly_id'].nunique()
+    project_poly_counts = project_poly_counts.reindex(dropped_polys.index, fill_value=0)
+
+    full_proj_drops = dropped_polys[
+        dropped_polys == project_poly_counts
+    ].index.tolist()
+
+    partial_proj_drops = dropped_polys[
+        dropped_polys < project_poly_counts
+    ].index.tolist()
+
+    print(f"Projects fully removed: {len(full_proj_drops)}")
+    print(f"Projects partially affected: {len(partial_proj_drops)}")
+    final_df = df.dropna(subset=['plantstart'], how='any')
+    return final_df
 
 def process_tm_api_results(results, outfile1, outfile2):
     """
     Processes API results into a clean DataFrame for analysis.
+
+    Extracting tree cover indicators:
+    **tree_cover_years syntax is a Python dictionary unpacking 
+    feature that allows us to dynamically add multiple columns 
+    to the DataFrame without explicitly defining them.
     """
-    project_df = pd.DataFrame(results)
+    extracted_data = []
 
-    tree_cover_data = []
-
-    # Iterate over each project to extract tree cover statistics
+    # Iterate over each project to extract project details & tree cover statistics
     for project in results:
+        # Extract general project details
         project_id = project.get('project_id')
         poly_id = project.get('poly_id')
         site_id = project.get('siteId')
+        geom = project.get('geometry')
+        plant_start = project.get('plantStart')
+        plant_end = project.get('plantEnd')
+        project_phase = project.get('projectPhase', '')  # Ensure a default empty string
+
+        # Extract tree cover indicators
+        tree_cover_years = {}  # Store year-specific tree cover percentages
         indicators = project.get('indicators', [])
 
-        # Iterate through indicators to find tree cover
         for indicator in indicators:
-            if indicator.get('indicatorSlug') == 'treeCover':
+            if (
+                indicator.get('indicatorSlug') == 'treeCover' and
+                project_phase != 'test'  # Exclude 'test' project phases
+            ):
                 year = indicator.get('yearOfAnalysis')
                 percent_cover = indicator.get('percentCover')
+                tree_cover_years[f'ttc_{year}'] = percent_cover
 
-                tree_cover_data.append({
-                    'project_id': project_id,
-                    'poly_id': poly_id,
-                    'siteId': site_id,
-                    f'ttc_{year}': percent_cover 
-                })
+        # Store extracted project details in a structured format
+        extracted_data.append({
+            'project_id': project_id,
+            'poly_id': poly_id,
+            'site_id': site_id,
+            'geometry': geom,
+            'plantstart': plant_start,
+            'plantend': plant_end,
+            **tree_cover_years  
+        })
 
-    # Merge tree cover -- if there is no tree cover val it will be NaN
-    tree_cover_df = pd.DataFrame(tree_cover_data)
-    mrgd = project_df.merge(tree_cover_df, on=['project_id', 'poly_id', 'siteId'], how='left') 
+    final_df = pd.DataFrame(extracted_data)
+    final_df.columns = final_df.columns.str.lower()
 
-    # clean and drop
-    mrgd.columns = mrgd.columns.str.lower()
-    drop_columns = ['status', 'establishmenttreespecies', 'reportingperiods', 'indicators']
-    mrgd = mrgd.drop(drop_columns, axis=1)
+    # Clean up start and end dates
+    final_df = clean_datetime_column(final_df, 'plantstart')
+    final_df = clean_datetime_column(final_df, 'plantend')
 
-    # clean up start and end dates
-    final_df = clean_datetime_column(mrgd, 'plantstart')
-    final_df = clean_datetime_column(mrgd, 'plantend')
-    missing_dates_count = final_df['plantstart'].isna() & final_df['plantend'].isna()
-    total_missing = missing_dates_count.sum()
-    print(f"Total rows missing start and end plant date: {total_missing}")
-    final_df = final_df.dropna(subset=['plantstart'], how='any')
-    
+    # Drop polygons with missing planting dates
+    final_df = missing_planting_dates(final_df)
+
     final_df.to_csv(outfile1, index=False)
     final_df.to_csv(outfile2, index=False)
     

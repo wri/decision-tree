@@ -85,6 +85,9 @@ def process_tm_api_results(results, outfile1, outfile2):
         geom = project.get('geometry')
         plant_start = project.get('plantStart')
         plant_end = project.get('plantEnd')
+        practice = project.get('practice')
+        targetsys = project.get('targetSys')
+        dist = project.get('distr')
         project_phase = project.get('projectPhase', '')  # Ensure a default empty string
 
         # Extract tree cover indicators
@@ -108,6 +111,9 @@ def process_tm_api_results(results, outfile1, outfile2):
             'geometry': geom,
             'plantstart': plant_start,
             'plantend': plant_end,
+            'practice': practice,
+            'target_sys': targetsys,
+            'dist': dist,
             **tree_cover_years  
         })
 

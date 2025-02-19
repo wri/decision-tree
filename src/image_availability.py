@@ -25,7 +25,7 @@ def analyze_image_availability(proj_df,
     - pd.DataFrame: Merged DataFrame with image availability counts per polygon.
     """
     proj_df.columns = proj_df.columns.str.lower()
-    img_df = img_df[['project_id', 'project_na', 'poly_id', 'datetime', 'eo:cloud_cover']].copy()
+    img_df = img_df[['project_id', 'poly_id', 'site_id', 'datetime', 'eo:cloud_cover']].copy()
 
     # Convert 'datetime' columns
     img_df.loc[:, 'datetime'] = pd.to_datetime(img_df['datetime'], format='%Y-%m-%dT%H:%M:%S.%fZ', errors='coerce')

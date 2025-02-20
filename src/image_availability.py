@@ -3,82 +3,70 @@ import geopandas as gpd
 import numpy as np
 import os
 
+def analyze_image_availability(proj_df, 
+                               img_df, 
+                               baseline_range=(-365, 0), 
+                               ev_range=(365, 1095), 
+                               cloud_thresh=50):
+    """
+    Assesses image availability for baseline & early verification per 
+    project/polygon based on user defined windows.
 
-def imagery_features(imagery_dir, 
-                     project_shapefile,
-                     cloud_thresh):
-    
-    '''
-    Using the plantstart date from the TM project shapefile
-    calculates the number of images available between img date and 
-    the plant start date.
-    Creates columns to count the number of images available for 
-    early verification and baseline assessments.
-    '''
+    Parameters:
+    - proj_df (pd.DataFrame): DataFrame containing project characteristics.
+    - img_df (pd.DataFrame): DataFrame containing image observations.
+    - baseline_range (tuple): Timeframe for baseline availability in days 
+        (e.g., (-365, 0) for 1 year before plantstart).
+    - ev_range (tuple): Timeframe for early verification availability in days 
+        (e.g., (90, 1095) for 3 years after plantstart).
+    - cloud_thresh (int): Maximum acceptable cloud cover percentage.
 
-    all_proj = gpd.read_file(project_shapefile) # confirm w/ Rhiannon
-    imagery_files = os.listdir(imagery_dir)
-    subdf_list = []
-    for project in imagery_files:
-        project_df = pd.read_csv(f"{imagery_dir}/{project}")
-        project_sub_df = project_df[['Name', 
-                                     'properties.datetime','collection', 
-                                     'properties.eo:cloud_cover', 
-                                     'properties.off_nadir_avg']]
-        project_sub_df['Project'] = project.replace('afr100_', '').replace('_imagery_availability.csv', '')
-        subdf_list.append(project_sub_df)
+    Returns:
+    - pd.DataFrame: Merged DataFrame with image availability counts per polygon.
+    """
+    proj_df.columns = proj_df.columns.str.lower()
+    img_df = img_df[['project_id', 'poly_id', 'site_id', 'datetime', 'eo:cloud_cover']].copy()
 
-    all_projects_imagery_df = pd.concat(subdf_list).reset_index()
-    all_projects_imagery_df = all_projects_imagery_df[['Project', 
-                                                       'Name', 
-                                                       'properties.datetime',
-                                                       'collection', 
-                                                       'properties.eo:cloud_cover', 
-                                                       'properties.off_nadir_avg']]
-    all_projects_imagery_df = all_projects_imagery_df[~pd.isna(all_projects_imagery_df['Name'])]
-    all_projects_imagery_df.rename(columns={'Name':'poly_name'}, inplace=True)
-    all_projects_imagery_df['properties.datetime'] =pd.to_datetime(all_projects_imagery_df['properties.datetime'], 
-                                                                   format='mixed').dt.normalize()
-    all_projects_imagery_df['properties.datetime'] = all_projects_imagery_df['properties.datetime'].apply(lambda x: x.replace(tzinfo=None))
+    # Convert 'datetime' columns
+    img_df.loc[:, 'datetime'] = pd.to_datetime(img_df['datetime'], format='%Y-%m-%dT%H:%M:%S.%fZ', errors='coerce')
+    img_df.loc[:, 'datetime'] = img_df['datetime'].apply(lambda x: x.replace(tzinfo=None) if pd.notna(x) else x)
+    img_df = img_df.rename(columns={'datetime': 'img_date'})
 
-    proj_plant_date = all_proj[['Project',  'poly_name', 'plantstart']]
-    df = proj_plant_date.merge(all_projects_imagery_df, on=['Project', 'poly_name'], how='left')
-    df = df[~pd.isna(df['plantstart'])]
-    df = df[df['plantstart'] != '15-04-2024 - 15-05-2024']
-    df['plantstart'] = pd.to_datetime(df['plantstart'], format='mixed')
-    df['properties.datetime'] = pd.to_datetime(df['properties.datetime'], format='mixed').dt.normalize()
-    df['properties.datetime'] = df['properties.datetime'].apply(lambda x: x.replace(tzinfo=None))
-    df['dateDiff']= (df['properties.datetime'] - df['plantstart']).dt.days
+    # Merge project data with image data
+    new = img_df.merge(proj_df, on=['project_id', 'poly_id'], how='left')
+    new['plantstart'] = pd.to_datetime(new['plantstart'], errors='coerce')
 
-    # get baseline img count
-    df_imagery_usable_baseline = df[(df['dateDiff'] < 0 ) & (df['dateDiff'] > -365 ) & (df['properties.eo:cloud_cover'] < cloud_thresh)]
-    usable_baseline_summary = df_imagery_usable_baseline.groupby(['Project', 'poly_name']).count().reset_index()[['Project', 
-                                                                                                                'poly_name', 
-                                                                                                                'collection']]
-    usable_baseline_summary.rename(columns={'collection':'available_baseline_images'}, inplace=True)
+    # Calculate img availability
+    new['date_diff'] = (new['img_date'] - new['plantstart']).dt.days
+    baseline = new[
+        (new['date_diff'] >= baseline_range[0]) &  
+        (new['date_diff'] <= baseline_range[1]) &  
+        (new['eo:cloud_cover'] < cloud_thresh)  
+    ]
+    baseline_summary = (
+        baseline.groupby(['project_id', 'poly_id'])
+        .size()
+        .reset_index(name='baseline_img_count')
+    )
 
-    # get early verf img count
-    df_imagery_usable_ev = df[(df['dateDiff'] > 90 ) & (df['properties.eo:cloud_cover'] < cloud_thresh)]
-    usable_ev_summary = df_imagery_usable_ev.groupby(['Project', 'poly_name']).count().reset_index()[['Project', 
-                                                                                                    'poly_name', 
-                                                                                                    'collection']]
-    usable_ev_summary.rename(columns={'collection':'available_ev_images'}, inplace=True)
+    ev = new[
+        (new['date_diff'] >= ev_range[0]) & 
+        (new['date_diff'] <= ev_range[1]) &  
+        (new['eo:cloud_cover'] < cloud_thresh)
+    ]
 
-    # combine
-    all_proj_df_imagery = all_proj.merge(usable_baseline_summary , on=['Project', 'poly_name'], how='left')
-    all_proj_df_imagery = all_proj_df_imagery.merge(usable_ev_summary, on=['Project', 'poly_name'], how='left')
+    ev_summary = (
+        ev.groupby(['project_id', 'poly_id'])
+        .size()
+        .reset_index(name='ev_img_count')
+    )
 
-    all_proj_df_imagery['available_baseline_images'] = all_proj_df_imagery['available_baseline_images'].replace({np.nan:int(0)})
-    all_proj_df_imagery['available_ev_images'] = all_proj_df_imagery['available_ev_images'].replace({np.nan:int(0)})
+    # **Merge baseline and early verification counts into the final summary**
+    final_summary = proj_df.merge(baseline_summary, on=['project_id', 'poly_id'], how='left') \
+                           .merge(ev_summary, on=['project_id', 'poly_id'], how='left')
 
-    return all_proj_df_imagery
+    # Fill NaN values with 0 (if no images met the criteria)
+    final_summary[['baseline_img_count', 'ev_img_count']] = final_summary[['baseline_img_count', 
+                                                                           'ev_img_count']].fillna(0)
 
-
-
-# ## should also perform this step
-#     ## BRANCH 3 ##
-#     def image_availability(row):
-#         method = 'field' if row.baseline_img < 1 else 'remote'
-#         return method
-#     open_sys = open_sys.assign(method=open_sys.apply(image_availability, axis=1))
-#     closed_sys['method'] = 'field'
+    return final_summary

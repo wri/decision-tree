@@ -8,13 +8,13 @@ from tqdm import tqdm
 
 def pull_tm_api_data(url, headers, project_ids, outfile="../data/tm_api_response.json"):
     '''
-    edits to the above function include:
-        iterating through list of project ids within func so output is a df with 
-        multiple projects
-        add project id as a column to support maxar metadata request
-        update to last record variable
-        added tqdm progress bar 
-        
+    edits to legacy func (below):
+        - params are defined within the func to facilitate looping through
+        various project ids -- line 23
+        - adds tqdm progress print out bar (not required but helpful!) -- line 20
+        - defines new_last_record variable as none -- line 31
+        - dumps json to outfile, added as func arg -- line 67
+        - adds project id to output support subsequent maxar API request -- line 51      
     '''
     results = []
     with tqdm(total=len(project_ids), desc="Processing Projects", unit="project") as progress_bar:

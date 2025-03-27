@@ -20,16 +20,23 @@ def clean_datetime_column(df, column_name):
     df[column_name] = df[column_name].replace(['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT)
     df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
 
-    # handle leap year instances
+    # Handle leap year Feb 29 cases
     is_feb_29 = df[column_name].notna() & (df[column_name].dt.month == 2) & (df[column_name].dt.day == 29)
     years = df.loc[is_feb_29, column_name].dt.year
+
+    # Ensure aligned index with is_feb_29
     non_leap_years = ~years.apply(calendar.isleap)
-    df.loc[is_feb_29 & non_leap_years, column_name] = df.loc[is_feb_29 & non_leap_years, column_name].apply(
+    affected_rows = is_feb_29.copy()
+    affected_rows.loc[is_feb_29] = non_leap_years
+
+    df.loc[affected_rows, column_name] = df.loc[affected_rows, column_name].apply(
         lambda x: datetime(x.year, 2, 28)
     )
+
     missing_count = df[column_name].isna().sum()
     print(f"Number of rows missing a '{column_name}' date: {missing_count}/{len(df)}")
     return df
+
 
 def missing_planting_dates(df):
     '''
@@ -62,8 +69,10 @@ def missing_planting_dates(df):
 
     print(f"Projects fully removed: {len(full_proj_drops)}")
     print(f"Projects partially affected: {len(partial_proj_drops)}")
+    # drop row if plantstart has missing vals (Nan or None)
     final_df = df.dropna(subset=['plantstart'], how='any')
     return final_df
+
 
 def process_tm_api_results(results, outfile1, outfile2):
     """
@@ -75,6 +84,7 @@ def process_tm_api_results(results, outfile1, outfile2):
     to the DataFrame without explicitly defining them.
     """
     extracted_data = []
+    input_ids = {project.get('project_id') for project in results if project.get('project_id')}
 
     # Iterate over each project to extract project details & tree cover statistics
     for project in results:
@@ -91,17 +101,17 @@ def process_tm_api_results(results, outfile1, outfile2):
         project_phase = project.get('projectPhase', '')  # Ensure a default empty string
 
         # Extract tree cover indicators
-        tree_cover_years = {}  # Store year-specific tree cover percentages
+        tree_cover_years = {}
         indicators = project.get('indicators', [])
 
         for indicator in indicators:
-            if (
-                indicator.get('indicatorSlug') == 'treeCover' and
-                project_phase != 'test'  # Exclude 'test' project phases
-            ):
-                year = indicator.get('yearOfAnalysis')
-                percent_cover = indicator.get('percentCover')
-                tree_cover_years[f'ttc_{year}'] = percent_cover
+            try:
+                year = int(indicator.get('yearOfAnalysis'))
+                if 2017 <= year <= 2024:
+                    tree_cover_years[f'ttc_{year}'] = indicator.get('percentCover')
+            except (TypeError, ValueError):
+                # Skip invalid or missing year values
+                continue
 
         # Store extracted project details in a structured format
         extracted_data.append({
@@ -114,11 +124,13 @@ def process_tm_api_results(results, outfile1, outfile2):
             'practice': practice,
             'target_sys': targetsys,
             'dist': dist,
+            'project_phase': project_phase,
             **tree_cover_years  
         })
 
     final_df = pd.DataFrame(extracted_data)
     final_df.columns = final_df.columns.str.lower()
+    pre_clean_ids = list(set(final_df['project_id']))
 
     # Clean up start and end dates
     final_df = clean_datetime_column(final_df, 'plantstart')
@@ -127,9 +139,17 @@ def process_tm_api_results(results, outfile1, outfile2):
     # Drop polygons with missing planting dates
     final_df = missing_planting_dates(final_df)
 
+    # identify missing projs
+    output_ids = list(set(final_df['project_id']))
+    assert len(input_ids) == len(pre_clean_ids) == len(output_ids)
+
+    missing_projects = input_ids - set(final_df['project_id'])
+    if missing_projects:
+        print(f"Missing prj ids: {missing_projects}")
+
     final_df.to_csv(outfile1, index=False)
     final_df.to_csv(outfile2, index=False)
-    
+
     # if outfile is not None:
     #     final_df.to_csv(outfile)
 

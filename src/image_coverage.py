@@ -35,6 +35,25 @@ def preprocess_polygons(poly_df, debug=False):
     # Convert to GeoDataFrame
     poly_gdf = gpd.GeoDataFrame(poly_df, geometry='poly_geom', crs="EPSG:4326")
 
+    # Check for and fix invalid geometries
+    invalid_geom_mask = ~poly_gdf.is_valid
+    num_invalid_geom = invalid_geom_mask.sum()
+
+    print(f"There are {num_invalid_geom} polygons with invalid geometries.")
+
+    if num_invalid_geom > 0:
+        if debug:
+            print(f"Found {num_invalid_geom} invalid geometries. Attempting to fix with buffer(0)...")
+        # Fix only the invalid geometries
+        poly_gdf.loc[invalid_geom_mask, 'poly_geom'] = poly_gdf.loc[invalid_geom_mask, 'poly_geom'].apply(lambda g: g.buffer(0))
+    
+    # Re-check validity after fix
+    num_still_invalid_geom = (~poly_gdf.is_valid).sum()
+    if num_still_invalid_geom > 0:
+        print(f"Warning: {num_still_invalid_geom} geometries are still invalid after buffer(0).")
+    elif debug: 
+        print("All invalid geometries were fixed successfully.")
+
     if debug:
         print(f"There are {len(poly_gdf.poly_id.unique())} unique polygons for {len(poly_gdf.project_id.unique())} projects in this dataset.")
 
@@ -62,7 +81,7 @@ def preprocess_images(img_df, debug=False):
     img_df = img_df.rename(columns={'datetime': 'img_date'}) # Rename the column img_date
 
     # Select the relevent columns from img_df
-    img_df = img_df[['title', 'project_id', 'poly_id', 'img_date', 'area:cloud_cover_percentage', 'eo:cloud_cover', 'area:avg_off_nadir_angle', 'view:sun_elevation', 'img_geom']]
+    img_df = img_df[['img_id', 'title', 'project_id', 'poly_id', 'img_date', 'area:cloud_cover_percentage', 'eo:cloud_cover', 'area:avg_off_nadir_angle', 'view:sun_elevation', 'img_geom']]
 
     # Convert stringified 'poly_geom' dictionaries into real dictionaries
     img_df['img_geom'] = img_df['img_geom'].apply(lambda x: shape(ast.literal_eval(x)) if isinstance(x, str) else shape(x))

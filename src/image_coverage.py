@@ -129,7 +129,7 @@ def merge_polygons_images(img_gdf, poly_gdf, debug=False):
     
         # Count polygons dropped due to no matching images
         missing_polygons = len(poly_gdf[~poly_gdf['poly_id'].isin(merged_gdf['poly_id'])])
-        print(f"There {missing_polygons} polygons without images in the merged dataset")
+        print(f"{missing_polygons} polygons were dropped from the merged dataset because they have no Maxar images")
         print(f"Polygons without images (dropped at this stage): {missing_polygons_list}")
 
     return merged_gdf, missing_polygons_list
@@ -283,12 +283,15 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
     ## If there is at least one valid image
     # Select the best image from the filtered images for the polygon
     best_image = get_best_image(poly_images)
+    print(f"Found best image: {best_image}")
 
     # Retrieve the geometry of the best image footprint
     best_image_geom = best_image['img_geom']
+    print(f"Best image geometry: {best_image_geom}")
     
     # Reproject the best image footprint's geometry
     best_img_reprojected = gpd.GeoDataFrame([best_image], geometry="img_geom", crs="EPSG:4326").to_crs(utm_crs)
+    print(f"Reprojected best image to {utm_crs}")
     best_img_geom_reprojected = best_img_reprojected.geometry.iloc[0]
 
     # Compute intersection between polygon geometry and best image's footprint geometry

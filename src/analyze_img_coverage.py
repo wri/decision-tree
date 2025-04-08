@@ -11,12 +11,14 @@ def img_avail_hist(df, bin_width=10):
         df (pd.DataFrame): Dataframe containing the image availability by project
         bin_width (int): Width of each bin (e.g., 10 for 0-10%, 10-20%, etc...)
     """
-    max_val = 100
-    bins = list(range(0, max_val + bin_width, bin_width)) # e.g., [0, 10, 20, ..., 100]
-    labels = [f"{i}-{i+bin_width}%" for i in bins[:-1]]
+    # Define the bin edges
+    bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 101] # Right now slightly hack-y
+    
+    # Create labels for the bins
+    labels = [f"{i}-{i+10}%" for i in range(0, 100, 10)]
 
     # Bin the data
-    df['coverage_bin'] = pd.cut(df['total_percent_area_covered'], bins=bins, labels=labels, include_lowest=True, right=False)
+    df['coverage_bin'] = pd.cut(df['total_percent_area_covered'], bins=bins, labels=labels, include_lowest=True, right=False) # Includes 0 in 0-10% cat. Includes 100, but not 90 in 90-100% cat)
     bin_counts = df['coverage_bin'].value_counts().sort_index()
 
     # Print the bin counts
@@ -26,14 +28,19 @@ def img_avail_hist(df, bin_width=10):
     
     # Plot the histogram
     plt.figure(figsize=(10, 5))
-    bin_counts.plot(kind='bar', edgecolor='black')
+    ax = bin_counts.plot(kind='bar', edgecolor='black')
     plt.title(f"Number of Projects by Image Coverage Bin ({bin_width}% bins)")
     plt.xlabel("Coverage Bin (%)")
     plt.ylabel("Number of Projects")
     plt.xticks(rotation=45)
-    plt.tight_layout()
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.gca().yaxis.set_major_locator(mticker.MaxNLocator(integer=True)) # Force y-axis labels to be integers
+
+    # Annotate the bars with their exact counts
+    for i, count in enumerate(bin_counts):
+        ax.annotate(str(count), xy=(i, count), xytext=(0,3),
+                    textcoords="offset points", ha='center', va='bottom', fontsize=9)
+    
     plt.tight_layout
     plt.show()
 
@@ -48,7 +55,7 @@ def count_projs_wi_img_avail(df, threshold):
     Returns:
         list: Project IDs meeting the threshold  
     """
-    qualifying_projects = df[df['total_percent_area_covered'] >= threshold]
+    qualifying_projects = df[(df['total_percent_area_covered'] > threshold)]
     count = len(qualifying_projects)
 
     print(f"\n📊 Projects with ≥ {threshold}% image coverage: {count}")

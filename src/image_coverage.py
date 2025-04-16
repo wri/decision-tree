@@ -253,12 +253,8 @@ def get_best_image(poly_images, debug=False):
     Returns:
         GeoSeries: The best image row from poly_images
     """
-    # Create an absolute value date_diff column to help sort images by proximity to plantstart date
-    poly_images = poly_images.copy() # Avoid modifying the original dataframe
-    poly_images['abs_date_diff'] = poly_images['date_diff'].abs()
-
-    # Sort images by cloud cover (ascending) and then by date (closest to plantstart)
-    sorted_images = poly_images.sort_values(by=['area:cloud_cover_percentage', 'abs_date_diff'])
+    # Sort images by cloud cover ascending (lower is better) and then by image date descending (more recent is better)
+    sorted_images = poly_images.sort_values(by=['area:cloud_cover_percentage', 'img_date'], ascending=[True, False])
 
     if debug:
         print("\n Debug: Sorted images for this polygon (using cloud cover, then proximity to plantstart date):")

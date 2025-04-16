@@ -178,6 +178,7 @@ def merge_polygons_images(img_gdf, poly_gdf, debug=False):
 
     # Merge the image data with the polygon data (preserving image data rows and adding associated polygon attributes)
     merged_gdf = img_gdf.merge(poly_gdf, on=['project_id', 'poly_id'], how='left')
+    dropped_rows_invalid_poly = len(merged_gdf[merged_gdf['poly_geom'].isna()])
 
     # Filter out rows where polygon metadata is missing (i.e. no matching polygon found (polygon removed during preprocess_polygons because its geometry was invalid & unfixable))
     merged_gdf_clean = merged_gdf[merged_gdf['poly_geom'].notna()].copy()
@@ -191,8 +192,9 @@ def merge_polygons_images(img_gdf, poly_gdf, debug=False):
 
     print(f"Total images in img_gdf: {len(img_gdf)}")
     print(f"Total polygons in poly_gdf: {len(poly_gdf)}")
-    print(f"Total rows in merged dataset: {len(merged_gdf_clean)}")
     print(f"Number of polygons removed from merged dataset due to invalid (unfixable) geometries: {dropped_invalid_poly}")
+    print(f"Number of rows removed from image dataset because their polygons had invalid (unfixable) geometries: {dropped_rows_invalid_poly}")
+    print(f"Total rows in merged dataset: {len(merged_gdf_clean)}")
     print(f"Unique polygons in merged dataset: {len(merged_gdf_clean['poly_id'].unique())}")
 
     # Count polygons dropped due to no matching images

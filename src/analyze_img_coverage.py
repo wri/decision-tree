@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from datetime import datetime, timedelta
 
 def img_avail_hist(df, bin_width=10):
     """
@@ -100,3 +101,79 @@ def analyze_low_coverage_issues(df):
 
     print("\n📊 Stats for polygons with multiple images:")
     explore_overlap_stats(multiple_images_df)
+
+def compare_polygon_coverage(baseline_df, ev_df, threshold):
+    # Create dataframes with only relevent columns and rename for clarity before merging
+    base = baseline_df[['poly_id', 'project_id', 'percent_img_cover']].rename(
+        columns={'percent_img_cover': 'base_pct_img_cover'})
+    ev = ev_df[['poly_id', 'percent_img_cover']].rename(
+        columns={'percent_img_cover': 'ev_pct_img_cover'})
+    
+    # Merge dataframes on poly_id
+    merged = base.merge(ev, on='poly_id', how='inner')
+
+    # Filter polygons that meet the threshold in *both* periods
+    merged['both_high'] = (
+        (merged['base_pct_img_cover'] >= threshold) &
+        (merged['ev_pct_img_cover'] >= threshold)
+    )
+
+    # Group by project and compute:
+    # - total number of shared polygons
+    # - number of polygons that meet threshold in both
+    summary = (
+        merged.groupby('project_id')
+        .agg(total_polygons=('poly_id', 'count'),
+             polygons_high_both=('both_high', 'sum'))
+        .reset_index()
+    )
+
+    # Add percent
+    summary['percent_polygons_high_both'] = (
+        summary['polygons_high_both'] / summary['total_polygons'] * 100
+    )
+
+    return summary
+
+### Functions to assess proportion of the cohort we can conduct tree count on now ###
+# Percent of polygons with a valid plantstart date
+def valid_plantstart_stats(df):
+    grouped = df.groupby('project_id')['plantstart']
+    count_valid = grouped.apply(lambda x: x.notna().sum()).rename('#_poly_valid_plantstart')
+    total = grouped.size().rename('total_poly')
+    pct_valid = (count_valid / total * 100).rename('%_poly_valid_plantstart')
+    return pd.concat([total, pct_valid], axis=1).reset_index()
+
+# Percent of polygons planted 2+ years ago
+def planted_2_years_ago_stats(df, reference_date=None):
+    if reference_date is None:
+        reference_date = pd.Timestamp.today()
+        print(reference_date)
+    two_years_ago = reference_date - pd.DateOffset(years=2)
+
+    grouped = df.groupby('project_id')['plantstart']
+    count_2yrs = grouped.apply(lambda x: (x < two_years_ago).sum()).rename('#_poly_planted_2yr_ago')
+    total = grouped.size().rename('total_poly')
+    pct_2yrs = (count_2yrs / total * 100).rename('%_poly_planted_2yr_ago')
+    return pd.concat([pct_2yrs], axis=1).reset_index()
+
+# Percent of polygons with at least 1 filtered image 1 year+ post-plantstart
+def ev_image_available_stats(df):
+    grouped = df.groupby('project_id')['num_images']
+    count_wi_img = grouped.apply(lambda x: (x > 0).sum()).rename('#_poly_ev_img')
+    total = grouped.size().rename('total_poly')
+    pct_wi_img = (count_wi_img / total * 100).rename('%_poly_ev_img')
+    return pd.concat([pct_wi_img], axis=1).reset_index()
+
+# Wrapper function
+def summarize_project_planting_and_ev(df, reference_date=None):
+    
+    valid_start = valid_plantstart_stats(df)
+    two_years = planted_2_years_ago_stats(df, reference_date)
+    has_ev = ev_image_available_stats(df)
+
+    # Merge all the summaries
+    summary = valid_start.merge(two_years, on='project_id') \
+                         .merge(has_ev, on='project_id')
+    
+    return summary

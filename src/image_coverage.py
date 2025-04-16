@@ -1,15 +1,78 @@
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import shape
+from shapely.errors import ShapelyError
 import ast
 
-def preprocess_polygons(poly_df, debug=False):
+def clean_geometry(x, debug=False, stats=None):
+    """
+    Converts a geometry dict or string into a Shapely object. Attempts to fix invalid geometries using buffer(0). Returns None if geometry is still invalid, empty, or has 0 area.
+
+    Args:
+        x: Geometry dict or string
+    
+    Returns:
+        Shapely geometry or None
+    """
+    # Initialize stats dictionary and increment the counter of total rows by 1
+    if stats is not None:
+        stats['total'] +=1
+
+    # Try to convert a stringified dictionary or dictionary into a shapely object
+    try:
+        geom = shape(ast.literal_eval(x)) if isinstance(x, str) else shape(x)
+    except Exception as e:
+        if debug:
+            print(f"Failed to parse geometry: {e}")
+        # Increment counter of dropped rows by 1
+        if stats is not None:
+            stats['invalid'] += 1
+            stats['dropped'] +=1
+        return None
+
+    # Try to repair geometry if invalid
+    if not geom.is_valid:
+        # Increment counter of invalid geometries by 1
+        if stats is not None:
+            stats['invalid'] +=1
+        # Try to repair by buffering by 0
+        repaired = geom.buffer(0)
+        # If buffer(0) fixed the geometry, return the repaired geometry
+        if repaired.is_valid and not repaired.is_empty and repaired.area > 0:
+            if debug:
+                print("Geometry was repaired with buffer(0)")
+            # Increment counter of repaired geometries by 1
+            if stats is not None:
+                stats['repaired'] += 1
+            return repaired
+        else:
+            if debug:
+                print("Geometry invalid and not repairable using buffer(0)")
+            # Increment counter of dropped geometries by 1
+            if stats is not None:
+                stats['dropped'] +=1
+            return None
+        
+    # Drop rows with empty geometries or geometries with 0 area
+    if geom.is_empty or geom.area == 0:
+        if debug:
+            print("Geometry is empty or has zero area")
+        # Increment counter of dropped geometries by 1
+        if stats is not None:
+            stats['dropped'] += 1
+        return None
+    
+    return geom
+
+def preprocess_polygons(poly_df, debug=False, save_dropped=False, dropped_output_path=None):
     """
     Cleans up a dataframe of polygon metadata & geometries from the TerraMatch API and 
-    converts it into a GeoDataframe
+    converts it into a GeoDataframe. Tries to fix invalid geometries and drops (and logs) them if irreparable.
 
     Args:
         poly_df (DataFrame): Raw polygon dataset.
+        save_dropped (bool): Save dropped polygons to a csv
+        dropped_output_path (str): File path to save rows with dropped polygons
 
     Returns:
         GeoDataFrame: Processed polygon dataset with a geometry column as a shapely object.
@@ -17,47 +80,96 @@ def preprocess_polygons(poly_df, debug=False):
     if debug:
         print("Processing polygon data...")
 
+    ## COLUMN NAMES
     # Enforce lowercase column names
     poly_df.columns = poly_df.columns.str.lower()
-
     # Rename 'name' and 'geometry' columns
     poly_df = poly_df.rename(columns={'name': 'poly_name', 'geometry': 'poly_geom'})
-
+    
+    ## PLANTSTART
     # Convert 'plantstart' column to a datetime
     poly_df['plantstart'] = pd.to_datetime(poly_df['plantstart'], errors='coerce')
 
-    # Convert stringified 'poly_geom' dictionaries into real dictionaries
-    poly_df['poly_geom'] = poly_df['poly_geom'].apply(lambda x: shape(ast.literal_eval(x)) if isinstance(x, str) else shape(x))
-
-    # Convert 'poly_geom' dictionaries from WKT to Shapely objects
-    poly_df['poly_geom'] = poly_df['poly_geom'].apply(shape)
-
-    # Convert to GeoDataFrame
-    poly_gdf = gpd.GeoDataFrame(poly_df, geometry='poly_geom', crs="EPSG:4326")
-
-    # Check for and fix invalid geometries
-    invalid_geom_mask = ~poly_gdf.is_valid
-    num_invalid_geom = invalid_geom_mask.sum()
-
-    print(f"There are {num_invalid_geom} polygons with invalid geometries.")
-
-    if num_invalid_geom > 0:
-        if debug:
-            print(f"Found {num_invalid_geom} invalid geometries. Attempting to fix with buffer(0)...")
-        # Fix only the invalid geometries
-        poly_gdf.loc[invalid_geom_mask, 'poly_geom'] = poly_gdf.loc[invalid_geom_mask, 'poly_geom'].apply(lambda g: g.buffer(0))
-    
-    # Re-check validity after fix
-    num_still_invalid_geom = (~poly_gdf.is_valid).sum()
-    if num_still_invalid_geom > 0:
-        print(f"Warning: {num_still_invalid_geom} geometries are still invalid after buffer(0).")
-    elif debug: 
-        print("All invalid geometries were fixed successfully.")
-
+    ## GEOMETRIES
     if debug:
-        print(f"There are {len(poly_gdf.poly_id.unique())} unique polygons for {len(poly_gdf.project_id.unique())} projects in this dataset.")
+        print("Cleaning geometries...")
+    
+    # Initialize stats to track # of invalid geometries
+    stats = {
+        'total': 0,
+        'invalid': 0,
+        'repaired': 0,
+        'dropped': 0
+    }
+
+    # Check for invalid geometries, fix them if possible, and drop them if irreparable
+    poly_df['poly_geom'] = poly_df['poly_geom'].apply(lambda x: clean_geometry(x, debug=debug, stats=stats))
+
+    # Split dropped & clean polygons
+    dropped_polys = poly_df[poly_df['poly_geom'].isna()]
+    poly_df_clean = poly_df.dropna(subset=['poly_geom'])
+
+    # Optionally save rows that were dropped due to invalid geometries
+    if save_dropped and dropped_output_path and not dropped_polys.empty:
+        dropped_polys.to_csv(dropped_output_path, index=False)
+        print(f"Dropped polygons saved to {dropped_output_path}")
+
+    # Create GeoDataFrame from cleaned data
+    poly_gdf = gpd.GeoDataFrame(poly_df_clean, geometry='poly_geom', crs="EPSG:4326")
+
+    # Summary
+    if debug:
+        print("\n🧾 Geometry Cleaning Summary:")
+        print(f"  ➤ Total geometries processed: {stats['total']}")
+        print(f"  ➤ Invalid geometries:         {stats['invalid']}")
+        print(f"  ➤ Repaired with buffer(0):    {stats['repaired']}")
+        print(f"  ➤ Dropped:                    {stats['dropped']}")
+        print(f"  ✅ Final valid polygons:       {len(poly_gdf)}\n")
+
+    print(f'Double check - len(poly_df) before processing: {len(poly_df)}')
+    print(f'Double check - len(dropped_polys): {len(dropped_polys)}')
+    print(f'Double check - len(poly_df_clean): {len(poly_df_clean)}')
+    print(f'Double check - len(poly_gdf): {len(poly_gdf)}')
 
     return poly_gdf
+
+    # Convert stringified 'poly_geom' dictionaries into real dictionaries
+    #poly_df['poly_geom'] = poly_df['poly_geom'].apply(lambda x: shape(ast.literal_eval(x)) if isinstance(x, str) else shape(x))
+
+    # Convert 'poly_geom' dictionaries from WKT to Shapely objects
+    #poly_df['poly_geom'] = poly_df['poly_geom'].apply(shape)
+
+    # Create GeoDataFrame from cleaned data and return GeoDataFrame
+    poly_gdf = gpd.GeoDataFrame(poly_df_clean, geometry='poly_geom', crs="EPSG:4326")
+
+
+    # if debug:
+    #     print(f"✅ Retained {len(poly_gdf)} valid polygons from {len(poly_df)} total.")
+    #     print(f" Unique projects: {poly_gdf['project_id'].nunique()}")
+
+    # # Check for and fix invalid geometries
+    # invalid_geom_mask = ~poly_gdf.is_valid
+    # num_invalid_geom = invalid_geom_mask.sum()
+
+    # print(f"There are {num_invalid_geom} polygons with invalid geometries.")
+
+    # if num_invalid_geom > 0:
+    #     if debug:
+    #         print(f"Found {num_invalid_geom} invalid geometries. Attempting to fix with buffer(0)...")
+    #     # Fix only the invalid geometries
+    #     poly_gdf.loc[invalid_geom_mask, 'poly_geom'] = poly_gdf.loc[invalid_geom_mask, 'poly_geom'].apply(lambda g: g.buffer(0))
+    
+    # # Re-check validity after fix
+    # num_still_invalid_geom = (~poly_gdf.is_valid).sum()
+    # if num_still_invalid_geom > 0:
+    #     print(f"Warning: {num_still_invalid_geom} geometries are still invalid after buffer(0).")
+    # elif debug: 
+    #     print("All invalid geometries were fixed successfully.")
+
+    # if debug:
+    #     print(f"There are {len(poly_gdf.poly_id.unique())} unique polygons for {len(poly_gdf.project_id.unique())} projects in this dataset.")
+
+    # return poly_gdf
 
 def preprocess_images(img_df, debug=False):
     """
@@ -242,13 +354,17 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
     ## Calculate the polygon's area from its geometry
     # Explicitly retrieve the polygon row
     polygon_row = poly_gdf.loc[poly_gdf['poly_id'] == poly_id]
+    print(f"Computing coverage for polygon {poly_id}")
 
     # Retrieve the actual polygon geometry
     poly_geom = polygon_row['poly_geom'].values[0]
+    print(f'poly_geom: {poly_geom}')
 
     # Compute UTM Zone based on polygon centroid and reproject polygon and image footprint
     poly_centroid = poly_geom.centroid
+    print(f'poly_centroid: {poly_centroid}')
     utm_crs = get_utm_crs(poly_centroid.x, poly_centroid.y)
+    print(f'Calculated UTM CRS: {utm_crs}')
 
     # Reproject the polygon geometry into a CRS with a unit of square meters
     poly_reprojected = gpd.GeoDataFrame(polygon_row, geometry='poly_geom', crs="EPSG:4326").to_crs(utm_crs)
@@ -258,7 +374,6 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
     poly_area_ha = poly_geom_reprojected.area / 10_000
 
     ## Get all images associated with this polygon
-    print(f"Computing coverage for polygon {poly_id}")
     poly_images = img_gdf_filtered[img_gdf_filtered['poly_id'] == poly_id]
     num_images = len(poly_images)
 
@@ -297,9 +412,11 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
     # Compute intersection between polygon geometry and best image's footprint geometry
     overlap_area = poly_geom_reprojected.intersection(best_img_geom_reprojected).area
     overlap_area_ha = overlap_area / 10_000
+    print(f"The best image overlaps {overlap_area_ha}ha of {poly_id}.")
 
     # Compute percentage of polygon covered by best image
     percent_img_cover = (overlap_area_ha / poly_area_ha) * 100
+    print(f"Polygon {poly_id} has {percent_img_cover}% image cover")
 
     # Log cases where the imagery coverage of the best image is below the threshold
     if percent_img_cover < min_coverage_threshold or percent_img_cover == 0:
@@ -314,7 +431,8 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
             'percent_img_cover': percent_img_cover,
         }
         low_img_coverage_log.append(log_entry)
-
+    
+    print("Success!")
     # Return results
     return (poly_id, project_id, best_image['title'], num_images, poly_area_ha, overlap_area_ha,
             percent_img_cover)

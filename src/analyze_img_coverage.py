@@ -2,6 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from datetime import datetime, timedelta
+from shapely.geometry.base import BaseGeometry
+import geopandas as gpd
 
 def img_avail_hist(df, bin_width=10):
     """
@@ -177,3 +179,107 @@ def summarize_project_planting_and_ev(df, reference_date=None):
                          .merge(has_ev, on='project_id')
     
     return summary
+
+
+### Functions to calculate % of each polygon (and project) with imagery at both time points ###
+def get_utm_crs(longitude, latitude):
+    """
+    Determines the appropriate UTM CRS for a given polygon based on the longitude and latitude
+    of its centroid.
+
+    Args:
+        longitude (float): Longitude of the polygon centroid.
+        latitude (float): Latitude of the polygon centroid.
+    
+    Returns:
+        str: EPSG code of the best UTM CRS.
+    """
+
+    # UTM zones range from 0 to 60, each covering 6 degrees of longitude
+    utm_zone = int((longitude + 180) / 6) + 1
+
+    # EPSG code for UTM Northern vs. Southern hemisphere
+    epsg_code = 32600 + utm_zone if latitude >= 0 else 32700 + utm_zone
+
+    return f"EPSG:{epsg_code}"
+
+def reproject_geometry(geom, target_crs):
+    """
+    Reprojects a single Shapely geometry into the target CRS.
+
+    Args:
+        - geom (shapely geometry object): A geometry in the form of a shapely object. Expects an input CRS of EPSG:4326
+    Returns:
+        - A shapely object reprojected to the target_crs
+    """
+    gdf = gpd.GeoDataFrame(index=[0], geometry=[geom], crs="EPSG:4326")
+    return gdf.to_crs(target_crs).geometry.iloc[0]
+
+def compute_shared_img_overlap(row, debug=False):
+    """
+    Given a row of a DataFrame with a polygon and baseline/early verification image footprints, 
+    calculates the actual area and % of the polygon area that has imagery coverage at both time points.
+
+    Args:
+        - row: Row in a GeoDataFrame
+    Returns:
+        - pd.Series with the area of the polygon with overlapping imagery (ha) and percent of the polygon with imagery coverage at both time points
+    """
+    from shapely.geometry.base import BaseGeometry
+
+    if debug:
+        print(f"\n⚙️ Processing poly_id: {row.get('poly_id', 'N/A')}")
+
+    # Extract row values
+    poly_geom = row['poly_geom']
+    img_geom_base = row['img_geom_base']
+    img_geom_ev = row['img_geom_ev']
+
+    if debug:
+        print(f"⬜ Geometry types:\n poly={type(poly_geom)},\n base={type(img_geom_base)},\n ev={type(img_geom_ev)}")
+
+
+    # Check for missing, empty, or invalid type geometries
+    #  If one or more geometries are missing/invalid, return 0 hectares of overlapping area and 0 % of the polygon with overlapping imagery coverage
+    if not all(isinstance(g, BaseGeometry) and not g.is_empty for g in [poly_geom, img_geom_base, img_geom_ev]):
+        if debug:
+            print(f"⚠️ Missing or invalid type of one or more geometries: recording 0 area & % overlap for poly_id: {row.get('poly_id')}")
+        return pd.Series({'overlap_area_both': 0, 'pct_img_cover_both': 0})
+    
+    if debug:
+        print(f"✅ Valid geometries for polygon and both baseline & EV image")
+    
+    # Compute UTM Zone based on polygon centroid
+    centroid = poly_geom.centroid
+    utm_crs = get_utm_crs(centroid.x, centroid.y)
+    if debug:
+        print(f"🗺️ Calculated UTM CRS: {utm_crs}")
+
+    try:
+        # Reproject polygon and image geometries for accurate area calculations 
+        #  (Use reproject_geometry function to reproject shapely objects by wrapping them in a one-row GeoDataFrame)
+        poly_proj = reproject_geometry(poly_geom, utm_crs)
+        base_proj = reproject_geometry(img_geom_base, utm_crs)
+        ev_proj = reproject_geometry(img_geom_ev, utm_crs)
+    
+        # Calculate intersection of polygon with baseline & early verification image
+        intersection = poly_proj.intersection(base_proj).intersection(ev_proj)
+        overlap_area = intersection.area
+        poly_area = poly_proj.area
+
+        # Calculate percent of polygon area with imagery at both baseline & early verification
+        percent_covered = (overlap_area / poly_area) if poly_area > 0 else 0
+
+        if debug:
+            print(f"📐 Polygon area (ha): {poly_area / 10_000}")
+            print(f"🛰️ Area with overlapping imagery (ha): {overlap_area / 10_000}")
+            print(f"✅ Percent of polygon with imagery coverage both years (ha): {percent_covered * 100}")
+
+        return pd.Series({
+            'overlap_area_both': overlap_area / 10_000,     # in hectares
+            'pct_img_cover_both': percent_covered * 100     # in % of polygon area
+            })
+    
+    except Exception as e:
+        if debug:
+            print(f"❌ Exception occurred for poly_id {row.get('poly_id')}: {e}")

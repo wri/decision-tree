@@ -6,79 +6,57 @@ import re
 import os
 import clean_raw_data as clean
 
-def year0(ttc_csv,
-          old_poly_feats,
-          new_poly_feats,
-          imagery_dir,
-          canopy_thresh,
-          cloud_thresh,
-          img_count,
-          ):
+def parse_condition(value, actual):
+    """
+    Evaluate simple condition like '>=1', '<2', or direct value.
+    Interprets and evaluates conditional expressions (like ">=1") 
+    from the rules CSV.
+    """
+    if isinstance(value, str) and any(op in value for op in [">=", "<=", ">", "<", "=="]):
+        try:
+            return eval(f"{actual} {value}")
+        except Exception:
+            return False
+    return actual == value
+
+def apply_rules_baseline(df, save_to_csv=None):
     '''
-    Assigns a remote or field verification method to every
-    row in the input df, according baseline conditions (year0).
-    Checks all rows have been assigned and prints method breakdown.
-    Modifiable parameters include: 
-        image requirements: Within 1 yr of planting date, there are 
-        >=1 images available with <50% cloud cover
-    
-    Branch 1: at baseline, what is the canopy cover?
+    Refers to the rules template to determine:
+    Branch 1: what is the canopy cover at baseline?
     Branch 2: what is the target land use?
-    Branch 3: at baseline, how many images are available?
-
-    TODO: determine how to handle polys w/ multiple target_sys
+    Branch 3: what is the practice?
+    Branch 4: what is image availability at baseline?
     '''
-    ## Overview ##
-    print('Running decision tree for Year 0: Baseline')
-    print("------- DATA PREP ------- \n")
-    print('Preparing inputs according to params...')
-    # here would create the features according to input params (ie. image availability, slope, aspect)
-    # xyz = img.imagery_features(imagery_dir,
-    #                            new_poly_feats,
-    #                            cloud_thresh)
-    df = clean.clean_combine_inputs(ttc_csv, old_poly_feats, new_poly_feats, canopy_thresh)
-    
-    print("------- PORTFOLIO REPORT ------- \n")
-    print(f"Unique project counts: {df['project_name'].nunique()}")
-    print(f"Unique site counts: {df['site_name'].nunique()}")
-    print(f"Unique polygon counts: {df['poly_name'].nunique()}")
-    print(' ')
-    print("Tree Cover Distribution (polygon):")
-    print(f"Total open: {len(df[df.tree_cover <= canopy_thresh])}")
-    print(f"Total closed: {len(df[df.tree_cover > canopy_thresh])} \n")
-    print(' ')  
-    print("Tree Cover Distribution (project):")
-    print(f"Total open: {len(df[df.canopy == 'open'])}")
-    print(f"Total closed: {len(df[df.canopy == 'closed'])} \n")
 
-    ## BRANCH: open or closed ##
-    open_ = df[df.canopy == 'open']
-    closed_ = df[df.canopy == 'closed']
+    rules = pd.read_csv('../data/rule_template.csv')
+    decisions = []
 
-    ## BRANCH:
+    for _, row in df.iterrows():
+        matched = False
+        for _, rule in rules.iterrows():
+            if (
+                row['baseline_canopy'] == rule['baseline_canopy'] and
+                row['target_sys'] == rule['target_sys'] and
+                row['practice'] == rule['practice'] and
+                parse_condition(rule['img_count'], row['baseline_img_count'])
+            ):
+                decisions.append(rule['decision'])
+                matched = True
+                break
+        if not matched:
+            decisions.append('review required')
 
-    ## BRANCH: image availability ##
-    def image_availability(row, img_count):
-        method = 'field' if row.baseline_img < img_count else 'remote'
-        return method
+    df['decision'] = decisions
 
-    open_ = open_.assign(method=open_.apply(lambda row: image_availability(row, img_count), axis=1))
-    closed_['method'] = 'field'
-    
-    comb = pd.concat([open_, closed_], ignore_index=True)
-    assert not comb['method'].isnull().any(), "Some rows have not been assigned a method."
-    print(f"All {len(comb)} polygons have been assigned a method.")
-    method_counts = comb['method'].value_counts()
-    method_breakdown = comb['method'].value_counts(normalize=True) * 100
+    # Summary output
+    summary = df['decision'].value_counts().reset_index()
+    summary.columns = ['decision', 'count']
+    summary['proportion'] = summary['count'] / len(df)
 
-    print("\nMethod allocation:")
-    for method, count in method_counts.items():
-        percentage = method_breakdown[method]
-        print(f"{method}: {count} projects ({percentage:.2f}%)")
-    
-    print("\nSaving results to csv...")
-    comb.to_csv("../data/results/decisons_yr0.csv", index=False)
-    return comb
+    if save_to_csv:
+        df.to_csv(save_to_csv, index=False)
+
+    return df, summary
 
 def year3(df):
     '''

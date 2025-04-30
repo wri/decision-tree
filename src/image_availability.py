@@ -19,7 +19,7 @@ def analyze_image_availability(proj_df,
     - baseline_range (tuple): Timeframe for baseline availability in days 
         (e.g., (-365, 0) for 1 year before plantstart).
     - ev_range (tuple): Timeframe for early verification availability in days 
-        (e.g., (90, 1095) for 3 years after plantstart).
+        (e.g., (365, 1095) for 2 years after plantstart).
     - cloud_thresh (int): Maximum acceptable cloud cover percentage.
 
     Returns:

@@ -70,7 +70,7 @@ def missing_planting_dates(df):
     print(f"Projects fully removed: {len(full_proj_drops)}")
     print(f"Projects partially affected: {len(partial_proj_drops)}")
     # drop row if plantstart has missing vals (Nan or None)
-    final_df = df.dropna(subset=['plantstart'], how='any')
+    final_df = df #.dropna(subset=['plantstart'], how='any')
     return final_df
 
 
@@ -99,6 +99,7 @@ def process_tm_api_results(results, outfile1, outfile2):
         targetsys = project.get('targetSys')
         dist = project.get('distr')
         project_phase = project.get('projectPhase', '')  # Ensure a default empty string
+        area = project.get('calcArea')
 
         # Extract tree cover indicators
         tree_cover_years = {}
@@ -125,6 +126,7 @@ def process_tm_api_results(results, outfile1, outfile2):
             'target_sys': targetsys,
             'dist': dist,
             'project_phase': project_phase,
+            'area': area,
             **tree_cover_years  
         })
 
@@ -147,10 +149,9 @@ def process_tm_api_results(results, outfile1, outfile2):
     if missing_projects:
         print(f"Missing prj ids: {missing_projects}")
 
-    final_df.to_csv(outfile1, index=False)
-    final_df.to_csv(outfile2, index=False)
-
-    # if outfile is not None:
-    #     final_df.to_csv(outfile)
+    if outfile1 is not None:
+        final_df.to_csv(outfile1, index=False)
+    if outfile2 is not None:
+        final_df.to_csv(outfile2, index=False)
 
     return final_df

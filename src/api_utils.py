@@ -35,6 +35,7 @@ def pull_wrapper(url,
             'includeTestProjects': 'false',
             'page[size]': '100'
         }
+        #print(params)
 
         try:
             results = pull_tm_api_data(url, headers, params)

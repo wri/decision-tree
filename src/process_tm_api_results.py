@@ -3,7 +3,7 @@ import json
 import calendar
 from datetime import datetime
 
-def clean_datetime_column(df, column_name):
+def clean_datetime_column(df, column_name, min_valid_plantstart):
     """
     Cleans a datetime column in a pandas DataFrame by:
     1. Replacing invalid date strings ('0000-00-00') with NaT.
@@ -12,9 +12,14 @@ def clean_datetime_column(df, column_name):
 
     Handles issues with dates pertaining to:
     1. Missing dates
-    2. Dates that fall before the minimum valid planting date ('1888-01-01')
+    2. Dates that fall before the minimum valid planting date (e.g.: '1888-01-01')
     2. Illegal month error resulting from NaN values
     3. Start date calculation lands on a leap year
+
+    Args:
+    - df (DataFrame): DataFrame of polygon features
+    - column_name (str): The name of the datetime column to clean
+    - min_valid_plantstart (str): The earliest date to accept as a valid plantstart (for cleaning the datetime column) (Must be in 'YYYY-MM-DD' format.)
     """
     df[column_name] = df[column_name].astype(str)
 
@@ -22,8 +27,8 @@ def clean_datetime_column(df, column_name):
     df[column_name] = df[column_name].replace(['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT)
     df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
 
-    # Handle invalid dates that fall before the minimum valid plantstart (Jan 1, 2022) (based on when TF projects began planting)
-    min_valid_date = pd.Timestamp("2022-01-01")
+    # Handle invalid dates that fall before the minimum valid plantstart (based on when projects began planting)
+    min_valid_date = pd.Timestamp(min_valid_plantstart)
     invalid_dates = df[column_name] < min_valid_date
     df.loc[invalid_dates, column_name] = pd.NaT
 
@@ -80,10 +85,16 @@ def missing_planting_dates(df):
 
     return df
 
-def process_tm_api_results(results, outfile1, outfile2):
+def process_tm_api_results(results, min_valid_plantstart, outfile1, outfile2):
     """
     Processes TerraMatch API results into a clean DataFrame for analysis.
     1. 
+
+    Args:
+    - results ():
+    - min_valid_plantstart (str): The earliest date to accept as a valid plantstart (for cleaning the datetime column)
+    - outfile1 (str): File path to save the cleaned DataFrame
+    - outfile2 (str): Additional file path to save the cleaned DataFrame
     """
     extracted_data = []
     input_ids = {project.get('project_id') for project in results if project.get('project_id')}
@@ -121,8 +132,8 @@ def process_tm_api_results(results, outfile1, outfile2):
     pre_clean_ids = list(set(final_df['project_id']))
 
     # Clean up start and end dates
-    final_df = clean_datetime_column(final_df, 'plantstart')
-    final_df = clean_datetime_column(final_df, 'plantend')
+    final_df = clean_datetime_column(final_df, 'plantstart', min_valid_plantstart)
+    final_df = clean_datetime_column(final_df, 'plantend', min_valid_plantstart)
 
     # Print out statistics on missing planting dates
     final_df = missing_planting_dates(final_df)

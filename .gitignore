@@ -5,3 +5,6 @@ ARCHIVE/data_OLD/*
 *__pycache__*
 *.pyc
 secrets.yaml
+arcos_polygons_2025-04-03.geojson
+poly_wi_gte_70_pct_cover_base_ev.csv
+tf_cohort1_landscapes_baseline_ev_pct_cover_comparison.csv

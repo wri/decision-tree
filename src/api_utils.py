@@ -62,3 +62,68 @@ def pull_wrapper(url,
         print(f"Results saved to {outfile}")
 
     return all_results
+
+DEFAULT_INDICATOR_MAPPING = {
+    'treeCover': 'tree_cover',
+    'treeCoverLoss': 'tree_cover_loss',
+    'treeCoverLossFires': 'tree_cover_loss_fires',
+    'restorationByStrategy': 'restoration_by_strategy',
+    'restorationByLandUse': 'restoration_by_land_use'
+}
+
+def parse_tm_api_results(results, outfile, parse_indicators=False, indicator_mapping=None):
+    """
+    Converts TerraMatch API results JSON into a structured DataFrame with selected fields.
+    
+    Args:
+        results (list): Raw JSON results from the API (list of dicts)
+        outfile (str): Path to save cleaned CSV output
+        parse_indicators (bool): Include indicators columns in the final DataFrame
+        indicator_mapping (dict[str, str]): Dictionary used to map indicatorSlug names to desired column names. Keys should be the indicatorSlug keys within the results dictionary. 
+          Values should be the desired column name in the final DataFrame. If parse_indicators = True, this defaults to the DEFAULT_INDICATOR_MAPPING. 
+
+    Returns:
+        final_df (pd.DataFrame): Structured dataframe with selected fields 
+    """
+    extracted_data = []
+
+    # Iterate over each feature in the results JSON to extract polygon information
+    for feature in results: 
+        # Basic attributes
+        row_data = {
+            'project_id': feature.get('project_id'),
+            'poly_id': feature.get('poly_id'),
+            'site_id': feature.get('siteId'),
+            'geometry': feature.get('geometry'),
+            'plantstart': feature.get('plantStart'),
+            'plantend': feature.get('plantEnd'),
+            'practice': feature.get('practice'),
+            'target_sys': feature.get('targetSys'),
+            'dist': feature.get('distr'),
+            'project_phase': feature.get('projectPhase', '')  # default if missing
+        }
+
+        # Optionally parse the 'indicators' list into separate columns
+        if parse_indicators:
+            if indicator_mapping is None:
+                indicator_mapping = DEFAULT_INDICATOR_MAPPING
+            elif not isinstance(indicator_mapping, dict):
+                raise ValueError("indicator_mapping must be provided as a dictionary.")
+            
+            # Get the value associated with the 'indicators' key
+            indicators = feature.get('indicators', [])
+            # For each indicator dicationary
+            for indicator in indicators:
+                slug = indicator.get('indicatorSlug')
+                if slug in indicator_mapping:
+                    col_name = indicator_mapping[slug]
+                    row_data[col_name] = indicator  # Keep full dictionary
+
+        extracted_data.append(row_data)
+
+    final_df = pd.DataFrame(extracted_data)
+    
+    # Save results
+    final_df.to_csv(outfile, index=False)
+
+    return final_df

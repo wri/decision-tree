@@ -2,7 +2,6 @@ import yaml
 import sys
 sys.path.append('../src/')
 
-
 import process_api_results as clean
 import api_utils as tm
 from tm_api_utils import pull_tm_api_data
@@ -16,6 +15,10 @@ import decision_trees as tree
 yaml_path = "params.yaml"
 with open(yaml_path, "r") as f:
     params = yaml.safe_load(f)
+
+config_path = "../secrets.yaml"
+with open(config_path) as conf_file:
+    config = yaml.safe_load(conf_file)
 
 tm_auth_path = params['tm_api']['tm_auth_path']
 with open(tm_auth_path) as auth_file:
@@ -34,17 +37,19 @@ maxar_meta = out['maxar_meta'].format(cohort=out['cohort'],today=out['today'])
 results = out['decision'].format(cohort=out['cohort'],today=out['today'])
 
 
-json_response = tm.pull_wrapper(params['tm_api']['tm_prod_url'], 
+tm_response = tm.TM_pull_wrapper(params['tm_api']['tm_prod_url'], 
                              headers, 
                              c1_ids, # need to identify better way to get ids
                              tm_response)
 
-response_clean = clean.process_tm_api_results(json_response, # has to read this file in?
+response_clean = clean.process_tm_api_results(tm_response, # has to read this file in?
                                               params['criteria']['drop_missing'],
                                               outfile1=feats, 
                                               outfile2=feats_maxar_query)
 
-# step to acquire / process slope data goes here
+dem_response = tm.opentopo_pull_wrapper(params['opt_api']['opt_url'],
+                                        config['opentopo_key'],
+                                        )
 
 img_availability = img.analyze_image_availability(response_clean, # or read in from csv 
                                                    maxar_meta, # this is a string 

@@ -241,11 +241,11 @@ def filter_images(merged_gdf, filters, debug=False):
 
 def get_best_image(poly_images, debug=False):
     """
-    Selects the best image for a given polygon based on the lowest cloud cover. If multiple images have
-    the same cloud cover, selects the one closest to the plantstart date. 
+    Selects the best image for a given polygon. Selects the most recent image with < 10% cloud cover. If no images have < 10% cloud cover, selects
+    the image with the lowest cloud cover (using most recent image as a tiebreaker).
 
     If we want to update this to include an "expected coverage" based on cloud cover and footprint overlap,
-    this is where it would go.
+    this is where it would go. Also potential to update to try the "next best" image if the "best" image covers < 50% of the polygon.
 
     Args:
         poly_images (GeoDataFrame): Subset of img_gdf_filtered containing images for one polygon.
@@ -253,17 +253,26 @@ def get_best_image(poly_images, debug=False):
     Returns:
         GeoSeries: The best image row from poly_images
     """
-    # Sort images by cloud cover ascending (lower is better) and then by image date descending (more recent is better)
-    sorted_images = poly_images.sort_values(by=['area:cloud_cover_percentage', 'img_date'], ascending=[True, False])
+    # Filter poly_images to those with < 10% cloud cover (and sort by recency)
+    low_cc_images = poly_images[poly_images['area:cloud_cover_percentage'] < 10].copy().sort_values(by=['img_date'], ascending=False)
 
-    if debug:
-        print("\n Debug: Sorted images for this polygon (using cloud cover, then proximity to plantstart date):")
-        print(sorted_images[['title', 'area:cloud_cover_percentage', 'img_date', 'plantstart', 'abs_date_diff']])
-
-    # Select the best image (first row after sorting)
-    best_image = sorted_images.iloc[0]
-
-    return best_image
+    # If there is at least 1 image with < 10% cloud cover, return the most recent image as the best image
+    if len(low_cc_images) > 0:
+        if debug:
+            print("There are images with < 10% cloud cover! Selecting most recent image.")
+        best_image = low_cc_images.iloc[0]
+        return best_image
+    
+    # If there are no images with < 10% cloud cover (but a nonzero amount with cloud cover under the hard threshold)
+    else:
+        if debug:
+            print("There are no images with <10% cloud cover. Selecting image with lowest cloud cover.")
+        # Sort images by cloud cover ascending (lower is better) and then by image date descending (more recent is better)
+        sorted_images = poly_images.sort_values(by=['area:cloud_cover_percentage', 'img_date'], ascending=[True, False])
+        
+        # Return the most recent image as the best image
+        best_image = sorted_images.iloc[0]
+        return best_image
 
 def get_utm_crs(longitude, latitude):
     """

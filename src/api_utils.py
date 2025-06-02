@@ -68,7 +68,8 @@ DEFAULT_INDICATOR_MAPPING = {
     'treeCoverLoss': 'tree_cover_loss',
     'treeCoverLossFires': 'tree_cover_loss_fires',
     'restorationByStrategy': 'restoration_by_strategy',
-    'restorationByLandUse': 'restoration_by_land_use'
+    'restorationByLandUse': 'restoration_by_land_use',
+    'restorationByEcoRegion': 'restoration_by_ecoregion'
 }
 
 def parse_tm_api_results(results, outfile, parse_indicators=False, indicator_mapping=None):

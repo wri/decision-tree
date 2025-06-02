@@ -8,6 +8,7 @@ from tm_api_utils import pull_tm_api_data
 
 import image_availability as img
 import canopy_cover as cover
+import slope
 
 import decision_trees as tree
 
@@ -31,6 +32,7 @@ headers = {
 out = params['outfile']
 today = out['today']
 tm_response = out['tm_response'].format(cohort=out['cohort'],today=out['today'])
+ot_response = out['ot_response'].format(cohort=out['cohort'],today=out['today'])
 feats = out['feats'].format(cohort=out['cohort'],today=out['today'])
 feats_maxar_query = out['feats_maxar_query'].format(cohort=out['cohort'],today=out['today'])
 maxar_meta = out['maxar_meta'].format(cohort=out['cohort'],today=out['today'])
@@ -42,28 +44,31 @@ tm_response = tm.TM_pull_wrapper(params['tm_api']['tm_prod_url'],
                              c1_ids, # need to identify better way to get ids
                              tm_response)
 
-response_clean = clean.process_tm_api_results(tm_response, # has to read this file in?
+tm_clean = clean.process_tm_api_results(tm_response, # has to read this file in?
                                               params['criteria']['drop_missing'],
                                               outfile1=feats, 
                                               outfile2=feats_maxar_query)
 
-dem_response = tm.opentopo_pull_wrapper(params['opt_api']['opt_url'],
-                                        config['opentopo_key'],
+ot_response = tm.opentopo_pull_wrapper(params['opt_api']['opt_url'],
+                                       tm_clean,
+                                       params['opt_api']['opt_url'],
+                                       config['opentopo_key'],
+                                       outfile=ot_response
                                         )
 
-img_availability = img.analyze_image_availability(response_clean, # or read in from csv 
+img_branch = img.analyze_image_availability(tm_clean, # or read in from csv 
                                                    maxar_meta, # this is a string 
                                                    tuple(params['criteria']['baseline_range']), 
                                                    tuple(params['criteria']['ev_range']),
                                                    params['criteria']['cloud_thresh'])
 
-canopy_cover = cover.apply_canopy_classification(img_availability,
+canopy_branch = cover.apply_canopy_classification(img_branch,
                                                 params['criteria']['canopy_threshold'],
                                                 tuple(params['criteria']['baseline_range']), 
                                                 tuple(params['criteria']['ev_range']))
-# slope branch would go here
+slope_branch = slope.calculate_slope()
 
-c1_final = tree.apply_rules_baseline(canopy_cover, 
+c1_final = tree.apply_rules_baseline(canopy_branch, 
                                     params['criteria']['rules'],
                                     save_to_csv=results)
 

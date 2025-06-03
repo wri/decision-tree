@@ -26,14 +26,16 @@ def analyze_image_availability(proj_df,
     
     criteria = params.get('criteria', {})
 
-    baseline_range = criteria.get('baseline_range')
-    ev_range = criteria.get('ev_range')
+    baseline_range = tuple(criteria.get('baseline_range'))
+    ev_range = tuple(criteria.get('ev_range'))
     cloud_thresh = criteria.get('cloud_thresh')
     off_nadir = criteria.get('off_nadir')
     sun = criteria.get('sun_elevation')
-
+    
     proj_df.columns = proj_df.columns.str.lower()
-    img_df = img_df[['project_id', 'poly_id', 'site_id', 'datetime', 'eo:cloud_cover']].copy()
+    img_df = img_df[['project_id', 'poly_id', 'site_id', 
+                     'datetime', 'eo:cloud_cover', 
+                     'view:sun_elevation', 'view:off_nadir']].copy()
    
     # Ensure datetime format
     img_df['img_date'] = pd.to_datetime(img_df['datetime'], errors='coerce').dt.tz_localize(None)
@@ -48,7 +50,7 @@ def analyze_image_availability(proj_df,
         (merged['date_diff'] >= baseline_range[0]) &
         (merged['date_diff'] <= baseline_range[1]) &
         (merged['eo:cloud_cover'] < cloud_thresh) &
-        (merged['view:sun_elevation'] <= sun) &
+        (merged['view:sun_elevation'] >= sun) &
         (merged['view:off_nadir'] <= off_nadir)
     ]
     baseline_summary = (
@@ -59,8 +61,8 @@ def analyze_image_availability(proj_df,
     ev = merged[
         (merged['date_diff'] >= ev_range[0]) &
         (merged['date_diff'] <= ev_range[1]) &
-        (merged['eo:cloud_cover'] < cloud_thresh)
-        (merged['view:sun_elevation'] <= sun) &
+        (merged['eo:cloud_cover'] < cloud_thresh) &
+        (merged['view:sun_elevation'] >= sun) &
         (merged['view:off_nadir'] <= off_nadir)
     ]
     ev_summary = (

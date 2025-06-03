@@ -2,11 +2,10 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from datetime import datetime
+import yaml
 
 def apply_canopy_classification(df,
-                                canopy_thresh,
-                                baseline_range=(-365, 0),
-                                ev_range=(730, 1095)):
+                                param_path):
     """
     Assigns canopy classification for baseline and early verification
     based on the available ttc values and plantstart year.
@@ -28,6 +27,12 @@ def apply_canopy_classification(df,
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
     """
+    with open(param_path) as file:
+        params = yaml.safe_load(file)
+    
+    criteria = params.get('criteria', {})
+    canopy_thresh = criteria.get('canopy_threshold')
+
     current_year = datetime.today().year
     df['plantstart_year'] = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
     df.loc[:, 'baseline_canopy'] = 'unknown'

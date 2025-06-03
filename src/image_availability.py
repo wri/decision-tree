@@ -3,12 +3,12 @@ import geopandas as gpd
 import numpy as np
 import os
 import process_api_results as clean
+import yaml
 
 def analyze_image_availability(proj_df, 
                                img_df, 
-                               baseline_range=(-365, 0), 
-                               ev_range=(365, 1095), 
-                               cloud_thresh=50):
+                               param_path,
+                                ):
     """
     Assesses image availability for baseline & early verification per 
     project/polygon based on user defined windows.
@@ -16,15 +16,22 @@ def analyze_image_availability(proj_df,
     Parameters:
     - proj_df (pd.DataFrame): DataFrame containing project characteristics.
     - img_df (pd.DataFrame): DataFrame containing image observations.
-    - baseline_range (tuple): Timeframe for baseline availability in days 
-        (e.g., (-365, 0) for 1 year before plantstart).
-    - ev_range (tuple): Timeframe for early verification availability in days 
-        (e.g., (365, 1095) for 2 years after plantstart).
-    - cloud_thresh (int): Maximum acceptable cloud cover percentage.
+    - param_path points to the params.yaml which contains criteria for the decision
 
     Returns:
     - pd.DataFrame: Merged DataFrame with image availability counts per polygon.
     """
+    with open(param_path) as file:
+        params = yaml.safe_load(file)
+    
+    criteria = params.get('criteria', {})
+
+    baseline_range = criteria.get('baseline_range')
+    ev_range = criteria.get('ev_range')
+    cloud_thresh = criteria.get('cloud_thresh')
+    off_nadir = criteria.get('off_nadir')
+    sun = criteria.get('sun_elevation')
+
     proj_df.columns = proj_df.columns.str.lower()
     img_df = img_df[['project_id', 'poly_id', 'site_id', 'datetime', 'eo:cloud_cover']].copy()
    
@@ -40,18 +47,21 @@ def analyze_image_availability(proj_df,
     baseline = merged[
         (merged['date_diff'] >= baseline_range[0]) &
         (merged['date_diff'] <= baseline_range[1]) &
-        (merged['eo:cloud_cover'] < cloud_thresh)
+        (merged['eo:cloud_cover'] < cloud_thresh) &
+        (merged['view:sun_elevation'] <= sun) &
+        (merged['view:off_nadir'] <= off_nadir)
     ]
     baseline_summary = (
         baseline.groupby(['project_id', 'poly_id'])
         .size()
         .reset_index(name='baseline_img_count')
     )
-
     ev = merged[
         (merged['date_diff'] >= ev_range[0]) &
         (merged['date_diff'] <= ev_range[1]) &
         (merged['eo:cloud_cover'] < cloud_thresh)
+        (merged['view:sun_elevation'] <= sun) &
+        (merged['view:off_nadir'] <= off_nadir)
     ]
     ev_summary = (
         ev.groupby(['project_id', 'poly_id'])

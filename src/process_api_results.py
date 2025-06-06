@@ -175,7 +175,7 @@ def process_tm_api_results(results,
 
     # final clean up
     output_ids = list(set(clean_df['project_id']))
-    #assert len(input_ids) == len(pre_clean_ids) == len(output_ids)
+    assert len(input_ids) == len(pre_clean_ids) == len(output_ids)
 
     missing_projects = input_ids - set(clean_df['project_id'])
     if missing_projects:
@@ -187,3 +187,15 @@ def process_tm_api_results(results,
         clean_df.to_csv(outfile2, index=False)
 
     return clean_df
+
+def create_geojsons(results):
+    '''
+    This function takes the TM API output and
+    saves each project as its own geojson. I think this should
+    use the raw API response (results) or it could use the output
+    dataframe from process_tm_api_results(), but that would only
+    include specific information and undergo a cleaning process.
+    The output is a project shapefile containing all polygons and 
+    named using the project_id column
+    
+    '''

@@ -9,13 +9,13 @@ from tqdm import tqdm
 import geopandas as gpd
 import rasterio as rs
 from rasterio.plot import show
-from rasterstats import zonal_stats
+from exactextract import exact_extract
 import richdem as rd
 import tempfile
 import ast
 from shapely.geometry import shape
 from osgeo import gdal
-
+from rasterio.io import MemoryFile
 from tm_api_utils import pull_tm_api_data
 
 
@@ -61,19 +61,23 @@ def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
     return results
 
 
-def TM_pull_wrapper(url, headers, project_ids, outfile=None):
+def tm_pull_wrapper(url, headers, project_ids, outfile=None, geojson_dir=None):
     """
     Wrapper function around the TM API package.
 
-    Iterates over a list of project IDs, aggregates results, and writes to JSON if specified.
+    Iterates over a list of project IDs, aggregates results, and writes to JSON and GeoJSON if specified.
 
     Parameters:
         url (str): TerraMatch API endpoint.
         headers (dict): Auth headers.
         project_ids (list): List of project UUIDs.
         outfile (str): Optional path to write output JSON.
+        geojson_dir (str): Optional directory to save project-level GeoJSONs.
     """
     all_results = []
+    
+    if geojson_dir:
+        os.makedirs(geojson_dir, exist_ok=True)
 
     with tqdm(total=len(project_ids), desc="Pulling Projects", unit="project") as progress:
         for project_id in project_ids:
@@ -85,17 +89,33 @@ def TM_pull_wrapper(url, headers, project_ids, outfile=None):
             }
 
             try:
-                results = patched_pull_tm_api_data(url, headers, params)
-                # results = pull_tm_api_data(url, headers, params) confirm this now works
-
+                #update this to directly use TM Api 
+                results = patched_pull_tm_api_data(url, headers, params) 
                 if results is None:
                     print(f"No results returned for project: {project_id}")
+                    progress.update(1)
                     continue
 
+                # Add project_id for traceability
                 for r in results:
-                    r['project_id'] = project_id  # Add project_id for traceability
+                    r['project_id'] = project_id
 
                 all_results.extend(results)
+
+                # --- Save GeoJSON per project if requested ---
+                if geojson_dir:
+             
+                    gdf = gpd.GeoDataFrame(
+                        results,
+                        geometry=[shape(feature['geometry']) for feature in results],
+                        crs='EPSG:4326'
+                    )
+
+                    # Validate geometries
+                    # gdf['geometry'] = gdf['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+                    # gdf = gdf[~gdf['geometry'].is_empty & gdf['geometry'].notnull()]
+                    geojson_path = os.path.join(geojson_dir, f"{project_id}.geojson")
+                    gdf.to_file(geojson_path, driver='GeoJSON')
 
             except Exception as e:
                 print(f"Error pulling project {project_id}: {e}")
@@ -110,28 +130,33 @@ def TM_pull_wrapper(url, headers, project_ids, outfile=None):
 
     return all_results
 
-
-def opentopo_pull_wrapper(dem_url, api_key, df, outfile):
+def opentopo_pull_wrapper(dem_url, api_key, input_df, geojson_dir, outfile):
     '''
     Downloads DEM data using the project bounding box, then calculates 
-    slope and aspect statistics at the polygon level to ensure a yes/no
-    decision can be made for each polygon.
+    slope and aspect rasters, saved as temp disk files. Calculates zonal statistics 
+    for an entire project (due to exact extract specifications) but at the polygon level. 
+    If a polygon falls outside the DEM extent, stats default to NaN.
 
-    If a polygon is too small or falls outside DEM extent, stats are set to NaN.
+    Parameters:
+        dem_url (str): API endpoint for DEM.
+        api_key (str): API key for authentication.
+        input_df (pd.DataFrame): DataFrame containing list of project_ids to process.
+        geojson_dir (str): Directory where per-project GeoJSON files are saved.
+        outfile (str): Output CSV file path.
     '''
-    #df = pd.read_csv(project_csv) update this later to read in clean csv
-    df['geometry'] = df['geometry'].apply(ast.literal_eval).apply(shape)
+    project_ids = input_df['project_id'].unique()
 
-    projects = df['project_id'].unique()
+    all_prjs = []
 
-    all_polygons = []
-
-    for id in tqdm(projects, desc='Processing Projects', unit='project'):
-        project_df = df[df.project_id == id].copy()
-        gdf = gpd.GeoDataFrame(project_df, geometry='geometry', crs='EPSG:4326')
-
-        # Project-level bounding box
-        total_bounds = gdf.total_bounds  # (minx, miny, maxx, maxy)
+    for project_id in tqdm(project_ids, desc='Processing Projects', unit='project'):
+        
+        # import prj geojson
+        geojson_path = os.path.join(geojson_dir, f"{project_id}.geojson")
+        if not os.path.exists(geojson_path):
+            print(f"Warning: GeoJSON for {project_id} not found, skipping.")
+            continue
+        prj = gpd.read_file(geojson_path)
+        total_bounds = prj.total_bounds  # (minx, miny, maxx, maxy)
 
         query = {
             'demtype': 'NASADEM',
@@ -142,70 +167,88 @@ def opentopo_pull_wrapper(dem_url, api_key, df, outfile):
             'outputFormat': 'GTiff',
             'API_Key': api_key
         }
-        # Use a temporary file instead of manual file path
-        # keep delete = False because file is used later
-        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmpfile:
-            temp_path = tmpfile.name
+
+        # Create temporary files for DEM, slope, and aspect
+        with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as dem_tmp, \
+             tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as slope_tmp, \
+             tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as aspect_tmp:
+            
+            dem_path = dem_tmp.name
+            slope_path = slope_tmp.name
+            aspect_path = aspect_tmp.name
 
         try:
-            # Download the DEM to the temp file
+            # Download the DEM
             response = requests.get(dem_url, stream=True, params=query)
             if response.status_code != 200:
-                print(f"Error downloading DEM for project {id}: {response.text}")
-                raise Exception(f"Failed to download DEM for project {id}")
+                print(f"Error downloading DEM for project {project_id}: {response.text}")
+                raise Exception(f"Failed to download DEM for project {project_id}")
 
-            # Save the DEM content to the temp file
-            with open(temp_path, 'wb') as f:
+            with open(dem_path, 'wb') as f:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
 
-            # Load the DEM
-            dem = rd.LoadGDAL(temp_path)
-            slope = rd.TerrainAttribute(dem, attrib='slope_riserun')
-            aspect = rd.TerrainAttribute(dem, attrib='aspect')
+            # Load the DEM and generate slope/aspect
+            dem = rd.LoadGDAL(dem_path)
+            slope = rd.TerrainAttribute(dem, attrib='slope_percentage').astype('float32')
+            aspect = rd.TerrainAttribute(dem, attrib='aspect').astype('float32')
 
-            # Open the DEM with rasterio to get affine
-            with rs.open(temp_path) as dem_r:
-                affine = dem_r.transform
+            # Load DEM to get spatial profile
+            with rs.open(dem_path) as dem_r:
+                profile = dem_r.profile
+            profile.update(dtype='float32', count=1)
 
-            for idx, row in gdf.iterrows():
-                poly = row['geometry']
+            # Save slope and aspect to temporary disk files
+            with rs.open(slope_path, 'w', **profile) as dst:
+                dst.write(slope, 1)
+            with rs.open(aspect_path, 'w', **profile) as dst:
+                dst.write(aspect, 1)
 
-                # Initialize stats as NaN
-                slope_stats = {stat: np.nan for stat in ["min", "max", "mean", 
-                                                         "median", "majority"]}
-                aspect_stats = {stat: np.nan for stat in ["min", "max", "mean", 
-                                                          "median", "majority"]}
+            # Open the rasters for reading
+            slope_raster = rs.open(slope_path)
+            aspect_raster = rs.open(aspect_path)
 
-                try:
-                    slope_zs = zonal_stats(poly, slope, affine=affine,
-                                           stats=["min", "max", "mean", 
-                                                  "median", "majority"])
-                    aspect_zs = zonal_stats(poly, aspect, affine=affine,
-                                            stats=["min", "max", "mean", 
-                                                   "median", "majority"])
-                    # Update stats if available
-                    if slope_zs and slope_zs[0] is not None:
-                        slope_stats = slope_zs[0]
-                    if aspect_zs and aspect_zs[0] is not None:
-                        aspect_stats = aspect_zs[0]
-                except Exception as e:
-                    print(f"Warning: Unable to calculate stats for polygon {row['poly_id']} in project {id}: {e}")
+            aggregations = ['min', 'max', 'mean', 'median', 'majority']
 
-                all_polygons.append({
-                    'project_id': id,
-                    'poly_id': row['poly_id'],
+            # Get zonal stats for all polygons at once
+            slope_stats_list = exact_extract(slope_raster, prj, aggregations)
+            aspect_stats_list = exact_extract(aspect_raster, prj, aggregations)
+
+            for idx, (row, slope_zs, aspect_zs) in enumerate(zip(prj.itertuples(), slope_stats_list, aspect_stats_list)):
+                if isinstance(slope_zs, dict) and 'properties' in slope_zs:
+                    slope_stats = slope_zs['properties']
+                else:
+                    slope_stats = {stat: np.nan for stat in aggregations}
+
+                if isinstance(aspect_zs, dict) and 'properties' in aspect_zs:
+                    aspect_stats = aspect_zs['properties']
+                else:
+                    aspect_stats = {stat: np.nan for stat in aggregations}
+
+                all_prjs.append({
+                    'project_id': project_id,
+                    'poly_id': getattr(row, 'poly_id'),
                     'slope_stats': slope_stats,
                     'aspect_stats': aspect_stats
                 })
-        # now delete the temp file
+
+            slope_raster.close()
+            aspect_raster.close()
+
         finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            # Delete all temp files
+            for fpath in [dem_path, slope_path, aspect_path]:
+                if os.path.exists(fpath):
+                    os.remove(fpath)
 
     # Write results to CSV
-    result_df = pd.DataFrame(all_polygons)
-    result_df = pd.concat([result_df.drop(['slope_stats', 'aspect_stats'], axis=1),
-                       result_df['slope_stats'].apply(pd.Series).add_suffix('_slope'),
-                       result_df['aspect_stats'].apply(pd.Series).add_suffix('_aspect')], axis=1)
+    result_df = pd.DataFrame(all_prjs)
+
+    # Expand the nested dictionaries
+    result_df = pd.concat([
+        result_df.drop(['slope_stats', 'aspect_stats'], axis=1),
+        result_df['slope_stats'].apply(pd.Series).add_suffix('_slope'),
+        result_df['aspect_stats'].apply(pd.Series).add_suffix('_aspect')
+    ], axis=1)
+
     result_df.to_csv(outfile, index=False)

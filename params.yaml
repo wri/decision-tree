@@ -3,7 +3,7 @@ opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
 
 tm_api:
-  tm_auth_path: secrets.yaml
+  tm_auth_path: ../secrets.yaml #UPDATE
   tm_staging_url: https://api-staging.terramatch.org/research/v3/sitePolygons?  
   tm_prod_url: https://api.terramatch.org/research/v3/sitePolygons?
 
@@ -19,9 +19,10 @@ criteria:
   rules: data/rule_template.csv
 
 outfile:
-  today: 04-24-2025
+  today: 06-06-2025
   cohort: c1               
   portfolio: data/portfolio_csvs/terrafund_approved_projects_202504021529.csv
+  geojsons: data/geojsons/
   tm_response: data/tm_api_response/{cohort}_{today}.json
   ot_response: data/slope/slope_statistics_{cohort}_{today}.csv
   feats: data/tm_api_{cohort}_{today}.csv

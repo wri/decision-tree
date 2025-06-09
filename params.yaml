@@ -15,7 +15,8 @@ criteria:
   img_count: 1                                                 # threshold for identifying image availability
   baseline_range: [-365, 0]                                    # baseline window (1 year before plant start date)
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
-  drop_missing: True
+  drop_missing: False
+  slope_thresh: 20
   rules: data/rule_template.csv
 
 outfile:
@@ -26,6 +27,7 @@ outfile:
   tm_response: data/tm_api_response/{cohort}_{today}.json
   ot_response: data/slope/slope_statistics_{cohort}_{today}.csv
   feats: data/tm_api_{cohort}_{today}.csv
+  slope: data/slope/slope_{cohort}.csv
   feats_maxar_query: Users/jessica.ertel/github/maxar-tools/data/tm_api_c2_{today}.csv
   maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{today}.csv
   decision: data/dtree_output_{cohort}_{today}.csv

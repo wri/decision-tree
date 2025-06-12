@@ -309,7 +309,7 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
         min_coverage_threshold (int): Imagery coverage threshold below which polygons are logged (defaults to 50%)
 
     Returns:
-        Tuple containing (poly_id, project_id, best_image, num_images, poly_area_ha,
+        Tuple containing (poly_id, project_id, best_image, img_date, num_images, poly_area_ha,
         overlap_area_ha, percent_img_cover)
     """
 
@@ -349,6 +349,7 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
             'poly_id': poly_id,
             'project_id': project_id,
             'best_image': None,
+            'img_date': None,
             'num_images': 0,
             'poly_area_ha': poly_area_ha,
             'overlap_area_ha': 0,
@@ -358,7 +359,7 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
         low_img_coverage_log.append(log_entry)
 
         # Return after logging
-        return (poly_id, project_id, None, num_images, poly_area_ha, 0, 0)
+        return (poly_id, project_id, None, None, num_images, poly_area_ha, 0, 0)
     
     ## If there is at least one valid image
     # Select the best image from the filtered images for the polygon
@@ -393,6 +394,7 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
             'poly_id': poly_id,
             'project_id': project_id,
             'best_image': best_image['title'] if best_image is not None else None,
+            'img_date': best_image['img_date'] if best_image is not None else None,
             'num_images': num_images,
             'poly_area_ha': poly_area_ha,
             'overlap_area_ha': overlap_area_ha,
@@ -402,7 +404,7 @@ def compute_polygon_image_coverage(poly_id, project_id, poly_gdf, img_gdf_filter
     
     print("Success!")
     # Return results
-    return (poly_id, project_id, best_image['title'], num_images, poly_area_ha, overlap_area_ha,
+    return (poly_id, project_id, best_image['title'], best_image['img_date'], num_images, poly_area_ha, overlap_area_ha,
             percent_img_cover)
 
 def aggregate_project_image_coverage(results_df, debug=False):

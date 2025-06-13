@@ -9,9 +9,11 @@ from tqdm import tqdm
 import geopandas as gpd
 import rasterio as rs
 from rasterio.plot import show
+import rasterio.mask
 from exactextract import exact_extract
 import richdem as rd
 import tempfile
+import math
 import ast
 from shapely.geometry import shape
 from osgeo import gdal
@@ -130,6 +132,35 @@ def tm_pull_wrapper(url, headers, project_ids, outfile=None, geojson_dir=None):
 
     return all_results
 
+def calculate_high_slope_area(slope_raster, polygon, threshold=20):
+
+    '''
+    Masks the slope raster with the polygon to determine the
+    percentage of polygon area with steep slope.
+    If there are no high slope pixels (>20%) then will see 0
+
+    we need a certain number of inventory plots in each polygon to 
+    reach our designated sampling rate, so if we could only put plots 
+    on a small proportion of a project, it's unlikely we would reach 
+    our desired sampling rate and field verification might not 
+    accurately capture planting activities.
+    '''
+    # Mask the slope raster with the polygon
+    out_image, out_transform = rasterio.mask.mask(slope_raster, [polygon], crop=True, nodata=np.nan)
+    out_image = out_image[0] 
+
+    # Flatten and remove NaNs
+    slope_values = out_image.flatten()
+    slope_values = slope_values[~np.isnan(slope_values)]
+
+    if len(slope_values) == 0:
+        return np.nan  # No data available for polygon #TODO: make this explicitly no data
+
+    high_slope_pixels = np.sum(slope_values > threshold)
+    total_pixels = len(slope_values)
+    percentage = (high_slope_pixels / total_pixels) * 100
+    return round(percentage, 1)
+
 def opentopo_pull_wrapper(dem_url, api_key, input_df, geojson_dir, outfile):
     '''
     Downloads DEM data using the project bounding box, then calculates 
@@ -188,9 +219,14 @@ def opentopo_pull_wrapper(dem_url, api_key, input_df, geojson_dir, outfile):
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
 
+            # convert degrees to meters
+            latitude = (total_bounds[1] + total_bounds[3]) / 2
+            meters_per_degree = 111320 * math.cos(math.radians(latitude))
+            zscale = 1 / meters_per_degree
+
             # Load the DEM and generate slope/aspect
             dem = rd.LoadGDAL(dem_path)
-            slope = rd.TerrainAttribute(dem, attrib='slope_percentage').astype('float32')
+            slope = rd.TerrainAttribute(dem, attrib='slope_percentage', zscale=zscale).astype('float32')
             aspect = rd.TerrainAttribute(dem, attrib='aspect').astype('float32')
 
             # Load DEM to get spatial profile
@@ -198,7 +234,6 @@ def opentopo_pull_wrapper(dem_url, api_key, input_df, geojson_dir, outfile):
                 profile = dem_r.profile
             profile.update(dtype='float32', count=1)
 
-            # Save slope and aspect to temporary disk files
             with rs.open(slope_path, 'w', **profile) as dst:
                 dst.write(slope, 1)
             with rs.open(aspect_path, 'w', **profile) as dst:
@@ -224,12 +259,15 @@ def opentopo_pull_wrapper(dem_url, api_key, input_df, geojson_dir, outfile):
                     aspect_stats = aspect_zs['properties']
                 else:
                     aspect_stats = {stat: np.nan for stat in aggregations}
+                
+                area_stat = calculate_high_slope_area(slope_raster, row.geometry, threshold=20) # move threshold to PARAMS
 
                 all_prjs.append({
                     'project_id': project_id,
                     'poly_id': getattr(row, 'poly_id'),
                     'slope_stats': slope_stats,
-                    'aspect_stats': aspect_stats
+                    'aspect_stats': aspect_stats,
+                    'slope_area': area_stat
                 })
 
             slope_raster.close()
@@ -243,6 +281,7 @@ def opentopo_pull_wrapper(dem_url, api_key, input_df, geojson_dir, outfile):
 
     # Write results to CSV
     result_df = pd.DataFrame(all_prjs)
+    result_df = result_df.round(1)
 
     # Expand the nested dictionaries
     result_df = pd.concat([

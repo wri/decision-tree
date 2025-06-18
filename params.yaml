@@ -1,4 +1,9 @@
 
+s3:
+  bucket_name: restoration-monitoring
+  upload_gjson: True
+
+
 opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
 
@@ -20,15 +25,15 @@ criteria:
   rules: data/rule_template.csv
 
 outfile:
-  today: 06-06-2025
+  today: 06-18-2025
   cohort: c1               
-  portfolio: data/portfolio_csvs/terrafund_approved_projects_202504021529.csv
-  geojsons: data/geojsons/
-  tm_response: data/tm_api_response/{cohort}_{today}.json
-  ot_response: data/slope/slope_statistics_{cohort}_{today}.csv
-  feats: data/tm_api_{cohort}_{today}.csv
-  slope: data/slope/slope_{cohort}.csv
+  portfolio: ../data/portfolio_csvs/terrafund_approved_projects_202504021529.csv
+  geojsons: ../data/geojsons/
+  tm_response: ../data/tm_api_response/{cohort}_{today}.json
+  ot_response: ../data/slope/slope_statistics_{cohort}_{today}.csv
+  feats: ../data/tm_api_{cohort}_{today}.csv
+  slope: ../data/slope/slope_{cohort}.csv
   feats_maxar_query: Users/jessica.ertel/github/maxar-tools/data/tm_api_c2_{today}.csv
-  maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{today}.csv
-  decision: data/dtree_output_{cohort}_{today}.csv
+  maxar_meta: ../data/imagery_availability/comb_img_availability_{cohort}_{today}.csv
+  decision: ../data/dtree_output_{cohort}_{today}.csv
 

@@ -5,10 +5,7 @@ import os
 import process_api_results as clean
 import yaml
 
-def analyze_image_availability(proj_df, 
-                               img_df, 
-                               param_path,
-                                ):
+def analyze_image_availability(params, proj_df, maxar_fp):
     """
     Assesses image availability for baseline & early verification per 
     project/polygon based on user defined windows.
@@ -21,11 +18,8 @@ def analyze_image_availability(proj_df,
     Returns:
     - pd.DataFrame: Merged DataFrame with image availability counts per polygon.
     """
-    with open(param_path) as file:
-        params = yaml.safe_load(file)
     
     criteria = params.get('criteria', {})
-
     baseline_range = tuple(criteria.get('baseline_range'))
     ev_range = tuple(criteria.get('ev_range'))
     cloud_thresh = criteria.get('cloud_thresh')
@@ -33,6 +27,7 @@ def analyze_image_availability(proj_df,
     sun = criteria.get('sun_elevation')
     
     proj_df.columns = proj_df.columns.str.lower()
+    img_df = pd.read_csv(maxar_fp)
     img_df = img_df[['project_id', 'poly_id', 'site_id', 
                      'datetime', 'eo:cloud_cover', 
                      'view:sun_elevation', 'view:off_nadir']].copy()

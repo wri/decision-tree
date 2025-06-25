@@ -4,8 +4,7 @@ import numpy as np
 from datetime import datetime
 import yaml
 
-def apply_canopy_classification(df,
-                                param_path):
+def apply_canopy_classification(params, df):
     """
     Assigns canopy classification for baseline and early verification
     based on the available ttc values and plantstart year.
@@ -27,9 +26,6 @@ def apply_canopy_classification(df,
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
     """
-    with open(param_path) as file:
-        params = yaml.safe_load(file)
-    
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
 

@@ -26,6 +26,9 @@ def apply_canopy_classification(params, df):
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
     """
+    n_projects = df['project_id'].nunique()
+    print(f"Analyzing canopy cover for {n_projects} projects...")
+
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
 

@@ -187,9 +187,11 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
 
 def opentopo_pull_wrapper(params, config, input_df):
     '''
-    Downloads DEM data using the project bounding box, then calculates 
+    Checks for existing outputs to reduce API requests.
+    Downloads DEM data using the project bounding box + buffer, then calculates 
     slope and aspect rasters, saved as temp disk files. Calculates zonal statistics 
     for an entire project (due to exact extract specifications) at the polygon level. 
+    Calculates area with high slope.
     If a polygon falls outside the DEM extent, stats default to NaN.
 
     Parameters:
@@ -207,13 +209,12 @@ def opentopo_pull_wrapper(params, config, input_df):
 
     project_names = input_df['project_name'].unique()
 
-    all_prjs = []
-
     #for name in tqdm(project_names, desc='Processing Projects', unit='project'):
     for name in project_names:
-        stat_path = f"data/slope/project_statistics/{name}_slope_stats.csv"
+        stat_path = params['outfile']['project_stats'].format(name=name)
         if os.path.exists(stat_path):
             print(f"{name} already processed, skipping.")
+            continue
         else:
             print(f"Processing {name}")
         geojson_path = os.path.join(geojson_dir, f"{name}_{today}.geojson")
@@ -258,7 +259,9 @@ def opentopo_pull_wrapper(params, config, input_df):
 
             # Load the DEM and generate slope/aspect
             dem = rd.LoadGDAL(dem_path)
-            slope = rd.TerrainAttribute(dem, attrib='slope_percentage', zscale=zscale).astype('float32')
+            slope = rd.TerrainAttribute(dem, 
+                                        attrib='slope_percentage', 
+                                        zscale=zscale).astype('float32')
 
             with rs.open(dem_path) as dem_r:
                 profile = dem_r.profile
@@ -303,7 +306,7 @@ def opentopo_pull_wrapper(params, config, input_df):
                 if os.path.exists(fpath):
                     os.remove(fpath)
 
-    csv_files = glob.glob("data/slope/project_statistics/*_slope_stats.csv")
+    csv_files = glob.glob("/Users/jessica.ertel/github/terrafund-portfolio-analyses/data/slope/project_statistics/*_slope_stats.csv")
     dfs = [pd.read_csv(f) for f in csv_files]
     result_df = pd.concat(dfs, ignore_index=True)
 

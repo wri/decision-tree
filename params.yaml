@@ -28,7 +28,7 @@ criteria:
 outfile:
   today: 06-26-2025
   cohort: c1               
-  portfolio: data/portfolio_csvs/terrafund_approved_projects_202504021529.csv
+  portfolio: data/portfolio_csvs/prj_ids_{cohort}_{today}.csv
   geojsons: data/geojsons/
   tm_response: data/tm_api_response/{cohort}_{today}.json
   slope_stats: data/slope/slope_statistics_{cohort}_{today}.csv

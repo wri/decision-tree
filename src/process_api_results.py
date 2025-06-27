@@ -74,7 +74,7 @@ def missing_planting_dates(df, drop=False):
 
 def missing_features(df, drop=False):
     '''
-    Identifies rows where ttc is only NaN values.
+    Identifies rows where ttc is only NaN values (no data for any years).
     Identifies rows where practice or targetsys is NaN.
     Optionally drops these rows based on the drop argument 
     and prints a statement about the count of rows affected.
@@ -101,10 +101,7 @@ def missing_features(df, drop=False):
     return final_df
     
 
-def process_tm_api_results(results, 
-                           drop_missing, 
-                           outfile1=None, 
-                           outfile2=None):
+def process_tm_api_results(params, results):
     """
     Processes API results into a clean DataFrame for analysis.
     results: json response
@@ -117,6 +114,7 @@ def process_tm_api_results(results,
     feature that allows us to dynamically add multiple columns 
     to the DataFrame without explicitly defining them.
     """
+    drop_missing = params['criteria']['drop_missing']
     extracted_data = []
     input_ids = {project.get('project_id') for project in results if project.get('project_id')}
 
@@ -125,6 +123,7 @@ def process_tm_api_results(results,
         project_id = project.get('project_id')
         poly_id = project.get('poly_id')
         site_id = project.get('siteId')
+        project_name = project.get('projectShortName')
         geom = project.get('geometry')
         plant_start = project.get('plantStart')
         plant_end = project.get('plantEnd')
@@ -152,6 +151,7 @@ def process_tm_api_results(results,
             'project_id': project_id,
             'poly_id': poly_id,
             'site_id': site_id,
+            'project_name': project_name,
             'geometry': geom,
             'plantstart': plant_start,
             'plantend': plant_end,
@@ -181,21 +181,4 @@ def process_tm_api_results(results,
     if missing_projects:
         print(f"Missing prj ids: {missing_projects}")
 
-    if outfile1 is not None:
-        clean_df.to_csv(outfile1, index=False)
-    if outfile2 is not None:
-        clean_df.to_csv(outfile2, index=False)
-
     return clean_df
-
-def create_geojsons(results):
-    '''
-    This function takes the TM API output and
-    saves each project as its own geojson. I think this should
-    use the raw API response (results) or it could use the output
-    dataframe from process_tm_api_results(), but that would only
-    include specific information and undergo a cleaning process.
-    The output is a project shapefile containing all polygons and 
-    named using the project_id column
-    
-    '''

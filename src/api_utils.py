@@ -107,6 +107,7 @@ def tm_pull_wrapper(params, project_ids):
 
     with tqdm(total=len(project_ids), desc="Pulling Projects", unit="project") as progress:
         for project_id in project_ids:
+
             api_param_dict = {
                 'projectId[]': project_id,
                 'polygonStatus[]': 'approved',
@@ -115,7 +116,7 @@ def tm_pull_wrapper(params, project_ids):
             }
 
             try:
-                # update this to directly use TM Api 
+                # update this to directly use TM Api package
                 results = patched_pull_tm_api_data(url, headers, api_param_dict) 
                 if results is None:
                     print(f"No results returned for project: {project_id}")
@@ -185,7 +186,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     percentage = (high_slope_pixels / len(valid_pixels)) * 100
     return round(percentage, 1)
 
-def opentopo_pull_wrapper(params, config, input_df):
+def opentopo_pull_wrapper(params, config, feats_df):
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates 
@@ -207,21 +208,20 @@ def opentopo_pull_wrapper(params, config, input_df):
     slope_thresh = params['criteria']['slope_thresh']
     today = params['outfile']['today']
 
-    project_names = input_df['project_name'].unique()
-
-    #for name in tqdm(project_names, desc='Processing Projects', unit='project'):
+    project_names = feats_df['project_name'].unique()
+    dfs_to_concat = []
     for name in project_names:
+        project_df = feats_df[feats_df.project_name == name]
+        project_id = project_df.project_id.iloc[0]
         stat_path = params['outfile']['project_stats'].format(name=name)
         if os.path.exists(stat_path):
+            dfs_to_concat.append(pd.read_csv(stat_path))
             print(f"{name} already processed, skipping.")
             continue
         else:
             print(f"Processing {name}")
+        
         geojson_path = os.path.join(geojson_dir, f"{name}_{today}.geojson")
-        if not os.path.exists(geojson_path):
-            print(f"Warning: {geojson_path} not found, skipping.")
-            continue
-
         prj = gpd.read_file(geojson_path)
         total_bounds = prj.total_bounds  
         buffer_deg = 0.01  # ~1 km buffer; adjust if needed
@@ -291,14 +291,18 @@ def opentopo_pull_wrapper(params, config, input_df):
 
                 project_data.append({
                     'project_name': name,
+                    'project_id': project_id,
                     'poly_id': getattr(row, 'poly_id'),
                     'slope_stats': slope_stats,
                     'slope_area': area_stat})
                 
                 df = pd.DataFrame(project_data).round(1)
+                expanded = df["slope_stats"].apply(pd.Series).add_suffix("_slope")
+                df = pd.concat([df.drop("slope_stats", axis=1), expanded], axis=1)
                 df.to_csv(stat_path, index=False)
+                dfs_to_concat.append(df)
 
-            slope_raster.close()
+                slope_raster.close()
 
         finally:
             # Delete all temp files
@@ -306,14 +310,6 @@ def opentopo_pull_wrapper(params, config, input_df):
                 if os.path.exists(fpath):
                     os.remove(fpath)
 
-    csv_files = glob.glob("/Users/jessica.ertel/github/terrafund-portfolio-analyses/data/slope/project_statistics/*_slope_stats.csv")
-    dfs = [pd.read_csv(f) for f in csv_files]
-    result_df = pd.concat(dfs, ignore_index=True)
 
-    # Expand the nested dictionaries
-    result_df = pd.concat([
-    result_df.drop(['slope_stats'], axis=1),
-    result_df['slope_stats'].apply(ast.literal_eval).apply(pd.Series).add_suffix('_slope'),
-    ], axis=1)
-
+    result_df = pd.concat(dfs_to_concat, ignore_index=True)
     return result_df

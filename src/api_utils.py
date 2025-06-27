@@ -16,20 +16,7 @@ import math
 from shapely.geometry import shape
 from osgeo import gdal
 from tm_api_utils import pull_tm_api_data
-from s3_utils import upload_to_s3
-import shutil
-import glob
-import ast
-
-def get_ids(params):
-    out = params['outfile']
-    portfolio = out['portfolio']
-    full = pd.read_csv(portfolio)
-    cohort = out['cohort']
-    keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
-    filtered = full[(full.cohort == keyword)]
-    ids = list(set(filtered.project_id))
-    return ids    
+from s3_utils import upload_to_s3   
 
 def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
     """
@@ -72,6 +59,39 @@ def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
 
     return results
 
+def get_ids(params):
+    print("Requesting project IDs from TerraMatch...")
+    out = params['outfile']
+    cohort = out['cohort']
+    keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
+    url = params['tm_api']['tm_prod_url']
+    out = params['outfile']
+    tm_auth_path = params['config']
+
+    with open(tm_auth_path) as auth_file:
+        auth = yaml.safe_load(auth_file)
+    headers = {'Authorization': f"Bearer {auth['access_token']}"}
+    api_param_dict = {
+                'projectCohort': keyword, 
+                'polygonStatus[]': 'approved',
+                'includeTestProjects': 'false',
+                'page[size]': '100'
+            }
+    try:
+        results = patched_pull_tm_api_data(url, headers, api_param_dict)
+        
+        ids = list({
+        str(r["projectId"])
+        for r in results
+        if "projectId" in r and r["projectId"] is not None
+         })
+            
+        print(f"Found {len(ids)} project IDs for {cohort}.")
+    
+    except Exception as e:
+        print(f"Error pulling project ids: {e}")
+    
+    return ids 
 
 def tm_pull_wrapper(params, project_ids):
     """
@@ -156,6 +176,7 @@ def tm_pull_wrapper(params, project_ids):
         print(f"Results saved to {outfile}")
 
     return all_results
+
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
 
@@ -302,7 +323,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
                 df.to_csv(stat_path, index=False)
                 dfs_to_concat.append(df)
 
-                slope_raster.close()
+            slope_raster.close()
 
         finally:
             # Delete all temp files

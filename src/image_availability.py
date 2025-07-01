@@ -18,7 +18,10 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     Returns:
     - pd.DataFrame: Merged DataFrame with image availability counts per polygon.
     """
-    
+    n_projects = proj_df['project_id'].nunique()
+    n_polys = proj_df['poly_id'].nunique() 
+    print(f"Analyzing image availability for {n_projects} projects and {n_polys} polygons...")
+
     criteria = params.get('criteria', {})
     baseline_range = tuple(criteria.get('baseline_range'))
     ev_range = tuple(criteria.get('ev_range'))
@@ -32,8 +35,10 @@ def analyze_image_availability(params, proj_df, maxar_fp):
                      'datetime', 'eo:cloud_cover', 
                      'view:sun_elevation', 'view:off_nadir']].copy()
    
-    # Ensure datetime format
+    # Ensure correct datatypes
     img_df['img_date'] = pd.to_datetime(img_df['datetime'], errors='coerce').dt.tz_localize(None)
+    num_cols = ['eo:cloud_cover', 'view:sun_elevation', 'view:off_nadir']
+    img_df[num_cols] = img_df[num_cols].apply(pd.to_numeric, errors='coerce')
     proj_df['plantstart'] = pd.to_datetime(proj_df['plantstart'], errors='coerce')
     proj_df['plantend'] = pd.to_datetime(proj_df['plantend'], errors='coerce')
     merged = img_df.merge(proj_df, on=['project_id', 'poly_id'], how='left')
@@ -72,5 +77,7 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     final_summary[['baseline_img_count', 'ev_img_count']] = final_summary[
         ['baseline_img_count', 'ev_img_count']
     ].fillna(0)
-
+    
+    num_duplicates = final_summary.duplicated().sum()
+    print(f"DUPLICATES: {num_duplicates}")   
     return final_summary

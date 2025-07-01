@@ -230,6 +230,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
     today = params['outfile']['today']
 
     project_names = feats_df['project_name'].unique()
+    project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # this should only drop 1 prj and 100 polys
     dfs_to_concat = []
     for name in project_names:
         project_df = feats_df[feats_df.project_name == name]
@@ -333,4 +334,9 @@ def opentopo_pull_wrapper(params, config, feats_df):
 
 
     result_df = pd.concat(dfs_to_concat, ignore_index=True)
-    return result_df
+
+    # merge slope results into feats df (polys with missing slope become NaN)
+    comb = feats_df.merge(result_df,
+                          on=['project_id', 'poly_id'],
+                          how='left')
+    return comb

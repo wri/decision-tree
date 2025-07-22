@@ -438,3 +438,39 @@ def aggregate_project_image_coverage(results_df, debug=False):
     )
 
     return project_coverage_df
+
+def aggregate_project_image_coverage_ppc(results_df, debug=False):
+    """
+    Aggregates the polygon-level image coverage data to the task (PPC project_id + plantstart year of interest) level.
+
+    Args:
+        results_df (DataFrame): Contains polygon-level image coverage data. Should be filtered to only include polygons for years of interest.
+    
+    Returns:
+        project_coverage_df (DataFrame): Aggregated project-level imagery coverage summary
+    """
+    # Group the data by project_id and plantstart_year
+    grouped = results_df.groupby(['project_id', 'plantstart_year'])
+
+    # Compute summary statistics per project
+    project_coverage_df = grouped.agg(
+        num_polygons=('poly_id', 'count'), # Total polygons
+        num_polygons_with_images=('percent_img_cover', lambda x: (x > 0).sum()), # Polygons with imagery
+        num_polygons_no_images=('percent_img_cover', lambda x: (x == 0).sum()), # Polygons with 0% imagery coverage
+        total_project_area_ha=('poly_area_ha', 'sum'), # Total area of the project in hectares (sum of polygon areas)
+        total_overlap_area_ha=('overlap_area_ha', 'sum'), # Total area of the project with imagery coverage (sum of per polygon area with imagery coverage)
+    ).reset_index()
+
+    # Compute the total percent area of each project that has Maxar imagery coverage (final result)
+    project_coverage_df['total_percent_area_covered'] = (
+        (project_coverage_df['total_overlap_area_ha'] / project_coverage_df['total_project_area_ha']) * 100
+    )
+
+    # Create a unique 'task_id' for each project_id and plantstart_year combo
+    project_coverage_df['task_id'] = project_coverage_df['project_id'] + "_" + project_coverage_df['plantstart_year'].astype(str)
+
+    # Reorder columns
+    project_coverage_df = project_coverage_df[['project_id', 'task_id', 'plantstart_year', 'num_polygons', 'num_polygons_with_images', 'num_polygons_no_images', 
+                                               'total_project_area_ha', 'total_overlap_area_ha', 'total_percent_area_covered']]
+
+    return project_coverage_df

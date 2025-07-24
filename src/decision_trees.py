@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 import os
-import clean_raw_data as clean
 
 def parse_condition(value, actual):
     """
@@ -19,80 +18,107 @@ def parse_condition(value, actual):
             return False
     return actual == value
 
-def apply_rules_baseline(df, save_to_csv=None):
-    '''
-    Refers to the rules template to determine:
-    Branch 1: what is the canopy cover at baseline?
-    Branch 2: what is the target land use?
-    Branch 3: what is the practice?
-    Branch 4: what is image availability at baseline?
-    '''
+def apply_rules_baseline(params, df):
+    """
+    Decision tree for baseline classification.
+    
+    PHASE 1:
+      • assign base_decision ∈ {mangrove, remote, field}  
+        (intentionally ignores slope entirely)
+    
+    PHASE 2:
+      • for base_decision=='remote', look only at img_count rules  
+      • for base_decision=='field', look only at slope rules  
+      • mangrove stays as is (final_decision = 'mangrove')
+    """
 
-    rules = pd.read_csv('../data/rule_template.csv')
+    rules = pd.read_csv(params['criteria']['rules'])
+
+    # clean rules df
+    for col in rules.columns:
+        if rules[col].dtype == object:
+            rules[col] = rules[col].map(
+                lambda x: x.strip().lower() if isinstance(x, str) else x
+            )
+
+    # clean input df
+    for col in ['baseline_canopy', 'target_sys', 'practice', 'slope']:
+        df[col] = df[col].astype(str).str.strip().str.lower()
+
+    # 4) split the rules into exactly the subsets each phase needs
+    base_rules = rules[['baseline_canopy','target_sys','practice','img_count','base_decision']]
+    remote_rules = rules[rules['base_decision']=='remote'][[
+        'baseline_canopy','target_sys','practice','img_count','final_decision'
+    ]]
+    field_rules  = rules[rules['base_decision']=='field'][[
+        'baseline_canopy','target_sys','practice','slope','final_decision'
+    ]]
+
     decisions = []
-
     for _, row in df.iterrows():
-        matched = False
-        for _, rule in rules.iterrows():
-            if (
-                row['baseline_canopy'] == rule['baseline_canopy'] and
-                row['target_sys'] == rule['target_sys'] and
-                row['practice'] == rule['practice'] and
-                parse_condition(rule['img_count'], row['baseline_img_count'])
-            ):
-                decisions.append(rule['decision'])
-                matched = True
-                break
-        if not matched:
-            decisions.append('review required')
+
+        # PHASE 1: base_decision — assign 'mangrove', 'remote' or 'field'
+        if row['target_sys'] == 'mangrove':
+            base = 'mangrove'
+        else:
+            base = None
+            for _, rule in base_rules.iterrows():
+                if (
+                    row['baseline_canopy'] == rule['baseline_canopy'] and
+                    row['target_sys']       == rule['target_sys'] and
+                    row['practice']         == rule['practice'] and
+                    parse_condition(rule['img_count'], row['baseline_img_count'])
+                ):
+                    base = rule['base_decision']
+                    break
+
+        # ——— PHASE 2: final_decision — refine using img_count or slope only
+        if base == 'remote':
+            # only img_count drives strong vs. weak remote
+            final = None
+            for _, rule in remote_rules.iterrows():
+                if (
+                    row['baseline_canopy'] == rule['baseline_canopy'] and
+                    row['target_sys'] == rule['target_sys'] and
+                    row['practice'] == rule['practice'] and
+                    parse_condition(rule['img_count'], row['baseline_img_count'])
+                ):
+                    final = rule['final_decision']
+                    break
+
+        elif base == 'field':
+            # only slope drives strong vs. weak field
+            final = None
+            for _, rule in field_rules.iterrows():
+                if (
+                    row['baseline_canopy'] == rule['baseline_canopy'] and
+                    row['target_sys'] == rule['target_sys'] and
+                    row['practice'] == rule['practice'] and
+                    row['slope'] == rule['slope']
+                ):
+                    final = rule['final_decision']
+                    break
+
+        else:
+            final = base
+
+        decisions.append(final or 'review required')
 
     df['decision'] = decisions
 
-    # Summary output
+    desired_cols = [
+    'project_id', 'poly_id', 'site_id', 'project_name',
+    'plantstart', 'practice', 'target_sys', 'baseline_year',
+    'ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023',  'ttc_2024', 
+    'baseline_img_count', 'ev_img_count', 'baseline_canopy', 
+    'ev_canopy', 'slope_area', 'slope', 'decision'
+    ]
+    df = df[desired_cols]
+
+    # Summary
     summary = df['decision'].value_counts().reset_index()
     summary.columns = ['decision', 'count']
-    summary['proportion'] = summary['count'] / len(df)
+    summary['proportion'] = round((summary['count'] / len(df))*100)
+    print(summary)
 
-    if save_to_csv:
-        df.to_csv(save_to_csv, index=False)
-
-    return df, summary
-
-def year3(df):
-    '''
-    Assigns a remote or field verification method to every
-    row in the input df, according endline conditions (year3).
-    Checks all rows have been assigned and prints method breakdown.
-
-    Modifiable parameters include: 
-        image requirements: Within 1 yr of planting date, there are 
-        >=1 images available with <50% cloud cover
-    
-    Branch 1: at midpoint, what is the canopy cover? 
-    Branch 2: what is the target land use?
-    Branch 3: at midpoint, how many images are available?
-
-    TODO: determine how to handle polys w/ multiple target_sys
-    '''
-
-    return None
-
-def year6(df):
-    '''
-    Assigns a remote or field verification method to every
-    row in the input df, according endline conditions (year6).
-    Checks all rows have been assigned and prints method breakdown.
-    
-    Modifiable parameters include: 
-        image requirements: Within 1 yr of planting date, there are 
-        >=1 images available with <50% cloud cover
-    
-    Branch 1: at endline, what is the canopy cover? There will only be 2
-    landcover classes that could have <40% cover at year 6
-    Branch 2: what is the target land use?
-    Branch 3: at endline, how many images are available?
-
-    TODO: determine how to handle polys w/ multiple target_sys
-    '''
-
-    return None
+    return df

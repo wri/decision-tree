@@ -6,6 +6,24 @@ import re
 import os
 import math
 
+
+def summarize_results(df):
+    total_projects = df['project_id'].nunique()
+    print(f"{total_projects} total projects")
+    
+    # 2. Total number of polygon_ids per project
+    polygon_counts = df.groupby('project_id')['poly_id'].nunique().reset_index(name='polygon_count')
+    
+    # 3. Proportion of remote vs field decisions per project
+    decision_counts = df.groupby(['project_id', 'decision']).size().unstack(fill_value=0)    
+    decision_proportions = decision_counts.div(decision_counts.sum(axis=1), axis=0)
+    decision_proportions = (decision_proportions * 100).round(2).reset_index()
+    
+    # Merge polygon counts and decision proportions into one summary
+    summary = polygon_counts.merge(decision_proportions, on='project_id')
+    return summary
+
+
 ### Cleans the tropical tree cover statistics for polygons ###
 
 def classify_canopy(project: pd.DataFrame, thresh: int):

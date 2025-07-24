@@ -26,34 +26,30 @@ def clean_datetime_column(df, column_name):
 
     # Ensure aligned index with is_feb_29
     non_leap_years = ~years.apply(calendar.isleap)
-    affected_rows = is_feb_29.copy()
-    affected_rows.loc[is_feb_29] = non_leap_years
+    affected_rows = is_feb_29.where(~is_feb_29, non_leap_years.values)
 
     df.loc[affected_rows, column_name] = df.loc[affected_rows, column_name].apply(
         lambda x: datetime(x.year, 2, 28)
     )
-
-    missing_count = df[column_name].isna().sum()
-    print(f"Number of rows missing a '{column_name}' date: {missing_count}/{len(df)}")
     return df
 
 
-def missing_planting_dates(df):
+def missing_planting_dates(df, drop=False):
     '''
     Identifies where there are missing planting dates for 
     a polygon, hindering maxar metadata retrieval
     '''
     # count how rows are missing start and end dates
     missing_both = df['plantstart'].isna() & df['plantend'].isna()
-    print(f"⚠️ Total rows missing start and end plant date: {missing_both.sum()}")
+    print(f"⚠️ Polygons missing start and end plant date: {missing_both.sum()}")
 
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
     missing_start = df[df['plantstart'].isna()]
     num_projects_dropped = missing_start['project_id'].nunique()
     num_polygons_dropped = missing_start['poly_id'].nunique()
-    print(f"⚠️ Total projects missing 'plantstart': {num_projects_dropped}")
-    print(f"⚠️ Total polygons missing 'plantstart': {num_polygons_dropped}")
+    print(f"⚠️ Projects missing 'plantstart': {num_projects_dropped}")
+    print(f"⚠️ Polygons missing 'plantstart': {num_polygons_dropped}/{len(df)}")
      
     # Identify projects where all or partial polys are removed
     dropped_polys = missing_start.groupby('project_id')['poly_id'].nunique()
@@ -67,31 +63,66 @@ def missing_planting_dates(df):
         dropped_polys < project_poly_counts
     ].index.tolist()
 
-    print(f"Projects fully removed: {len(full_proj_drops)}")
+    print(f"Projects fully affected: {len(full_proj_drops)}")
     print(f"Projects partially affected: {len(partial_proj_drops)}")
+
     # drop row if plantstart has missing vals (Nan or None)
-    final_df = df #.dropna(subset=['plantstart'], how='any')
+    final_df = df.dropna(subset=['plantstart'], how='any') if drop else df
+
     return final_df
 
+def missing_features(df, drop=False):
+    '''
+    Identifies rows where ttc is only NaN values (no data for any years).
+    Identifies rows where practice or targetsys is NaN.
+    Optionally drops these rows based on the drop argument 
+    and prints a statement about the count of rows affected.
+    '''
+    starting = len(df)
+    ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
+    
+    null_rows = df[df[ttc_cols].isna().all(axis=1)]
+    missing_practice = df[df['practice'].isna()]
+    missing_targetsys = df[df['target_sys'].isna()]
 
-def process_tm_api_results(results, outfile1, outfile2):
+    print(f"⚠️ Polygons missing 'ttc': {len(null_rows)}")
+    print(f"⚠️ Polygons missing 'practice': {len(missing_practice)}")
+    print(f"⚠️ Polygons missing 'target system': {len(missing_targetsys)}")
+
+    # Combine indices for all three conditions
+    rows_to_drop = pd.Index(null_rows.index).union(missing_practice.index).union(missing_targetsys.index)
+
+    final_df = df.drop(index=rows_to_drop) if drop else df
+    finishing = len(final_df)
+    diff = starting - finishing
+    print(f"{round((diff/starting)*100)}% data lost due to missing values.")
+
+    return final_df
+    
+
+def process_tm_api_results(params, results):
     """
     Processes API results into a clean DataFrame for analysis.
+    results: json response
+    drop_missing: drop rows with missing information
+    outfile: filepath to store cleaned results
+    outfile2: filepath to store cleaned results for maxar metadata request
 
     Extracting tree cover indicators:
     **tree_cover_years syntax is a Python dictionary unpacking 
     feature that allows us to dynamically add multiple columns 
     to the DataFrame without explicitly defining them.
     """
+    drop_missing = params['criteria']['drop_missing']
     extracted_data = []
     input_ids = {project.get('project_id') for project in results if project.get('project_id')}
 
     # Iterate over each project to extract project details & tree cover statistics
     for project in results:
-        # Extract general project details
         project_id = project.get('project_id')
         poly_id = project.get('poly_id')
         site_id = project.get('siteId')
+        project_name = project.get('projectShortName')
         geom = project.get('geometry')
         plant_start = project.get('plantStart')
         plant_end = project.get('plantEnd')
@@ -119,6 +150,7 @@ def process_tm_api_results(results, outfile1, outfile2):
             'project_id': project_id,
             'poly_id': poly_id,
             'site_id': site_id,
+            'project_name': project_name,
             'geometry': geom,
             'plantstart': plant_start,
             'plantend': plant_end,
@@ -130,28 +162,22 @@ def process_tm_api_results(results, outfile1, outfile2):
             **tree_cover_years  
         })
 
-    final_df = pd.DataFrame(extracted_data)
-    final_df.columns = final_df.columns.str.lower()
-    pre_clean_ids = list(set(final_df['project_id']))
+    raw_df = pd.DataFrame(extracted_data)
+    raw_df.columns = raw_df.columns.str.lower()
+    pre_clean_ids = list(set(raw_df['project_id']))
 
-    # Clean up start and end dates
-    final_df = clean_datetime_column(final_df, 'plantstart')
-    final_df = clean_datetime_column(final_df, 'plantend')
+    # Clean up start and end dates and missing info
+    clean_df = clean_datetime_column(raw_df, 'plantstart')
+    clean_df = clean_datetime_column(clean_df, 'plantend')
+    clean_df = missing_planting_dates(clean_df, drop_missing)
+    clean_df = missing_features(clean_df, drop_missing)
 
-    # Drop polygons with missing planting dates
-    final_df = missing_planting_dates(final_df)
-
-    # identify missing projs
-    output_ids = list(set(final_df['project_id']))
+    # final clean up
+    output_ids = list(set(clean_df['project_id']))
     assert len(input_ids) == len(pre_clean_ids) == len(output_ids)
 
-    missing_projects = input_ids - set(final_df['project_id'])
+    missing_projects = input_ids - set(clean_df['project_id'])
     if missing_projects:
         print(f"Missing prj ids: {missing_projects}")
 
-    if outfile1 is not None:
-        final_df.to_csv(outfile1, index=False)
-    if outfile2 is not None:
-        final_df.to_csv(outfile2, index=False)
-
-    return final_df
+    return clean_df

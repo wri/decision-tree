@@ -26,8 +26,7 @@ def clean_datetime_column(df, column_name):
 
     # Ensure aligned index with is_feb_29
     non_leap_years = ~years.apply(calendar.isleap)
-    affected_rows = is_feb_29.copy()
-    affected_rows.loc[is_feb_29] = non_leap_years
+    affected_rows = is_feb_29.where(~is_feb_29, non_leap_years.values)
 
     df.loc[affected_rows, column_name] = df.loc[affected_rows, column_name].apply(
         lambda x: datetime(x.year, 2, 28)

@@ -67,7 +67,7 @@ def get_ids(params):
     url = params['tm_api']['tm_prod_url']
     out = params['outfile']
     tm_auth_path = params['config']
-
+    
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
     headers = {'Authorization': f"Bearer {auth['access_token']}"}

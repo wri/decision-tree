@@ -1,4 +1,5 @@
 import requests
+import certifi
 import yaml
 import json
 import pandas as pd
@@ -6,6 +7,46 @@ import json
 from tqdm import tqdm
 from tm_api_utils import pull_tm_api_data
 
+def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
+    """
+    ## REMOVE ME ONCE PACKAGE UPDATED ##
+    
+    Optimized version of patched_pull_tm_api_data with improved performance.
+
+    - Parses response JSON only once per request
+    - Efficiently handles pagination cursors
+    - Uses safer access to nested metadata
+    """
+    results = []
+    last_record = None
+
+    while True:
+        response = requests.get(url, headers=headers, params=params, verify=certifi.where())
+
+        if response.status_code != 200:
+            raise ValueError(f"Request failed: {response.status_code}")
+
+        response_json = response.json()
+        data_items = response_json.get('data', [])
+
+        if not data_items:
+            break
+
+        for item in data_items:
+            attributes = item.get('attributes', {})
+            attributes['poly_id'] = item.get('meta', {}).get('page', {}).get('cursor') or item.get('id')
+            results.append(attributes)
+
+        # Efficient cursor handling after processing all records
+        new_last_record = data_items[-1].get('meta', {}).get('page', {}).get('cursor') if data_items else None
+
+        if new_last_record and new_last_record != last_record:
+            last_record = new_last_record
+            params['page[after]'] = last_record
+        else:
+            break
+
+    return results
 
 def pull_wrapper(url, 
                 headers, 
@@ -38,7 +79,8 @@ def pull_wrapper(url,
         #print(params)
 
         try:
-            results = pull_tm_api_data(url, headers, params)
+            #results = pull_tm_api_data(url, headers, params)
+            results = patched_pull_tm_api_data(url, headers, params) # Trying the new function found on https://github.com/wri/terrafund-portfolio-analyses/blob/main/src/api_utils.py
             if results is None:
                 print(f"No results returned for project: {project_id}")
                 continue

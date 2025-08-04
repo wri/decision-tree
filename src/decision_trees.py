@@ -2,7 +2,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import os
 
@@ -163,24 +163,32 @@ def apply_rules_ev(params, df):
         'canopy','target_sys','practice','slope','final_decision'
     ]]
 
-    current_year = datetime.today().year
+    today = datetime.today()
+    ev_days_start, ev_days_end = params['criteria']['ev_range']
+
     decisions = []
 
     for _, row in df.iterrows():
+        if pd.isna(row['plantstart']):
+            decisions.append('not available')
+            continue
 
-        # Temporal guard: EV decision only possible if EV year has passed
-        if pd.isna(row['ev_year']) or row['ev_year'] >= current_year:
+        plant_start = pd.to_datetime(row['plantstart'])
+        ev_window_start = plant_start + timedelta(days=ev_days_start)
+        if today < ev_window_start:
             decisions.append('not available')
             continue
 
         # PHASE 1 — first_decision: 'mangrove', 'remote', or 'field'
+        # NOTE: EV will use the baseline canopy if enough time has passed
+        # that we need to verify
         if row['target_sys'] == 'mangrove':
             base = 'mangrove'
         else:
             base = None
             for _, rule in base_rules.iterrows():
                 if (
-                    row['ev_canopy'] == rule['canopy'] and
+                    row['baseline_canopy'] == rule['canopy'] and
                     row['target_sys'] == rule['target_sys'] and
                     row['practice'] == rule['practice'] and
                     parse_condition(rule['img_count'], row['ev_img_count'])
@@ -193,7 +201,7 @@ def apply_rules_ev(params, df):
             final = None
             for _, rule in remote_rules.iterrows():
                 if (
-                    row['ev_canopy'] == rule['canopy'] and
+                    row['baseline_canopy'] == rule['canopy'] and
                     row['target_sys'] == rule['target_sys'] and
                     row['practice'] == rule['practice'] and
                     parse_condition(rule['img_count'], row['ev_img_count'])
@@ -205,7 +213,7 @@ def apply_rules_ev(params, df):
             final = None
             for _, rule in field_rules.iterrows():
                 if (
-                    row['ev_canopy'] == rule['canopy'] and
+                    row['baseline_canopy'] == rule['canopy'] and
                     row['target_sys'] == rule['target_sys'] and
                     row['practice'] == rule['practice'] and
                     row['slope'] == rule['slope']

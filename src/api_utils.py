@@ -21,7 +21,7 @@ def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
     last_record = None
 
     while True:
-        response = requests.get(url, headers=headers, params=params, verify=certifi.where())
+        response = requests.get(url, headers=headers, params=params)
 
         if response.status_code != 200:
             raise ValueError(f"Request failed: {response.status_code}")

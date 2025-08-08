@@ -135,6 +135,7 @@ def parse_tm_api_results(results, outfile, parse_indicators=False, indicator_map
         # Basic attributes
         row_data = {
             'project_id': feature.get('project_id'),
+            'project_name': feature.get('projectShortName'),
             'poly_id': feature.get('poly_id'),
             'site_id': feature.get('siteId'),
             'geometry': feature.get('geometry'),

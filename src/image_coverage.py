@@ -1,10 +1,11 @@
 import pandas as pd
 import geopandas as gpd
+from shapely import wkt
 from shapely.geometry import shape
 from shapely.errors import ShapelyError
 import ast
 
-def clean_geometry(x, debug=False, stats=None):
+def clean_geometry(x, debug=True, stats=None):
     """
     Converts a geometry dict or string into a Shapely object. Attempts to fix invalid geometries using buffer(0). Returns None if geometry is still invalid, empty, or has 0 area.
 
@@ -20,7 +21,8 @@ def clean_geometry(x, debug=False, stats=None):
 
     # Try to convert a stringified dictionary or dictionary into a shapely object
     try:
-        geom = shape(ast.literal_eval(x)) if isinstance(x, str) else shape(x)
+        #geom = shape(ast.literal_eval(x)) if isinstance(x, str) else shape(x)
+        geom = convert_geometry(x)
     except Exception as e:
         if debug:
             print(f"Failed to parse geometry: {e} -- {geom}")
@@ -63,6 +65,38 @@ def clean_geometry(x, debug=False, stats=None):
         return None
     
     return geom
+
+def convert_geometry(poly_geom, debug=False):
+    """
+    Detects whether a geometry is in WKT, GeoJSON dictionary, or stringified GeoJSON-style dictionary format and converts it into a Shapely geometry object.  
+    
+    Args:
+        poly_geom (str or dict) Geometry as a string (WKT or GeoJSON-style dictionary) or a dictionary.
+    Returns:
+        Shapely geometry object
+    """
+    if isinstance(poly_geom, str):
+        poly_geom = poly_geom.strip() # Remove extra spaces
+
+        if poly_geom.startswith('POLYGON') or poly_geom.startswith('MULTIPOLYGON'):
+            # If it starts with POLYGON or MULTIPOLYGON, it's in WKT format
+            if debug:
+                print('Detected WKT format. Converting using wkt.loads()...')
+            return wkt.loads(poly_geom)     
+        else:
+            try:
+                # Assume stringified GeoJSON-style dictionary, convert string to dictionary first
+                if debug:
+                    print('Assuming GeoJSON format. Converting using ast.literal_eval() and shape()...')
+                return shape(ast.literal_eval(poly_geom))
+            except(SyntaxError, ValueError, TypeError, json.JSONDecodeError):
+                print(f'Error: Could not parse geometry {poly_geom}')
+                return None # Return None if conversion fails
+    elif isinstance(poly_geom, dict):
+        # If it's already a dictionary (GeoJSON format), use shape()
+        return shape(poly_geom)
+    
+    return None # Return None if format is unrecognized
 
 def preprocess_polygons(poly_df, debug=False, save_dropped=False, dropped_output_path=None):
     """
@@ -124,7 +158,6 @@ def preprocess_polygons(poly_df, debug=False, save_dropped=False, dropped_output
     print(f"  ✅ Final valid polygons:       {len(poly_gdf)}\n")
 
     return poly_gdf
-
 
 def preprocess_images(img_df, debug=False):
     """

@@ -1,6 +1,6 @@
 
 config: secrets.yaml
-mode: full  # options: full, test, skip_slope
+mode: test  # options: full, test, skip_slope
 
 s3:
   upload: false
@@ -15,7 +15,7 @@ tm_api:
   tm_prod_url: https://api.terramatch.org/research/v3/sitePolygons?
 
 criteria:
-  canopy_threshold: 40                                         # threshold for identifying open vs closed canopy projects
+  canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50                                             # threshold for identifying image quality
   off_nadir: 30                                                # number of degrees that the sensor varies from vertical
   sun_elevation: 30
@@ -26,9 +26,13 @@ criteria:
   slope_thresh: 20
   rules: data/rule_template.csv
 
+cost:
+  field: 0.32
+  remote: 20.0
+
 outfile:
   data_version: 07-14-2025
-  experiment_id: exp3
+  experiment_id: exp4
   cohort: c1               
   portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/geojsons/

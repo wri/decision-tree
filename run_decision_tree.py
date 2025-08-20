@@ -10,6 +10,7 @@ from image_availability import analyze_image_availability
 from canopy_cover import apply_canopy_classification
 from slope import apply_slope_classification
 import decision_trees as tree
+import cost_calculator as price
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
@@ -48,9 +49,9 @@ class VerificationDecisionTree:
             ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
             ids = list(set(ids.project_id))
             
-            # tm_response = tm_pull_wrapper(self.params, ids)
-            # with open(self.tm_outfile, "w") as f:
-            #     json.dump(tm_response, f, indent=4)
+            tm_response = tm_pull_wrapper(self.params, ids)
+            with open(self.tm_outfile, "w") as f:
+                json.dump(tm_response, f, indent=4)
 
             with open(self.tm_outfile, "r") as f:
                 tm_response = json.load(f)
@@ -73,7 +74,8 @@ class VerificationDecisionTree:
 
         baseline = tree.apply_rules_baseline(self.params, branch_slope)
         ev = tree.apply_rules_ev(self.params, baseline)
-        ev.to_csv(self.final_outfile, index=False)
+        results = price.calc_cost_to_verify(self.params, ev)
+        results.to_csv(self.final_outfile, index=False)
 
         # upload to s3 and trigger asana API
         # upload_to_s3.upload_results_to_s3(self.final_outfile, self.params, self.secrets)

@@ -151,3 +151,59 @@ def process_tm_api_results(results, min_valid_plantstart, outfile1, outfile2):
     final_df.to_csv(outfile2, index=False)
 
     return final_df
+
+def build_years_dict(years_df: pd.DataFrame):
+    """
+    Builds a dictionary of the years of interest for each project_id
+
+    Args:
+     - years_df (DataFrame): DataFrame containing project_ids and years of interest for each project. 
+                             Expects a format where there is one row per project_id + year combination, and the columns project_id and year
+    
+    Returns:
+     - A dictionary where the keys are unique project_ids and the values are lists of years of interest
+    """
+    year_dict = {
+        key: list(value)
+        for key, value in years_df.groupby('project_id')['year']
+    }
+
+    return year_dict
+
+def filter_by_years_of_interest(polygons_df: pd.DataFrame, years_df: pd.DataFrame):
+    """
+    Filters the polygons dataframe by the years of interest. 
+
+    Args:
+     - polygons_df (DataFrame): Dataframe of all polygons.
+     - years_df (DataFrame): DataFrame containing project_ids and years of interest for each project. 
+                             Expects a format where there is one row per project_id + year combination, and the columns project_id and year
+    
+    Returns:
+     - A dataframe filtered by the years of interest
+    """
+
+    # Convert the plantstart column to a datetime
+    polygons_df['plantstart'] = pd.to_datetime(polygons_df['plantstart'], errors='coerce')
+
+    # Extract the year into a new column
+    polygons_df['plantstart_year'] = polygons_df['plantstart'].dt.year
+
+    # Create a dictionary of the years of interest for each project
+    years_dict = build_years_dict(years_df)
+
+    # Build a boolean mask for valid polygons based on the years of interest
+    mask = polygons_df.apply(
+        lambda row: (
+            row['plantstart_year'] in years_dict[row['project_id']]
+            if row['project_id'] in years_dict
+            else True # keep all polygons from project_ids not in year_dict
+        ),
+        axis = 1
+    )
+
+    # Filter the dataframe and drop the 'plantstart_year' column
+    polygons_df_filt = polygons_df[mask].copy()
+    polygons_df_filt = polygons_df_filt.drop(columns=['plantstart_year'])
+
+    return polygons_df_filt

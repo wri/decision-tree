@@ -66,8 +66,8 @@ def apply_rules_baseline(params, df):
             for _, rule in base_rules.iterrows():
                 if (
                     row['baseline_canopy'] == rule['canopy'] and
-                    row['target_sys']       == rule['target_sys'] and
-                    row['practice']         == rule['practice'] and
+                    row['target_sys']      == rule['target_sys'] and
+                    row['practice']        == rule['practice'] and
                     parse_condition(rule['img_count'], row['baseline_img_count'])
                 ):
                     base = rule['first_decision']
@@ -110,7 +110,7 @@ def apply_rules_baseline(params, df):
     desired_cols = [
     'project_id', 'poly_id', 'site_id', 'project_name',
     'plantstart', 'practice', 'target_sys', 'baseline_year', 'ev_year',
-    'ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023',  'ttc_2024', 
+    'area','ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023',  'ttc_2024', 
     'baseline_img_count', 'ev_img_count', 'baseline_canopy', 
     'ev_canopy', 'slope_area', 'slope', 'baseline_decision'
     ]
@@ -231,7 +231,7 @@ def apply_rules_ev(params, df):
     desired_cols = [
         'project_id', 'poly_id', 'site_id', 'project_name',
         'plantstart', 'practice', 'target_sys', 'baseline_year', 'ev_year',
-        'ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023', 'ttc_2024', 
+        'area','ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023', 'ttc_2024', 
         'baseline_img_count', 'ev_img_count', 'baseline_canopy', 
         'ev_canopy', 'slope_area', 'slope', 'baseline_decision', 'ev_decision'
     ]

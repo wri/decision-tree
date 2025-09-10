@@ -1,5 +1,6 @@
 
 config: secrets.yaml
+mode: test  # options: full, test, skip_slope
 
 s3:
   upload: false
@@ -14,7 +15,7 @@ tm_api:
   tm_prod_url: https://api.terramatch.org/research/v3/sitePolygons?
 
 criteria:
-  canopy_threshold: 40                                         # threshold for identifying open vs closed canopy projects
+  canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50                                             # threshold for identifying image quality
   off_nadir: 30                                                # number of degrees that the sensor varies from vertical
   sun_elevation: 30
@@ -25,16 +26,20 @@ criteria:
   slope_thresh: 20
   rules: data/rule_template.csv
 
-outfile:
-  today: 07-14-2025
-  cohort: c1               
-  portfolio: data/portfolio_csvs/prj_ids_{cohort}_{today}.csv
-  geojsons: data/geojsons/
-  tm_response: data/tm_api_response/{cohort}_{today}.json
-  slope_stats: data/slope/slope_statistics_{cohort}_{today}.csv
-  project_stats: data/slope/project_statistics/{name}_slope_stats.csv
-  feats: data/feats/tm_api_{cohort}_{today}.csv
-  feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{today}.csv
-  maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{today}.csv
-  decision: data/results/dtree_output_{cohort}_{today}.csv
+cost:
+  field: 0.32
+  remote: 20.0
 
+outfile:
+  data_version: 07-14-2025
+  experiment_id: exp4
+  cohort: c1               
+  portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
+  geojsons: data/geojsons/
+  tm_response: data/tm_api_response/{cohort}_{data_version}.json
+  slope_stats: data/slope/slope_statistics_{cohort}_{data_version}.csv
+  project_stats: data/slope/project_statistics/{name}_slope_stats.csv
+  feats: data/feats/tm_api_{cohort}_{data_version}.csv
+  feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{data_version}.csv
+  maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
+  decision: data/results/dtree_output_{cohort}_{data_version}_{experiment_id}.csv

@@ -95,10 +95,49 @@ def missing_features(df, drop=False):
     final_df = df.drop(index=rows_to_drop) if drop else df
     finishing = len(final_df)
     diff = starting - finishing
-    print(f"{round((diff/starting)*100)}% data lost due to missing values.")
+    print(f"\n{round((diff/starting)*100)}% data lost due to missing values.\n")
 
     return final_df
     
+def resolve_multipractice(df):
+    """
+    Resolves projects where a single row contains a multi-practice entry by 
+    replacing it with the consistent single-practice value used in other rows 
+    of the same project.
+
+    Only applies when:
+      - The project has exactly one multi-practice row.
+      - All other rows in the project use the same single practice.
+    """
+    df = df.copy()
+    df['is_multipractice'] = df['practice'].str.contains(',')
+
+    updated_projects = []
+
+    for project_id, group in df.groupby('project_id'):
+        multipractice_rows = group[group['is_multipractice']]
+        singlepractice_rows = group[~group['is_multipractice']]
+
+        if len(multipractice_rows) == 1 and len(singlepractice_rows) > 0:
+            unique_single = singlepractice_rows['practice'].unique()
+            if len(unique_single) == 1:
+                consistent_value = unique_single[0]
+                idx_to_update = multipractice_rows.index[0]
+                df.at[idx_to_update, 'practice'] = consistent_value
+
+                # Get the project name from the first row
+                project_name = group['project_name'].iloc[0]
+                updated_projects.append((project_name, consistent_value))
+
+    df.drop(columns='is_multipractice', inplace=True)
+
+    if updated_projects:
+        for name, val in updated_projects:
+            print(f"{name} updated one polygon to → '{val}'")
+    else:
+        print("No single-row multi-practice projects were updated.")
+
+    return df
 
 def process_tm_api_results(params, results):
     """
@@ -171,6 +210,9 @@ def process_tm_api_results(params, results):
     clean_df = clean_datetime_column(clean_df, 'plantend')
     clean_df = missing_planting_dates(clean_df, drop_missing)
     clean_df = missing_features(clean_df, drop_missing)
+    
+    # fix multipractice issues
+    clean_df = resolve_multipractice(clean_df)
 
     # final clean up
     output_ids = list(set(clean_df['project_id']))

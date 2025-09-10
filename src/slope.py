@@ -38,10 +38,7 @@ def apply_slope_classification(params, df, slope_stats):
         slope_stats[['project_id', 'poly_id', 'slope_area', 'slope']], 
         on=['project_id', 'poly_id'], 
         how='left' 
-    )
-    
-    num_duplicates = comb.duplicated().sum()
-    print(f"DUPLICATES: {num_duplicates}")   
+    ) 
     
     return comb
 

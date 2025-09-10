@@ -36,6 +36,7 @@ def apply_canopy_classification(params, df):
 
     current_year = datetime.today().year
     df['baseline_year'] = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
+    df['ev_year'] = pd.to_datetime(df['plantstart'], errors='coerce').dt.year + 2
     df.loc[:, 'baseline_canopy'] = 'unknown'
     df.loc[:, 'ev_canopy'] = 'unknown'
 
@@ -66,13 +67,13 @@ def apply_canopy_classification(params, df):
             df.at[idx, 'baseline_canopy'] = 'investigate'
 
         # EV classification
-        ev_year = year + 2
-        years_since_planting = datetime.today().year - year
-        
-        # not available if less than 2 years since planting
-        if years_since_planting < 2:
+        plant_date = pd.to_datetime(row['plantstart'], errors='coerce')
+        days_since_planting = (datetime.today() - plant_date).days
+
+        if days_since_planting < 730:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:
+            ev_year = year + 2
             valid_ev_cols = [col for col in ttc_cols if int(col[4:]) >= ev_year and pd.notna(row[col])]
             if valid_ev_cols:
                 closest_ev = min(valid_ev_cols, key=lambda col: int(col[4:]))
@@ -80,7 +81,5 @@ def apply_canopy_classification(params, df):
                 df.at[idx, 'ev_canopy'] = 'closed' if val > canopy_thresh else 'open'
             else:
                 df.at[idx, 'ev_canopy'] = 'investigate'
-
-    num_duplicates = df.duplicated().sum()
-    print(f"DUPLICATES: {num_duplicates}")   
+   
     return df

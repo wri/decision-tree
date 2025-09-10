@@ -77,7 +77,4 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     final_summary[['baseline_img_count', 'ev_img_count']] = final_summary[
         ['baseline_img_count', 'ev_img_count']
     ].fillna(0)
-    
-    num_duplicates = final_summary.duplicated().sum()
-    print(f"DUPLICATES: {num_duplicates}")   
     return final_summary

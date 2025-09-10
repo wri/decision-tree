@@ -1,19 +1,19 @@
-# ── visuals_config.py ──
-
-import seaborn as sns
-
-# 1) define your canonical decision order
 DECISION_ORDER = [
     "strong remote",
     "weak remote",
     "strong field",
     "weak field",
     "review required",
+    "not available",
     "mangrove",
 ]
 
-# 2) pull exactly that many colors from Set2
-_PALETTE = sns.color_palette("Set2", n_colors=len(DECISION_ORDER))
-
-# 3) build a dict mapping each decision → its color
-DECISION_COLORS = dict(zip(DECISION_ORDER, _PALETTE))
+DECISION_COLORS = {
+    "strong remote": "#2E8F2E",        # dark green
+    "weak remote":   "#7DCE7D",        # light green
+    "strong field":  "#800080",        # dark purple
+    "weak field":    "#D472D4",        # light purple
+    "review required": "#F34A4A",      # dark red
+    "mangrove":      "#FF8C00",        # reddish orange
+    "not available": "#F4F47C",        # light yellow
+}

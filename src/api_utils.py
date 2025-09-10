@@ -111,8 +111,8 @@ def tm_pull_wrapper(params, project_ids):
     """
     url = params['tm_api']['tm_prod_url']
     out = params['outfile']
-    today = out['today']
-    outfile = out['tm_response'].format(cohort=out['cohort'], today=out['today'])
+    data_version = out['data_version']
+    outfile = out['tm_response'].format(cohort=out['cohort'], data_version=data_version)
     geojson_dir = out['geojsons']
     tm_auth_path = params['config']
 
@@ -159,11 +159,11 @@ def tm_pull_wrapper(params, project_ids):
                     crs='EPSG:4326'
                 )
                 project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')), project_id)
-                filename = f"{project_name}_{today}.geojson"
+                filename = f"{project_name}_{data_version}.geojson"
                 gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
 
                 if params['s3']['upload']:
-                    upload_to_s3(params, params["config"], project_name, today)
+                    upload_to_s3(params, params["config"], project_name, data_version)
 
             except Exception as e:
                 print(f"Upload error for {project_name}: {e}")
@@ -227,7 +227,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
     api_key = config['opentopo_key']
     geojson_dir = params['outfile']['geojsons']
     slope_thresh = params['criteria']['slope_thresh']
-    today = params['outfile']['today']
+    data_version = params['outfile']['data_version']
 
     project_names = feats_df['project_name'].unique()
     project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # this should only drop 1 prj and 100 polys
@@ -243,7 +243,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
         else:
             print(f"Processing {name}")
         
-        geojson_path = os.path.join(geojson_dir, f"{name}_{today}.geojson")
+        geojson_path = os.path.join(geojson_dir, f"{name}_{data_version}.geojson")
         prj = gpd.read_file(geojson_path)
         total_bounds = prj.total_bounds  
         buffer_deg = 0.01  # ~1 km buffer; adjust if needed

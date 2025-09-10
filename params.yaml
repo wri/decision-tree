@@ -32,7 +32,7 @@ cost:
 
 outfile:
   data_version: 07-14-2025
-  experiment_id: exp4
+  experiment_id: exp5
   cohort: c1               
   portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/geojsons/
@@ -42,4 +42,53 @@ outfile:
   feats: data/feats/tm_api_{cohort}_{data_version}.csv
   feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{data_version}.csv
   maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
-  decision: data/results/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: data/results/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: data/results/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+
+suitability:
+  area_col: area
+  min_coverage: 0.6         # require at least 60% of project area to have a valid polygon score
+  thresholds:
+    weak_field: 30
+    weak_remote: 55
+    strong_remote: 70
+
+  # How to map raw axis score -> 0..100
+  scale:
+    method: logistic   # or "minmax"
+    k: 0.8             # only used for logistic; larger k => steeper curve
+    min: -6            # only used for minmax
+    max: 6
+
+  # Optional nudges from your discrete tree outputs (keeps continuity)
+  base_bonus:
+    strong remote:  +1.0
+    weak remote:    +0.5
+    weak field:     -0.5
+    strong field:   -1.0
+    not available:  null   # null means: don't push score; you can also mask to NA (see code comment)
+    review required: null
+
+  # Feature contributions (same columns you already have)
+  features:
+    common:
+      baseline_canopy:
+        open:   +2.0
+        closed: -2.0
+      slope:
+        steep:  -2.0
+        flat:   -0.5
+      target_sys:
+        mangrove: null  # we’ll mask these to NaN in code (not part of remote/field axis)
+
+    baseline_only:
+      baseline_img_count:
+        ">=2": +2.0
+        "==1": +1.0
+        "<1":  -1.0
+
+    ev_only:
+      ev_img_count:
+        ">=2": +2.0
+        "==1": +1.0
+        "<1":  null   # treat as "not available" downstream rather than penalizing as field

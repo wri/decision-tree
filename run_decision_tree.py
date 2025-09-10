@@ -11,6 +11,7 @@ from canopy_cover import apply_canopy_classification
 from slope import apply_slope_classification
 import decision_trees as tree
 import cost_calculator as price
+import weighted_scoring as scoring
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
@@ -35,11 +36,8 @@ class VerificationDecisionTree:
         self.project_feats = out["feats"].format(cohort=cohort, data_version=data_v)
         self.project_feats_maxar = out["feats_maxar"].format(cohort=cohort, data_version=data_v)
         self.maxar_meta = out["maxar_meta"].format(cohort=cohort, data_version=data_v)
-        self.final_outfile = out["decision"].format(
-            cohort=cohort,
-            data_version=data_v,
-            experiment_id=experiment_id
-        )
+        self.poly_score = out["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id)
+        self.prj_score = out["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id)
 
     def run(self):
         if self.mode == 'full':
@@ -71,11 +69,18 @@ class VerificationDecisionTree:
         branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) # combine feats + imgs
         branch_canopy = apply_canopy_classification(self.params, branch_images)
         branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
+        # TODO: add a step to save csv here and another elif
 
         baseline = tree.apply_rules_baseline(self.params, branch_slope)
         ev = tree.apply_rules_ev(self.params, baseline)
-        results = price.calc_cost_to_verify(self.params, ev)
-        results.to_csv(self.final_outfile, index=False)
+
+        scored = scoring.apply_scoring(self.params, ev)
+        poly_results = price.calc_cost_to_verify(self.params, scored) # this will move down later
+        poly_results.to_csv(self.poly_score, index=False) 
+        
+        # calculate final project scale decision
+        prj_results = scoring.aggregate_project_score(self.params, poly_results)
+        prj_results.to_csv(self.prj_score, index=False) 
 
         # upload to s3 and trigger asana API
         # upload_to_s3.upload_results_to_s3(self.final_outfile, self.params, self.secrets)

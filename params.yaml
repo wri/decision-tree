@@ -1,6 +1,6 @@
 
 config: secrets.yaml
-mode: test  # options: full, test, skip_slope
+mode: score  # options: full, partial, score
 
 s3:
   upload: false
@@ -42,8 +42,9 @@ outfile:
   feats: data/feats/tm_api_{cohort}_{data_version}.csv
   feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{data_version}.csv
   maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
-  poly_decision: data/results/poly_output_{cohort}_{data_version}_{experiment_id}.csv
-  prj_decision: data/results/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+  tree_results: data/tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: data/decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: data/decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 suitability:
   area_col: area
@@ -52,6 +53,10 @@ suitability:
     weak_field: 30
     weak_remote: 55
     strong_remote: 70
+  special_labels:
+    mangrove_area_frac_threshold: 0.10     # label "mangrove" if ≥10% of total area is mangrove
+    review_area_frac_threshold:  0.10      # label "review required" if ≥10% is review
+    precedence: ["mangrove", "review required", "not available"]
 
   # How to map raw axis score -> 0..100
   scale:
@@ -66,8 +71,6 @@ suitability:
     weak remote:    +0.5
     weak field:     -0.5
     strong field:   -1.0
-    not available:  null   # null means: don't push score; you can also mask to NA (see code comment)
-    review required: null
 
   # Feature contributions (same columns you already have)
   features:
@@ -91,4 +94,4 @@ suitability:
       ev_img_count:
         ">=2": +2.0
         "==1": +1.0
-        "<1":  null   # treat as "not available" downstream rather than penalizing as field
+        "<1":  -1.0

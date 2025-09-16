@@ -86,7 +86,8 @@ class VerificationDecisionTree:
         prj_results = scoring.aggregate_project_score(self.params, scored)
         prj_results.to_csv(self.prj_score, index=False) 
 
-        # upload to s3 and trigger asana API
+        # uploads
+        asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score) 
         # upload_to_s3.upload_results_to_s3(self.final_outfile, self.params, self.secrets)
 
 

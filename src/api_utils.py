@@ -50,7 +50,8 @@ def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
 
 def pull_wrapper(url, 
                 headers, 
-                project_ids, 
+                project_ids,
+                modified_since=None, 
                 outfile=None,
                 ):
     """
@@ -62,6 +63,7 @@ def pull_wrapper(url,
         url (str): TerraMatch API endpoint.
         headers (dict): Auth headers.
         project_ids (list): List of project UUIDs.
+        modified_since (str): Filter to include only polygons last modified after this date. Must be a string with the format YYYY-MM-DD.
         outfile (str): Optional path to write output JSON.
         show_progress (bool): Whether to show tqdm progress bar.
     """
@@ -76,7 +78,9 @@ def pull_wrapper(url,
             'includeTestProjects': 'false',
             'page[size]': '100'
         }
-        #print(params)
+        if modified_since is not None:
+            params['lastModifiedDate'] = str(modified_since)
+        print(params)
 
         try:
             #results = pull_tm_api_data(url, headers, params)

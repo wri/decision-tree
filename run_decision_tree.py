@@ -11,6 +11,8 @@ from canopy_cover import apply_canopy_classification
 from slope import apply_slope_classification
 import decision_trees as tree
 import cost_calculator as price
+import weighted_scoring as scoring
+import update_asana as asana
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
@@ -35,18 +37,16 @@ class VerificationDecisionTree:
         self.project_feats = out["feats"].format(cohort=cohort, data_version=data_v)
         self.project_feats_maxar = out["feats_maxar"].format(cohort=cohort, data_version=data_v)
         self.maxar_meta = out["maxar_meta"].format(cohort=cohort, data_version=data_v)
-        self.final_outfile = out["decision"].format(
-            cohort=cohort,
-            data_version=data_v,
-            experiment_id=experiment_id
-        )
+        self.tree_results = out["tree_results"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id)
+        self.poly_score = out["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id)
+        self.prj_score = out["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id)
 
     def run(self):
         if self.mode == 'full':
             print("Running in FULL mode — acquiring prj data from APIs.")
-            # ids = get_ids(self.params)
-            # pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
-            ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
+            ids = get_ids(self.params)
+            pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
+            #ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
             ids = list(set(ids.project_id))
             
             tm_response = tm_pull_wrapper(self.params, ids)
@@ -60,24 +60,34 @@ class VerificationDecisionTree:
             tm_clean.to_csv(self.project_feats, index=False)
             tm_clean.to_csv(self.project_feats_maxar, index=False) 
        
-        elif self.mode == 'test':
-            print("Running in TEST mode — using cached prj feats.")
+        elif self.mode == 'partial':
+            print("Running in PARTIAL mode — using cached prj feats.")
             tm_clean = pd.read_csv('data/feats/tm_api_c1_07-14-2025.csv')
+            slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean) 
+            slope_statistics.to_csv(self.slope_stats, index=False)
 
-        slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean) 
-        slope_statistics.to_csv(self.slope_stats, index=False)
+            # pipeline pause here to get maxar metadata
+            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) # combine feats + imgs
+            branch_canopy = apply_canopy_classification(self.params, branch_images)
+            branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
+            baseline = tree.apply_rules_baseline(self.params, branch_slope)
+            ev = tree.apply_rules_ev(self.params, baseline)
+            ev.to_csv(self.tree_results, index=False)
 
-        # pipeline pause here to get maxar metadata
-        branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) # combine feats + imgs
-        branch_canopy = apply_canopy_classification(self.params, branch_images)
-        branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
+        elif self.mode == 'score':
+            print("Running in SCORE mode — using cached tree results.")
+            ev = pd.read_csv('data/tree_output/dtree_output_c1_07-14-2025_exp5.csv')
 
-        baseline = tree.apply_rules_baseline(self.params, branch_slope)
-        ev = tree.apply_rules_ev(self.params, baseline)
-        results = price.calc_cost_to_verify(self.params, ev)
-        results.to_csv(self.final_outfile, index=False)
+        scored = scoring.apply_scoring(self.params, ev)
+        poly_results = price.calc_cost_to_verify(self.params, scored) 
+        poly_results.to_csv(self.poly_score, index=False) 
+        
+        # calculate final project scale decision
+        prj_results = scoring.aggregate_project_score(self.params, scored)
+        prj_results.to_csv(self.prj_score, index=False) 
 
-        # upload to s3 and trigger asana API
+        # uploads
+        asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score) 
         # upload_to_s3.upload_results_to_s3(self.final_outfile, self.params, self.secrets)
 
 

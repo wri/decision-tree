@@ -1,11 +1,16 @@
 
 config: secrets.yaml
-mode: test  # options: full, test, skip_slope
+mode: full  # options: full, partial, score
 
 s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
+
+asana:
+  project_gid: 1209713669431043
+  section: Remote
+  dry_run: False
 
 opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
@@ -31,9 +36,9 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 07-14-2025
-  experiment_id: exp4
-  cohort: c1               
+  data_version: 10-06-25
+  experiment_id: exp1
+  cohort: c2
   portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/geojsons/
   tm_response: data/tm_api_response/{cohort}_{data_version}.json
@@ -42,4 +47,56 @@ outfile:
   feats: data/feats/tm_api_{cohort}_{data_version}.csv
   feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{data_version}.csv
   maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
-  decision: data/results/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  tree_results: data/tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: data/decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: data/decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+
+suitability:
+  area_col: area
+  min_coverage: 0.6         # require at least 60% of project area to have a valid polygon score
+  thresholds:
+    weak_field: 30
+    weak_remote: 55
+    strong_remote: 70
+  special_labels:
+    mangrove_area_frac_threshold: 0.10     # label "mangrove" if ≥10% of total area is mangrove
+    review_area_frac_threshold:  0.10      # label "review required" if ≥10% is review
+    precedence: ["mangrove", "review required", "not available"]
+
+  # How to map raw axis score -> 0..100
+  scale:
+    method: logistic   # or "minmax"
+    k: 0.8             # only used for logistic; larger k => steeper curve
+    min: -6            # only used for minmax
+    max: 6
+
+  # Optional nudges from your discrete tree outputs (keeps continuity)
+  base_bonus:
+    strong remote:  +1.0
+    weak remote:    +0.5
+    weak field:     -0.5
+    strong field:   -1.0
+
+  # Feature contributions (same columns you already have)
+  features:
+    common:
+      baseline_canopy:
+        open:   +2.0
+        closed: -2.0
+      slope:
+        steep:  -2.0
+        flat:   -0.5
+      target_sys:
+        mangrove: null  # we’ll mask these to NaN in code (not part of remote/field axis)
+
+    baseline_only:
+      baseline_img_count:
+        ">=2": +2.0
+        "==1": +1.0
+        "<1":  -1.0
+
+    ev_only:
+      ev_img_count:
+        ">=2": +2.0
+        "==1": +1.0
+        "<1":  -1.0

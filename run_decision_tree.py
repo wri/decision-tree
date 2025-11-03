@@ -44,9 +44,9 @@ class VerificationDecisionTree:
     def run(self):
         if self.mode == 'full':
             print("Running in FULL mode — acquiring prj data from APIs.")
-            # ids = get_ids(self.params)
-            # pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
-            ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
+            ids = get_ids(self.params)
+            pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
+            #ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
             ids = list(set(ids.project_id))
             
             tm_response = tm_pull_wrapper(self.params, ids)

@@ -72,7 +72,8 @@ def get_ids(params):
         auth = yaml.safe_load(auth_file)
     headers = {'Authorization': f"Bearer {auth['access_token']}"}
     api_param_dict = {
-                'projectCohort': keyword, 
+               # 'projectCohort': keyword, 
+                'cohort': keyword,
                 'polygonStatus[]': 'approved',
                 'includeTestProjects': 'false',
                 'page[size]': '100'

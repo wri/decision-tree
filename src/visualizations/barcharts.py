@@ -532,3 +532,131 @@ def baseline_counts(
 
     plt.tight_layout()
     return fig, ax, counts, props
+
+
+def plot_project_scores_dumbbell(
+    df: pd.DataFrame,
+    project_names: list,
+    baseline_col: str = "baseline_project_score_0_100",
+    ev_col: str       = "ev_project_score_0_100",
+    label_col: str    = "project_name",
+    figsize: tuple    = None,
+    title: str        = " ",
+    style_kwargs: dict = None,
+    annotate: bool     = True,       # annotate with "baseline"/"ev" strings
+    label_offset: float = 0.5        # x-offset (data units) for annotation text
+):
+    """
+    Horizontal plot where EACH project row shows a faint line from 0–100
+    and two markers placed at the baseline and EV scores.
+
+    Color coding is based on the score using the following buckets:
+        >= 70  => "strong remote"
+        55–70  => "weak remote"
+        30–55  => "weak field"
+        <  30  => "strong field"
+
+    Annotations (if enabled) label each point with "baseline" or "ev"
+    (category name, not the numeric score).
+
+    Returns
+    -------
+    None
+    """
+
+    # --- helper: score -> decision bucket (for color lookup) ---
+    def score_to_bucket(x: float) -> str:
+        if pd.isna(x):
+            return "strong field"  # fallback; will be skipped anyway
+        if x >= 70:
+            return "strong remote"
+        if x >= 55:
+            return "weak remote"
+        if x >= 30:
+            return "weak field"
+        return "strong field"
+
+    # --- subset & order by the provided project list (preserve order) ---
+    prj_set = set(project_names)
+    used_df = df[df[label_col].isin(prj_set)].copy()
+
+    # Keep only requested projects and in the exact order provided
+    used_df[label_col] = used_df[label_col].astype(str)
+    used_df = used_df.set_index(label_col).reindex(project_names).reset_index()
+
+    # Coerce to numeric
+    used_df[baseline_col] = pd.to_numeric(used_df[baseline_col], errors="coerce")
+    used_df[ev_col]       = pd.to_numeric(used_df[ev_col], errors="coerce")
+
+    # --- notify about rows that can't be plotted BEFORE dropping them ---
+    missing_mask = used_df[baseline_col].isna() | used_df[ev_col].isna()
+    if missing_mask.any():
+        for _, row in used_df.loc[missing_mask, [label_col, baseline_col, ev_col]].iterrows():
+            print(f"[skip] {row[label_col]} does not contain enough information to be plotted "
+                  f"(baseline={row[baseline_col]}, ev={row[ev_col]}).")
+
+    # Drop rows missing either score
+    used_df = used_df.dropna(subset=[baseline_col, ev_col])
+
+    n = len(used_df)
+    if n == 0:
+        raise ValueError("No valid projects to plot after filtering and numeric coercion.")
+
+    # --- figure sizing: auto height if not provided ---
+    if figsize is None:
+        figsize = (12, max(3.0, 0.55 * n + 1.5))
+
+    def color_for_score(x: float) -> str:
+        bucket = score_to_bucket(x)
+        return DECISION_COLORS.get(bucket)
+
+    refline_color  = "#bdbdbd"  # neutral reference line per row
+
+    # --- y positions (first project at top) ---
+    y = np.arange(n)[::-1]                 # invert so first item is at the top
+    ylabels = used_df[label_col].tolist()[::-1]
+    x_base  = used_df[baseline_col].to_numpy()[::-1]
+    x_ev    = used_df[ev_col].to_numpy()[::-1]
+
+    # --- plot ---
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # full 0–100 reference line per project row (faint)
+    for yi in y:
+        ax.hlines(y=yi, xmin=0, xmax=100, linewidth=1.5, color=refline_color, alpha=0.4, zorder=1)
+
+    # scatter markers, colored by score buckets
+    base_colors = [color_for_score(v) for v in x_base]
+    ev_colors   = [color_for_score(v) for v in x_ev]
+
+    ax.scatter(x_base, y, s=40, color=base_colors, zorder=3)
+    ax.scatter(x_ev,   y, s=40, color=ev_colors,   zorder=3)
+
+    # optional annotations: label markers with "baseline" / "ev"
+    if annotate:
+        for xi, yi in zip(x_base, y):
+            ax.text(xi + label_offset, yi, "baseline", va="center", ha="left", fontsize=11)
+        for xi, yi in zip(x_ev, y):
+            ax.text(xi + label_offset, yi, "ev", va="center", ha="left", fontsize=11)
+
+    # axes
+    ax.set_yticks(y)
+    ax.set_yticklabels(ylabels)
+    ax.set_xlim(0, 100)
+    ax.grid(axis="x", linestyle="--", alpha=0.35)
+
+    # match your house style
+    default_style = dict(
+        xlabel="Score",
+        ylabel=" ",
+        title=title,
+        x_grid=True,
+        y_grid=False,
+        hide_bottom=False,
+        fontsize=12
+    )
+    style_args = {**default_style, **(style_kwargs or {})}
+    style_axis(ax, **style_args)
+
+    plt.tight_layout()
+    return None

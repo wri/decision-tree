@@ -1,11 +1,16 @@
 
 config: secrets.yaml
-mode: score  # options: full, partial, score
+mode: full  # options: full, partial, score
 
 s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
+
+asana:
+  project_gid: 1209713669431043
+  section: Remote
+  dry_run: False
 
 opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
@@ -31,9 +36,9 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 07-14-2025
-  experiment_id: exp5
-  cohort: c1               
+  data_version: 10-06-25
+  experiment_id: exp1
+  cohort: c2
   portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/geojsons/
   tm_response: data/tm_api_response/{cohort}_{data_version}.json

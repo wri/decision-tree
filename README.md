@@ -6,19 +6,24 @@ This repository contains the code for running a rule-based decision process to i
 
 ## 🧠 Purpose & Scope
 
-The primary functions of this code are located within `run_decision_tree.py`. 
-**Data Gathering & Cleaning**  
-  - Query the TerraMatch API, Maxar API and OpenTopo API to gather input data for the decision tree
-  - Process, validate and clean the API response into the various "branches" of the tree
-**Apply Logic**  
-  - Apply the rules framework
-**Make Decisions**  
-  - Apply the weighted scoring approach at the polygon level
-  - Calculate the cost to monitor the project
-  - Aggregate polygon scores to derive project score
-**Upload**  
-  - Push results to Asana
-  - Push results to s3
+The primary functions of this code are located within `run_decision_tree.py`.
+
+**Data Gathering & Cleaning**
+- Query the TerraMatch API, Maxar API, and OpenTopo API to gather input data for the decision tree  
+- Process, validate, and clean the API response into the various "branches" of the tree  
+
+**Apply Logic**
+- Apply the rules framework  
+
+**Make Decisions**
+- Apply the weighted scoring approach at the polygon level  
+- Calculate the cost to monitor the project  
+- Aggregate polygon scores to derive project score  
+
+**Upload**
+- Push results to Asana  
+- Push results to S3  
+
 
 
 ## 🎯 Goals & Non-Goals

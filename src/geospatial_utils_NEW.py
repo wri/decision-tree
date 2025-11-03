@@ -23,7 +23,6 @@ def shp_to_gdf(shapefile_path, driver):
     shp_gdf["bounds"] = [list(i) for i in shp_gdf["bounds"]]
     return shp_gdf
 
-
 def calculate_area_km2(geometry):
     gdf = gpd.GeoDataFrame(geometry=[geometry], crs="EPSG:4326")
     gdf = gdf.to_crs("EPSG:3857")

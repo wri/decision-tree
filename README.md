@@ -7,16 +7,16 @@ This repository contains the code for running a rule-based decision process to i
 ## 🧠 Purpose & Scope
 
 The primary functions of this code are located within `run_decision_tree.py`. 
-Data Gathering & Cleaning
+**Data Gathering & Cleaning**  
   - Query the TerraMatch API, Maxar API and OpenTopo API to gather input data for the decision tree
   - Process, validate and clean the API response into the various "branches" of the tree
-Apply logic
+**Apply Logic**  
   - Apply the rules framework
-Create decisions
+**Make Decisions**  
   - Apply the weighted scoring approach at the polygon level
   - Calculate the cost to monitor the project
   - Aggregate polygon scores to derive project score
-Upload
+**Upload**  
   - Push results to Asana
   - Push results to s3
 
@@ -35,6 +35,7 @@ Upload
 |----------------------------|-------------------|-----------|---------------------|-------|
 | maxar-tools| API response| --- | ------------------- | ----- |
 | terramatch-researcher-api | API response| -- | ------------------- | ----- |
+| tf-biophysical-monitoring | patched tree cover| -- | ------------------- | ----- |
 
 
 ### External Data Sources
@@ -45,8 +46,7 @@ Upload
 
 ### Expected Input Formats
 
-* mode dependent - updated params.yaml file or project id csv for processing
-* rule_template.csv
+* mode dependent - mainly defers to `params.yaml` file or csv for processing
 
 ### Input Validation
 
@@ -77,7 +77,7 @@ Upload
 ### Downstream Repos / Consumers
 
 | Repo | Consumed Artifact | Contract Type | Dependency Level (strong/soft) |
-| tree-verification | binary decision | ---- | strong |
+| tree-verification            | binary decision | ---- | strong |
 | maxar-tools (image ordering) | binary decision | ---- | strong |
 | maxar-tools (image availability) | image count | ---- | soft |
 
@@ -136,7 +136,7 @@ asana:
 
 | Command | Purpose |
 |----------|--------|
-| python3 run_decision_tree.py | ------- |
+| python3 run_decision_tree.py | runs pipeline |
 
 
 ### Orchestration

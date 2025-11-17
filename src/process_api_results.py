@@ -110,13 +110,19 @@ def resolve_multipractice(df):
       - All other rows in the project use the same single practice.
     """
     df = df.copy()
-    df['is_multipractice'] = df['practice'].str.contains(',')
+    df['is_multipractice'] = df['practice'].astype(str).str.contains(',', na=False).astype(bool)
+    
+    # If there are no multipractice rows at all, just return
+    if not df['is_multipractice'].any():
+        print("No multi-practice rows found; nothing to resolve.")
+        df.drop(columns='is_multipractice', inplace=True)
+        return df
 
     updated_projects = []
 
     for project_id, group in df.groupby('project_id'):
         multipractice_rows = group[group['is_multipractice']]
-        singlepractice_rows = group[~group['is_multipractice']]
+        singlepractice_rows = group[~group['is_multipractice'].astype(bool)]
 
         if len(multipractice_rows) == 1 and len(singlepractice_rows) > 0:
             unique_single = singlepractice_rows['practice'].unique()

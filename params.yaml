@@ -1,6 +1,18 @@
 
+# =============================================================================
+# Project Parameters File (params.yaml)
+#
+# This file stores all configuration values for the Decision Tree pipeline.
+# Update paths, thresholds, scoring rules, and API settings here.
+#
+# Notes:
+# - 'mode' indicates where the pipeline begins. Options: full, partial, score
+# - 'data version' identifies cached inputs by the date they were downloaded
+# - 'experiment id' tracks different experiments using same input data
+# =============================================================================
+
 config: secrets.yaml
-mode: full  # options: full, partial, score
+mode: full  
 
 s3:
   upload: false
@@ -36,8 +48,8 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 10-06-25
-  experiment_id: exp1
+  data_version: 11-17-25
+  experiment_id: exp2
   cohort: c2
   portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/geojsons/

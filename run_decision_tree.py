@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 sys.path.append('src/')
 from api_utils import get_ids
-from api_utils import tm_pull_wrapper, opentopo_pull_wrapper
+from api_utils import get_tm_feats, opentopo_pull_wrapper
 import process_api_results as clean
 from image_availability import analyze_image_availability
 from canopy_cover import apply_canopy_classification
@@ -46,10 +46,10 @@ class VerificationDecisionTree:
             print("Running in FULL mode — acquiring prj data from APIs.")
             ids = get_ids(self.params)
             pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
-            #ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
-            ids = list(set(ids.project_id))
+            # ids = pd.read_csv("data/portfolio_csvs/prj_ids_c2_10-06-25.csv")
+            # ids = list(set(ids.project_id))
             
-            tm_response = tm_pull_wrapper(self.params, ids)
+            tm_response = get_tm_feats(self.params, ids)
             with open(self.tm_outfile, "w") as f:
                 json.dump(tm_response, f, indent=4)
 

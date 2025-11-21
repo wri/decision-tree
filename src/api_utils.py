@@ -15,8 +15,8 @@ import tempfile
 import math
 from shapely.geometry import shape
 from osgeo import gdal
-from tm_api_utils import pull_tm_api_data
-from s3_utils import upload_to_s3   
+# from tm_api_utils import pull_tm_api_data
+from .s3_utils import upload_to_s3
 
 def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
     """

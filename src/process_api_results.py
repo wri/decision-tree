@@ -39,9 +39,6 @@ def missing_planting_dates(df, drop=False):
     Identifies where there are missing planting dates for 
     a polygon, hindering maxar metadata retrieval
     '''
-    # count how rows are missing start and end dates
-    missing_both = df['plantstart'].isna() & df['plantend'].isna()
-    print(f"⚠️ Polygons missing start and end plant date: {missing_both.sum()}")
 
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
@@ -170,7 +167,6 @@ def process_tm_api_results(params, results):
         project_name = project.get('projectShortName')
         geom = project.get('geometry')
         plant_start = project.get('plantStart')
-        plant_end = project.get('plantEnd')
         practice = project.get('practice')
         targetsys = project.get('targetSys')
         dist = project.get('distr')
@@ -198,7 +194,6 @@ def process_tm_api_results(params, results):
             'project_name': project_name,
             'geometry': geom,
             'plantstart': plant_start,
-            'plantend': plant_end,
             'practice': practice,
             'target_sys': targetsys,
             'dist': dist,
@@ -213,7 +208,6 @@ def process_tm_api_results(params, results):
 
     # Clean up start and end dates and missing info
     clean_df = clean_datetime_column(raw_df, 'plantstart')
-    clean_df = clean_datetime_column(clean_df, 'plantend')
     clean_df = missing_planting_dates(clean_df, drop_missing)
     clean_df = missing_features(clean_df, drop_missing)
     

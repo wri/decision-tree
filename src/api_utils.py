@@ -17,6 +17,8 @@ from shapely.geometry import shape
 from osgeo import gdal
 # from tm_api_utils import pull_tm_api_data
 from .s3_utils import upload_to_s3
+from .tools import get_gfw_access_token
+
 
 def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
     """
@@ -115,11 +117,8 @@ def tm_pull_wrapper(params, project_ids):
     data_version = out['data_version']
     outfile = out['tm_response'].format(cohort=out['cohort'], data_version=data_version)
     geojson_dir = out['geojsons']
-    tm_auth_path = params['config']
 
-    with open(tm_auth_path) as auth_file:
-        auth = yaml.safe_load(auth_file)
-    headers = {'Authorization': f"Bearer {auth['access_token']}"}
+    headers = get_gfw_access_token(params)
     
     all_results = []
     

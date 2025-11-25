@@ -43,8 +43,9 @@ jobs:
          role-to-assume: arn:aws:iam::838255262149:role/restoration-gitub-actions
          aws-region: us-east-1
 
-     # Step 5: Run tests
+     # Step 6: Run tests
      - name: Run Tests
        env:
         GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
+        OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
        run: uv run pytest tests/

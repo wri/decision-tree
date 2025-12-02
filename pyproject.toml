@@ -1,0 +1,41 @@
+[project]
+name = "decision-tree"
+version = "0.1.0"
+description = "Cleaning and analysis scripts for TerraFund portfolio data"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "asana",
+    "boto3",
+    "exactextract",
+    "fiona",
+    "gdal",
+    "matplotlib",
+    "geopandas",
+    "pandas",
+    "pytest",
+    "pytest-xdist",
+    "pyyaml",
+    "rasterio",
+    "requests",
+    "richdem-fork>=3.0.0",
+    "shapely",
+    "tqdm",
+]
+
+[tool.uv.sources]
+gdal = [
+  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
+  { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
+]
+tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git" }
+
+[[tool.uv.index]]
+name = "geospatial_wheels"
+url = "https://nathanjmcdougall.github.io/geospatial-wheels-index/"
+explicit = true
+
+[[tool.uv.index]]
+name = "gdal-wheels"
+url = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple"
+explicit = true

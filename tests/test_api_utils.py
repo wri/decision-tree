@@ -2,12 +2,13 @@ import os
 import yaml
 
 from src.api_utils import get_ids, tm_pull_wrapper, opentopo_pull_wrapper
-from tests.tools import get_project_root, get_opentopo_api_key
+from tests.tools import get_opentopo_api_key
+from src.tools import get_project_root
 import src.process_api_results as clean
 
 ROOT_PATH = get_project_root()
 
-parms_path = os.path.join(ROOT_PATH, "tests", "data", "params.yaml")
+parms_path = os.path.join(ROOT_PATH, "tests", "params.yaml")
 with open(parms_path, 'r') as file:
     PARAMS = yaml.safe_load(file)
 

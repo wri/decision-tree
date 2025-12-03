@@ -1,5 +1,5 @@
 
-config: ../secrets.yaml
+config: secrets.yaml
 mode: full  # options: full, partial, score
 
 s3:

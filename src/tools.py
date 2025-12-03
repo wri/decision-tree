@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import yaml
 
@@ -10,9 +11,16 @@ def get_gfw_access_token(params):
             'Authorization': f"Bearer {access_token}"
         }
     else:
-        tm_auth_path = params['config']
+        tm_auth_file = params['config']
+        tm_auth_path = os.path.join(get_project_root(), tm_auth_file)
         with open(tm_auth_path) as auth_file:
             auth = yaml.safe_load(auth_file)
         auth_headers = {'Authorization': f"Bearer {auth['access_token']}"}
 
     return auth_headers
+
+
+def get_project_root() -> str:
+    """Return the absolute path to the project root directory."""
+    # Start from the directory of the current file
+    return str(Path(os.path.dirname(__file__)).parent)

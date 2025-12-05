@@ -7,8 +7,11 @@
 #
 # Notes:
 # - 'mode' indicates where the pipeline begins. Options: full, partial, score
-# - 'data version' identifies cached inputs by the date they were downloaded
-# - 'experiment id' tracks different experiments using same input data
+# File storage:
+# - files are named according to the 'data_version', 'experiment_id' and 'cohort'
+#   - 'data version' identifies cached inputs by the date they were downloaded
+#   - 'experiment id' tracks different experiments using same input data
+#   - 'cohort' refers to the batch of TerraFund projects that will be processed
 # =============================================================================
 
 config: secrets.yaml
@@ -22,7 +25,7 @@ s3:
 asana:
   project_gid: 1209713669431043
   section: Remote
-  dry_run: False
+  dry_run: True
 
 opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
@@ -48,9 +51,9 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 11-17-25
+  data_version: 07-14-2025
   experiment_id: exp2
-  cohort: c2
+  cohort: c1
   portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/geojsons/
   tm_response: data/tm_api_response/{cohort}_{data_version}.json
@@ -65,7 +68,7 @@ outfile:
 
 suitability:
   area_col: area
-  min_coverage: 0.6         # require at least 60% of project area to have a valid polygon score
+  min_coverage: 0.6                        # require at least 60% of project area to have a valid polygon score
   thresholds:
     weak_field: 30
     weak_remote: 55

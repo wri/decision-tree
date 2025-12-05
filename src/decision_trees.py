@@ -140,7 +140,7 @@ def apply_rules_ev(params, df):
     Additional Rule:
       • if EV year is current or future, decision is 'not available'
     """
-
+    df = df.copy()
     rules = pd.read_csv(params['criteria']['rules'])
 
     # Clean rules df
@@ -152,7 +152,8 @@ def apply_rules_ev(params, df):
 
     # Clean input df
     for col in ['ev_canopy', 'target_sys', 'practice', 'slope']:
-        df[col] = df[col].astype(str).str.strip().str.lower()
+        df.loc[:, col] = df[col].astype(str).str.strip().str.lower()
+
 
     # Filter EV-specific rule columns
     base_rules = rules[['canopy','target_sys','practice','img_count', 'first_decision']]

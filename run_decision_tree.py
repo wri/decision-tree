@@ -59,12 +59,11 @@ class VerificationDecisionTree:
             tm_clean = clean.process_tm_api_results(self.params, tm_response) 
             tm_clean.to_csv(self.project_feats, index=False)
             tm_clean.to_csv(self.project_feats_maxar, index=False)
-
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean) 
             slope_statistics.to_csv(self.slope_stats, index=False)
 
             # pipeline pause here to get maxar metadata
-            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) # combine feats + imgs
+            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) 
             branch_canopy = apply_canopy_classification(self.params, branch_images)
             branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
             baseline = tree.apply_rules_baseline(self.params, branch_slope)
@@ -78,7 +77,7 @@ class VerificationDecisionTree:
             slope_statistics.to_csv(self.slope_stats, index=False)
 
             # pipeline pause here to get maxar metadata
-            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) # combine feats + imgs
+            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) 
             branch_canopy = apply_canopy_classification(self.params, branch_images)
             branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
             baseline = tree.apply_rules_baseline(self.params, branch_slope)

@@ -15,53 +15,14 @@ import tempfile
 import math
 from shapely.geometry import shape
 from osgeo import gdal
-# from tm_api_utils import pull_tm_api_data
-from .s3_utils import upload_to_s3
-from .tools import get_gfw_access_token
+from tm_api_utils import pull_tm_api_data
+from s3_utils import upload_to_s3   
+import time
+import sys
 
-
-def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
-    """
-    ## REMOVE ME ONCE PACKAGE UPDATED ##
-    
-    Optimized version of patched_pull_tm_api_data with improved performance.
-
-    - Parses response JSON only once per request
-    - Efficiently handles pagination cursors
-    - Uses safer access to nested metadata
-    """
-    results = []
-    last_record = None
-
-    while True:
-        response = requests.get(url, headers=headers, params=params)
-
-        if response.status_code != 200:
-            raise ValueError(f"Request failed: {response.status_code}")
-
-        response_json = response.json()
-        data_items = response_json.get('data', [])
-
-        if not data_items:
-            break
-
-        for item in data_items:
-            attributes = item.get('attributes', {})
-            attributes['poly_id'] = item.get('meta', {}).get('page', {}).get('cursor') or item.get('id')
-            results.append(attributes)
-
-        # Efficient cursor handling after processing all records
-        new_last_record = data_items[-1].get('meta', {}).get('page', {}).get('cursor') if data_items else None
-
-        if new_last_record and new_last_record != last_record:
-            last_record = new_last_record
-            params['page[after]'] = last_record
-        else:
-            break
-
-    return results
 
 def get_ids(params):
+
     print("Requesting project IDs from TerraMatch...")
     out = params['outfile']
     cohort = out['cohort']
@@ -73,30 +34,31 @@ def get_ids(params):
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
     headers = {'Authorization': f"Bearer {auth['access_token']}"}
-    api_param_dict = {
-               # 'projectCohort': keyword, 
-                'cohort': keyword,
-                'polygonStatus[]': 'approved',
-                'includeTestProjects': 'false',
-                'page[size]': '100'
+    api_param_dict = {'projectCohort[]': keyword,
+                    'polygonStatus[]': 'approved',
+                    'includeTestProjects': 'false',
+                    'page[size]': '100'
             }
     try:
-        results = patched_pull_tm_api_data(url, headers, api_param_dict)
+        results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
         
         ids = list({
         str(r["projectId"])
         for r in results
         if "projectId" in r and r["projectId"] is not None
          })
-            
-        print(f"Found {len(ids)} project IDs for {cohort}.")
+        if len(ids) < 1:
+            print(f"Error: only found {len(ids)} project IDs. Exiting.")
+            sys.exit(1)
+        else:
+            print(f"Found {len(ids)} project IDs for {cohort}.")
     
     except Exception as e:
         print(f"Error pulling project ids: {e}")
     
     return ids 
 
-def tm_pull_wrapper(params, project_ids):
+def get_tm_feats(params, project_ids):
     """
     Wrapper function around the TM API package.
 
@@ -136,8 +98,7 @@ def tm_pull_wrapper(params, project_ids):
             }
 
             try:
-                # update this to directly use TM Api package
-                results = patched_pull_tm_api_data(url, headers, api_param_dict) 
+                results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False) 
                 if results is None:
                     print(f"No results returned for project: {project_id}")
                     progress.update(1)
@@ -161,12 +122,11 @@ def tm_pull_wrapper(params, project_ids):
                 project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')), project_id)
                 filename = f"{project_name}_{data_version}.geojson"
                 gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
-
-                if params['s3']['upload']:
-                    upload_to_s3(params, params["config"], project_name, data_version)
-
             except Exception as e:
-                print(f"Upload error for {project_name}: {e}")
+                print(f"Geojson creation error for {project_name}: {e}")
+
+            if params['s3']['upload']:
+                upload_to_s3(params, params["config"], project_name, data_version)
 
             progress.update(1)
 
@@ -230,7 +190,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
     data_version = params['outfile']['data_version']
 
     project_names = feats_df['project_name'].unique()
-    project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # this should only drop 1 prj and 100 polys
+    #project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # this should only drop 1 prj and 100 polys
     dfs_to_concat = []
     for name in project_names:
         project_df = feats_df[feats_df.project_name == name]

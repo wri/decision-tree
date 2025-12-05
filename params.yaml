@@ -1,6 +1,5 @@
 
 config: secrets.yaml
-mode: full  # options: full, partial, score
 
 s3:
   upload: false

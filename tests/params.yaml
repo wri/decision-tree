@@ -1,6 +1,4 @@
-
 config: secrets.yaml
-mode: full  # options: full, partial, score
 
 s3:
   upload: false
@@ -29,27 +27,27 @@ criteria:
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
-  rules: data/rule_template.csv
+  rules: tests/data/source_csv/rule_template.csv
 
 cost:
   field: 0.32
   remote: 20.0
 
 outfile:
-  data_version: 10-06-25
+  data_version: 06-30-2025
   experiment_id: exp1
   cohort: c2
-  portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
-  geojsons: data/geojsons/
-  tm_response: data/tm_api_response/{cohort}_{data_version}.json
-  slope_stats: data/slope/slope_statistics_{cohort}_{data_version}.csv
-  project_stats: data/slope/project_statistics/{name}_slope_stats.csv
-  feats: data/feats/tm_api_{cohort}_{data_version}.csv
-  feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{data_version}.csv
-  maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
-  tree_results: data/tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
-  poly_decision: data/decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
-  prj_decision: data/decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+  portfolio: tests/data/source_csv/prj_ids_{cohort}_{data_version}.csv
+  geojsons: tests/data/source_geojsons/
+  tm_response: tests/data/scratch_files/{cohort}_{data_version}.json
+  slope_stats: tests/data/scratch_files/slope_statistics_{cohort}_{data_version}.csv
+  project_stats: tests/data/scratch_files/{name}_slope_stats.csv
+  feats: tests/data/source_csv/tm_api_{cohort}_{data_version}.csv
+  feats_maxar: tests/data/source_csv/tm_api_{cohort}_{data_version}.csv
+  maxar_meta: tests/data/source_csv/comb_img_availability_{cohort}_{data_version}.csv
+  tree_results: tests/data/source_csv/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: tests/data/source_csv/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: tests/data/scratch_files/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 suitability:
   area_col: area

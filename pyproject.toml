@@ -17,8 +17,10 @@ dependencies = [
     "pytest-xdist",
     "pyyaml",
     "rasterio",
+    "regex",
     "requests",
     "richdem-fork>=3.0.0",
+    "seaborn",
     "shapely",
     "tqdm",
 ]

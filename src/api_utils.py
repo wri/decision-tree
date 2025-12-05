@@ -19,6 +19,7 @@ from tm_api_utils import pull_tm_api_data
 from s3_utils import upload_to_s3   
 import time
 import sys
+from .tools import get_gfw_access_token
 
 
 def get_ids(params):

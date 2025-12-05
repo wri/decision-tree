@@ -190,7 +190,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
     data_version = params['outfile']['data_version']
 
     project_names = feats_df['project_name'].unique()
-    #project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # this should only drop 1 prj and 100 polys
+    project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # still has an erroneous polygon that breaks the pipeline
     dfs_to_concat = []
     for name in project_names:
         project_df = feats_df[feats_df.project_name == name]

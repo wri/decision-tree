@@ -3,19 +3,22 @@ import os
 import pandas as pd
 from pathlib import Path
 
+import yaml
+
 from run_decision_tree import main, VerificationDecisionTree, compute_project_results, compute_ev_statistics
 from src.api_utils import opentopo_pull_wrapper
-from tests.tools import get_project_root, get_opentopo_api_key
+from tests.tools import get_project_root, get_opentopo_api_key, standardize_test_param_paths
 
 ROOT_PATH = get_project_root()
 PARAMS_PATH = os.path.join(ROOT_PATH, "tests", "params.yaml")
-SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
+SECRETS_PATH = os.path.join(ROOT_PATH, "tests", "secrets.yaml")
+with open(PARAMS_PATH, 'r') as file:
+    params = yaml.safe_load(file)
+PARAMS = standardize_test_param_paths(params)
 
 PROJECT_NAME_A = 'TGO_22_APAF'
 PROJECT_NAME_B = 'RWA_22_ICRAF'
 
-# instantiate the VerficationDT class
-vdt = VerificationDecisionTree(PARAMS_PATH, SECRETS_PATH)
 
 def test_run_decision_tree_param_parsing():
     workflow = main(PARAMS_PATH, SECRETS_PATH, parse_only=True)
@@ -24,7 +27,7 @@ def test_run_decision_tree_param_parsing():
                      "maxar_meta", "tree_results", "poly_score", "prj_score"}
 
     assert isinstance(workflow, VerificationDecisionTree)
-    assert has_expected_attributes(workflow, expected_atts)
+    assert _has_expected_attributes(workflow, expected_atts)
 
 
 def test_run_decision_tree_partial():
@@ -32,24 +35,22 @@ def test_run_decision_tree_partial():
     sample_maxar_file = "comb_img_availability_c1_07-14-2025_two_projects.csv"
     sample_tm_data_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", sample_tm_file)
     sample_maxar_data_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", sample_maxar_file)
-    vdt.params['outfile']['geojsons'] = os.path.join(ROOT_PATH, "tests", "data", "source_geojsons")
-    vdt.params['criteria']['rules'] = os.path.join(ROOT_PATH, vdt.params['criteria']['rules'])
 
     # Setup for testing
-    opentopo_key = get_opentopo_api_key(vdt.params)
-    secrets = {"opentopo_key": opentopo_key}
+    opentopo_key = get_opentopo_api_key(PARAMS)
+    opentopo_secrets = {"opentopo_key": opentopo_key}
     # Scratch folder
-    out_directory = Path(vdt.params['outfile']['project_stats']).parent
+    out_directory = Path(PARAMS['outfile']['project_stats']).parent
     os.makedirs(out_directory, exist_ok=True)
 
     # read sample data
     tm_clean = pd.read_csv(sample_tm_data_path)
 
     # compute slope stats
-    slope_statistics = opentopo_pull_wrapper(vdt.params, secrets, tm_clean)
+    slope_statistics = opentopo_pull_wrapper(PARAMS, opentopo_secrets, tm_clean)
 
     # compute ev decision
-    ev = compute_ev_statistics(vdt.params, tm_clean, sample_maxar_data_path, slope_statistics)
+    ev = compute_ev_statistics(PARAMS, tm_clean, sample_maxar_data_path, slope_statistics)
 
     # verify that two projects were returned
     project_count = ev['project_name'].nunique()
@@ -66,13 +67,16 @@ def test_run_decision_tree_partial():
     expected_proj_a_poly_decision = 'weak field'
     assert proj_a_poly_decision == expected_proj_a_poly_decision
 
+    # Clean up scratch file
+    _delete_scratch_file('TGO_22_APAF_slope_stats.csv')
+    _delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
 
 def test_run_decision_tree_score():
     sample_file = "dtree_output_c1_07-14-2025_exp5_two_projects.csv"
     sample_data_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", sample_file)
     ev = pd.read_csv(sample_data_path)
 
-    poly_results, prj_results = compute_project_results(vdt.params, ev)
+    poly_results, prj_results = compute_project_results(PARAMS, ev)
 
     # verify that two projects were returned
     project_count = prj_results['project_name'].nunique()
@@ -99,9 +103,8 @@ def test_run_decision_tree_score():
         f"proj: {PROJECT_NAME_B}: actual_baseline_score:{proj_a_baseline_cost} != expected_score:{expected_proj_a_baseline_cost}"
 
 
-
 # Function to check if a class or object has all expected attributes
-def has_expected_attributes(obj, expected_attrs):
+def _has_expected_attributes(obj, expected_attrs):
     """
     Check if the given object or class has all attributes in expected_attrs.
 
@@ -118,3 +121,9 @@ def has_expected_attributes(obj, expected_attrs):
         raise ValueError("All attribute names must be strings")
 
     return all(hasattr(obj, attr) for attr in expected_attrs)
+
+
+def _delete_scratch_file(filename):
+    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "scratch_files", filename)
+    if os.path.isfile(scratch_file_path1):
+        os.remove(scratch_file_path1)

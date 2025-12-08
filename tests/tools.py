@@ -16,3 +16,20 @@ def get_opentopo_api_key(params):
         api_key = auth['opentopo_key']
 
     return api_key
+
+def standardize_test_param_paths(params):
+    root_path = get_project_root()
+    params['criteria']['rules'] = os.path.join(root_path, "tests", params['criteria']['rules'])
+    params['outfile']['portfolio'] = os.path.join(root_path, "tests", params['outfile']['portfolio'])
+    params['outfile']['geojsons'] = os.path.join(root_path, "tests", params['outfile']['geojsons'])
+    params['outfile']['tm_response'] = os.path.join(root_path, "tests", params['outfile']['tm_response'])
+    params['outfile']['slope_stats'] = os.path.join(root_path, "tests", params['outfile']['slope_stats'])
+    params['outfile']['project_stats'] = os.path.join(root_path, "tests", params['outfile']['project_stats'])
+    params['outfile']['feats'] = os.path.join(root_path, "tests", params['outfile']['feats'])
+    params['outfile']['feats_maxar'] = os.path.join(root_path, "tests", params['outfile']['feats_maxar'])
+    params['outfile']['maxar_meta'] = os.path.join(root_path, "tests", params['outfile']['maxar_meta'])
+    params['outfile']['tree_results'] = os.path.join(root_path, "tests", params['outfile']['tree_results'])
+    params['outfile']['poly_decision'] = os.path.join(root_path, "tests", params['outfile']['poly_decision'])
+    params['outfile']['prj_decision'] = os.path.join(root_path, "tests", params['outfile']['prj_decision'])
+
+    return params

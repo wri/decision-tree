@@ -17,7 +17,7 @@ from shapely.geometry import shape
 from osgeo import gdal
 # from tm_api_utils import pull_tm_api_data
 from .s3_utils import upload_to_s3
-from .tools import get_gfw_access_token
+from .tools import get_gfw_access_token, read_opentopo_api_key
 
 
 def patched_pull_tm_api_data(url: str, headers: dict, params: dict) -> list:
@@ -224,7 +224,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
         outfile (str): Output CSV file path.
     '''
     dem_url = params['opt_api']['opt_url']
-    api_key = config['opentopo_key']
+    api_key = read_opentopo_api_key(config)
     geojson_dir = params['outfile']['geojsons']
     slope_thresh = params['criteria']['slope_thresh']
     data_version = params['outfile']['data_version']

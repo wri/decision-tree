@@ -27,7 +27,7 @@ criteria:
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
-  rules: tests/data/source_csv/rule_template.csv
+  rules: data/source_csv/rule_template.csv
 
 cost:
   field: 0.32
@@ -37,17 +37,17 @@ outfile:
   data_version: 06-30-2025
   experiment_id: exp1
   cohort: c2
-  portfolio: tests/data/source_csv/prj_ids_{cohort}_{data_version}.csv
-  geojsons: tests/data/source_geojsons/
-  tm_response: tests/data/scratch_files/{cohort}_{data_version}.json
-  slope_stats: tests/data/scratch_files/slope_statistics_{cohort}_{data_version}.csv
-  project_stats: tests/data/scratch_files/{name}_slope_stats.csv
-  feats: tests/data/source_csv/tm_api_{cohort}_{data_version}.csv
-  feats_maxar: tests/data/source_csv/tm_api_{cohort}_{data_version}.csv
-  maxar_meta: tests/data/source_csv/comb_img_availability_{cohort}_{data_version}.csv
-  tree_results: tests/data/source_csv/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
-  poly_decision: tests/data/source_csv/poly_output_{cohort}_{data_version}_{experiment_id}.csv
-  prj_decision: tests/data/scratch_files/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+  portfolio: data/source_csv/prj_ids_{cohort}_{data_version}.csv
+  geojsons: data/source_geojsons/
+  tm_response: data/scratch_files/{cohort}_{data_version}.json
+  slope_stats: data/scratch_files/slope_statistics_{cohort}_{data_version}.csv
+  project_stats: data/scratch_files/{name}_slope_stats.csv
+  feats: data/source_csv/tm_api_{cohort}_{data_version}.csv
+  feats_maxar: data/source_csv/tm_api_{cohort}_{data_version}.csv
+  maxar_meta: data/source_csv/comb_img_availability_{cohort}_{data_version}.csv
+  tree_results: data/source_csv/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: data/source_csv/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: data/scratch_files/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 suitability:
   area_col: area

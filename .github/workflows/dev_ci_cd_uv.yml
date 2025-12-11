@@ -18,32 +18,35 @@ jobs:
       matrix:
         python-version: ["3.12"]
     steps:
-     # Step 1: Checkout the repository
      - name: Checkout code
        uses: actions/checkout@v4
 
-     # Step 2: Install UV
+     - name: Checkout private repo
+       uses: actions/checkout@v3
+       with:
+          repository: wri/terramatch-researcher-api # Replace with the private repo name
+          ref: develop
+          token: ${{ secrets.PRIVATE_REPO_PAT }} # Use the PAT stored in secrets
+
      - name: Install UV
        uses: astral-sh/setup-uv@v6
 
-     # Step 3: Install dependencies
      - name: Sync dependencies
+       env:
+         GH_TOKEN: ${{ secrets.GH_TOKEN }}
        run: uv sync --locked --all-extras --dev
 
-     # Step 4: Install Linux dependencies
      - name: Install Linux dependencies
        run: |
         sudo apt update
         sudo apt install -y gdal-bin libgdal-dev
 
-     # Step 5 Configure AWS Credentials
      - name: Configure AWS Credentials
        uses: aws-actions/configure-aws-credentials@v5.1.0
        with:
          role-to-assume: arn:aws:iam::838255262149:role/restoration-gitub-actions
          aws-region: us-east-1
 
-     # Step 6: Run tests
      - name: Run Tests
        env:
         GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}

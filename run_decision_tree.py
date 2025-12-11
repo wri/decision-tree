@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 sys.path.append('src/')
 from api_utils import get_ids
-from api_utils import tm_pull_wrapper, opentopo_pull_wrapper
+from api_utils import get_tm_feats, opentopo_pull_wrapper
 import process_api_results as clean
 from image_availability import analyze_image_availability
 from canopy_cover import apply_canopy_classification
@@ -46,10 +46,10 @@ class VerificationDecisionTree:
             print("Running in FULL mode — acquiring prj data from APIs.")
             ids = get_ids(self.params)
             pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
-            #ids = pd.read_csv("data/portfolio_csvs/prj_ids_c1_06-30-2025.csv")
-            ids = list(set(ids.project_id))
+            # ids = pd.read_csv("data/portfolio_csvs/prj_ids_c2_10-06-25.csv")
+            # ids = list(set(ids.project_id))
             
-            tm_response = tm_pull_wrapper(self.params, ids)
+            tm_response = get_tm_feats(self.params, ids)
             with open(self.tm_outfile, "w") as f:
                 json.dump(tm_response, f, indent=4)
 
@@ -58,7 +58,17 @@ class VerificationDecisionTree:
         
             tm_clean = clean.process_tm_api_results(self.params, tm_response) 
             tm_clean.to_csv(self.project_feats, index=False)
-            tm_clean.to_csv(self.project_feats_maxar, index=False) 
+            tm_clean.to_csv(self.project_feats_maxar, index=False)
+            slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean) 
+            slope_statistics.to_csv(self.slope_stats, index=False)
+
+            # pipeline pause here to get maxar metadata
+            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) 
+            branch_canopy = apply_canopy_classification(self.params, branch_images)
+            branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
+            baseline = tree.apply_rules_baseline(self.params, branch_slope)
+            ev = tree.apply_rules_ev(self.params, baseline)
+            ev.to_csv(self.tree_results, index=False)
        
         elif self.mode == 'partial':
             print("Running in PARTIAL mode — using cached prj feats.")
@@ -67,7 +77,7 @@ class VerificationDecisionTree:
             slope_statistics.to_csv(self.slope_stats, index=False)
 
             # pipeline pause here to get maxar metadata
-            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) # combine feats + imgs
+            branch_images = analyze_image_availability(self.params, tm_clean, self.maxar_meta) 
             branch_canopy = apply_canopy_classification(self.params, branch_images)
             branch_slope = apply_slope_classification(self.params, branch_canopy, slope_statistics)
             baseline = tree.apply_rules_baseline(self.params, branch_slope)

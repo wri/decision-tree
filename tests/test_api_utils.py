@@ -1,7 +1,7 @@
 import os
 import yaml
 
-from src.api_utils import get_ids, tm_pull_wrapper, opentopo_pull_wrapper
+from src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
 from tests.tools import get_opentopo_api_key
 from src.tools import get_project_root
 import src.process_api_results as clean
@@ -36,10 +36,11 @@ def test_clean_tm_features():
     expected_minimum_poly_count = 24
     assert len(features) >= expected_minimum_poly_count
 
-    expected_column_count = 13
-    assert cleaned_features.shape[1] == expected_column_count
+    actual_attribute_count = cleaned_features.shape[1]
+    expected_column_count = 12
+    assert actual_attribute_count == expected_column_count
 
-    expected_columns = ['project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'plantend', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
+    expected_columns = ['project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area', 'ttc_2020']
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
 
@@ -62,12 +63,15 @@ def test_slope_statistics(tmp_path):
     unique_stats = slope_statistics.drop_duplicates(subset=['project_id','poly_id'])
 
     assert len(unique_stats) == len(cleaned_features)
-    assert unique_stats.shape[1] == 21
+
+    actual_attribute_count = slope_statistics.shape[1]
+    expected_attribute_count = 20
+    assert actual_attribute_count == expected_attribute_count
 
 
 def get_project_tm_features(project_id):
     # Clear the tm_response outfile path
     PARAMS['outfile']['tm_response'] = ''
 
-    features = tm_pull_wrapper(PARAMS, [project_id])
+    features = get_tm_feats(PARAMS, [project_id])
     return features

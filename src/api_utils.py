@@ -5,6 +5,8 @@ import pandas as pd
 import os
 import json
 import numpy as np
+import sys
+
 from tqdm import tqdm
 import geopandas as gpd
 import rasterio as rs
@@ -16,10 +18,9 @@ import math
 from shapely.geometry import shape
 from osgeo import gdal
 from tm_api_utils import pull_tm_api_data
-import sys
 
 from src.s3_utils import upload_to_s3
-from src.tools import get_gfw_access_token
+from src.tools import get_gfw_access_token, get_opentopo_api_key
 
 
 def get_ids(params):
@@ -185,7 +186,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
         outfile (str): Output CSV file path.
     '''
     dem_url = params['opt_api']['opt_url']
-    api_key = config['opentopo_key']
+    api_key = get_opentopo_api_key(config)
     geojson_dir = params['outfile']['geojsons']
     slope_thresh = params['criteria']['slope_thresh']
     data_version = params['outfile']['data_version']

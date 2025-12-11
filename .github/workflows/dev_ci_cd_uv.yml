@@ -21,11 +21,11 @@ jobs:
      - name: Checkout code
        uses: actions/checkout@v4
 
-      # Checkout private dependency repository
      - name: Checkout private repo
        uses: actions/checkout@v3
        with:
           repository: wri/terramatch-researcher-api # Replace with the private repo name
+          ref: develop
           token: ${{ secrets.PRIVATE_REPO_PAT }} # Use the PAT stored in secrets
 
      - name: Install UV

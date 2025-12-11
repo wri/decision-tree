@@ -23,6 +23,7 @@ dependencies = [
     "seaborn",
     "shapely",
     "tqdm",
+    "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop"
 ]
 
 [tool.uv.sources]
@@ -30,7 +31,6 @@ gdal = [
   { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
   { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
 ]
-tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git" }
 
 [[tool.uv.index]]
 name = "geospatial_wheels"

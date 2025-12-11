@@ -11,7 +11,7 @@ from tests.tools import get_project_root, get_opentopo_api_key, standardize_test
 
 ROOT_PATH = get_project_root()
 PARAMS_PATH = os.path.join(ROOT_PATH, "tests", "params.yaml")
-SECRETS_PATH = os.path.join(ROOT_PATH, "tests", "secrets.yaml")
+SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 with open(PARAMS_PATH, 'r') as file:
     params = yaml.safe_load(file)
 PARAMS = standardize_test_param_paths(params)
@@ -20,19 +20,23 @@ PROJECT_NAME_A = 'TGO_22_APAF'
 PROJECT_NAME_B = 'RWA_22_ICRAF'
 
 
-def test_run_decision_tree_param_parsing():
-    workflow = main(PARAMS_PATH, SECRETS_PATH, parse_only=True)
+def test_run_decision_tree_full():
+    project_ids_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", "prj_ids_c2_10-06-25.csv")
+    # project_ids_path = os.path.join(ROOT_PATH, "data", "portfolio_csvs", "prj_ids_c2_10-06-25.csv")
 
-    expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
-                     "maxar_meta", "tree_results", "poly_score", "prj_score"}
+    project_ids = pd.read_csv(project_ids_path, skiprows=1)
 
-    assert isinstance(workflow, VerificationDecisionTree)
-    assert _has_expected_attributes(workflow, expected_atts)
+    workflow = main(PARAMS_PATH, SECRETS_PATH, save_to_asana=False, parse_only=True)
+
+    # opentopo_key = get_opentopo_api_key(workflow.params)
+    # workflow.params['config']= {"opentopo_key": opentopo_key}
+
+    workflow.run(project_ids, save_to_asana = False)
 
 
 def test_run_decision_tree_partial():
-    sample_tm_file = "tm_api_c1_07-14-2025_two_project.csv"
-    sample_maxar_file = "comb_img_availability_c1_07-14-2025_two_projects.csv"
+    sample_tm_file = "tm_api_c1_07-14-2025.csv"
+    sample_maxar_file = "comb_img_availability_c1_07-14-2025.csv"
     sample_tm_data_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", sample_tm_file)
     sample_maxar_data_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", sample_maxar_file)
 
@@ -72,7 +76,7 @@ def test_run_decision_tree_partial():
     _delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
 
 def test_run_decision_tree_score():
-    sample_file = "dtree_output_c1_07-14-2025_exp5_two_projects.csv"
+    sample_file = "dtree_output_c1_07-14-2025_exp5.csv"
     sample_data_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", sample_file)
     ev = pd.read_csv(sample_data_path)
 
@@ -101,6 +105,16 @@ def test_run_decision_tree_score():
     expected_proj_a_baseline_score = 82.8
     assert math.isclose(proj_a_proj_baseline_score, expected_proj_a_baseline_score, rel_tol=0, abs_tol=0.0), \
         f"proj: {PROJECT_NAME_B}: actual_baseline_score:{proj_a_baseline_cost} != expected_score:{expected_proj_a_baseline_cost}"
+
+
+def test_run_decision_tree_param_parsing():
+    workflow = main(PARAMS_PATH, SECRETS_PATH, save_to_asana=False, parse_only=True)
+
+    expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
+                     "maxar_meta", "tree_results", "poly_score", "prj_score"}
+
+    assert isinstance(workflow, VerificationDecisionTree)
+    assert _has_expected_attributes(workflow, expected_atts)
 
 
 # Function to check if a class or object has all expected attributes

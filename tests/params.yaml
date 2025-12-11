@@ -34,9 +34,9 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 06-30-2025
+  data_version: 07-14-2025 # 06-30-2025
   experiment_id: exp1
-  cohort: c2
+  cohort: c1
   portfolio: data/source_csv/prj_ids_{cohort}_{data_version}.csv
   geojsons: data/source_geojsons/
   tm_response: data/scratch_files/{cohort}_{data_version}.json

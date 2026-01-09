@@ -2,7 +2,7 @@ import os
 import yaml
 
 from src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
-from tests.tools import get_opentopo_api_key
+from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
 from src.tools import get_project_root
 import src.process_api_results as clean
 
@@ -17,6 +17,9 @@ def test_tm_features():
     project_id = '468bee12-bfbc-4387-a00a-d7e915576427'
     features = _get_project_tm_features(project_id)
 
+    # cleanup
+    delete_source_geojsons_file('468bee12-bfbc-4387-a00a-d7e915576427_07-14-2025.geojson')
+
     # Confirm that the file contains an expected number of polygons or more
     expected_minimum_poly_count = 19
     assert len(features) >= expected_minimum_poly_count
@@ -27,6 +30,9 @@ def test_clean_tm_features():
     features = _get_project_tm_features(project_id)
 
     cleaned_features = clean.process_tm_api_results(PARAMS, features)
+
+    # cleanup
+    delete_source_geojsons_file('468bee12-bfbc-4387-a00a-d7e915576427_07-14-2025.geojson')
 
     expected_minimum_poly_count = 19
     assert len(features) >= expected_minimum_poly_count
@@ -56,6 +62,9 @@ def test_slope_statistics(tmp_path):
     # TODO Why are there so many duplicates?
     slope_statistics = opentopo_pull_wrapper(PARAMS, config, cleaned_features)
     unique_stats = slope_statistics.drop_duplicates(subset=['project_id','poly_id'])
+
+    # cleanup
+    delete_source_geojsons_file('KEN_22_EFK_07-14-2025.geojson')
 
     assert len(unique_stats) == len(cleaned_features)
 

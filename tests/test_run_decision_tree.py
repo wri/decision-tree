@@ -7,7 +7,8 @@ import yaml
 
 from run_decision_tree import main, VerificationDecisionTree, compute_project_results, compute_ev_statistics
 from src.api_utils import opentopo_pull_wrapper
-from tests.tools import get_project_root, get_opentopo_api_key, standardize_test_param_paths
+from tests.tools import get_project_root, get_opentopo_api_key, standardize_test_param_paths, delete_scratch_file, \
+    delete_source_geojsons_file
 
 ROOT_PATH = get_project_root()
 PARAMS_PATH = os.path.join(ROOT_PATH, "tests", "params.yaml")
@@ -24,11 +25,15 @@ def test_run_decision_tree_full():
     project_ids_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", "prj_ids_c2_10-06-25.csv")
     # project_ids_path = os.path.join(ROOT_PATH, "data", "portfolio_csvs", "prj_ids_c2_10-06-25.csv")
 
-    project_ids = _read_csv_values_skip_header(project_ids_path)
+    project_ids = [value for row in (list(csv.reader(open(project_ids_path)))[1:]) for value in row]
 
     workflow = main(PARAMS_PATH, SECRETS_PATH, save_to_asana=False, parse_only=True)
 
     slope_statistics, prj_results = workflow.run(project_ids, save_to_asana = False)
+
+    # cleanup
+    delete_source_geojsons_file('GHA_22_TILAA_07-14-2025.geojson')
+    delete_source_geojsons_file('TAZ_22_KIJANIP_07-14-2025.geojson')
 
     expected_project_count = 2
     assert len(prj_results) == expected_project_count
@@ -37,7 +42,6 @@ def test_run_decision_tree_full():
     expected_sum_median_slope = 481.5
     actual_sum_median_slope = slope_statistics[slope_statistics['project_id'] == sample_project_id]['median_slope'].sum()
     assert math.isclose(actual_sum_median_slope, expected_sum_median_slope, rel_tol=0.1), f"Expected {expected_sum_median_slope}, got {actual_sum_median_slope}"
-
 
 def test_run_decision_tree_partial():
     sample_tm_file = "tm_api_c1_07-14-2025.csv"
@@ -61,6 +65,10 @@ def test_run_decision_tree_partial():
     # compute ev decision
     ev = compute_ev_statistics(PARAMS, tm_clean, sample_maxar_data_path, slope_statistics)
 
+    # Clean up scratch file
+    delete_scratch_file('TGO_22_APAF_slope_stats.csv')
+    delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
+
     # verify that two projects were returned
     project_count = ev['project_name'].nunique()
     assert project_count == 2
@@ -75,10 +83,6 @@ def test_run_decision_tree_partial():
     proj_a_poly_decision =  ev[(ev['project_name'] == PROJECT_NAME_A) & (ev['poly_id'] == 'b0b8236e-b4e2-48b3-a3a2-d1b90b3cf058')]['ev_decision'].iloc[0]
     expected_proj_a_poly_decision = 'strong field'
     assert proj_a_poly_decision == expected_proj_a_poly_decision
-
-    # Clean up scratch file
-    _delete_scratch_file('TGO_22_APAF_slope_stats.csv')
-    _delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
 
 def test_run_decision_tree_score():
     sample_file = "dtree_output_c1_07-14-2025_exp5.csv"
@@ -140,26 +144,3 @@ def _has_expected_attributes(obj, expected_attrs):
         raise ValueError("All attribute names must be strings")
 
     return all(hasattr(obj, attr) for attr in expected_attrs)
-
-
-def _delete_scratch_file(filename):
-    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "scratch_files", filename)
-    if os.path.isfile(scratch_file_path1):
-        os.remove(scratch_file_path1)
-
-
-def _read_csv_values_skip_header(file_path):
-    values = []
-    try:
-        with open(file_path, mode='r', newline='', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            next(reader, None)  # Skip the header row
-            for row in reader:
-                # Flatten all values into a single list
-                values.extend(row)
-        return values
-    except FileNotFoundError:
-        print(f"Error: File '{file_path}' not found.")
-    except Exception as e:
-        print(f"Error reading file: {e}")
-    return []

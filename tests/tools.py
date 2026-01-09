@@ -1,9 +1,9 @@
 import os
-
 import yaml
 
 from src.tools import get_project_root
 
+ROOT_PATH = get_project_root()
 
 def get_opentopo_api_key(params):
     if 'OPENTOPO_API_KEY' in os.environ:
@@ -33,3 +33,15 @@ def standardize_test_param_paths(params):
     params['outfile']['prj_decision'] = os.path.join(root_path, "tests", params['outfile']['prj_decision'])
 
     return params
+
+
+def delete_scratch_file(filename):
+    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "scratch_files", filename)
+    if os.path.isfile(scratch_file_path1):
+        os.remove(scratch_file_path1)
+
+
+def delete_source_geojsons_file(filename):
+    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "source_geojsons", filename)
+    if os.path.isfile(scratch_file_path1):
+        os.remove(scratch_file_path1)

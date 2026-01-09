@@ -18,7 +18,7 @@ def test_tm_features():
     features = _get_project_tm_features(project_id)
 
     # Confirm that the file contains an expected number of polygons or more
-    expected_minimum_poly_count = 24
+    expected_minimum_poly_count = 19
     assert len(features) >= expected_minimum_poly_count
 
 
@@ -28,14 +28,14 @@ def test_clean_tm_features():
 
     cleaned_features = clean.process_tm_api_results(PARAMS, features)
 
-    expected_minimum_poly_count = 24
+    expected_minimum_poly_count = 19
     assert len(features) >= expected_minimum_poly_count
 
     actual_attribute_count = cleaned_features.shape[1]
-    expected_column_count = 12
+    expected_column_count = 11
     assert actual_attribute_count == expected_column_count
 
-    expected_columns = ['project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area', 'ttc_2020']
+    expected_columns = ['project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
 

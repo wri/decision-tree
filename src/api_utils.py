@@ -1,24 +1,25 @@
 import requests
 import yaml
-import json
 import pandas as pd
 import os
 import json
 import numpy as np
 import sys
-
-from tqdm import tqdm
+import utm
 import geopandas as gpd
 import rasterio as rs
 import rasterio.mask
-from exactextract import exact_extract
-import richdem as rd
 import tempfile
 import math
-from shapely.geometry import shape
-from osgeo import gdal
-from tm_api_utils import pull_tm_api_data
 
+from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.enums import Resampling
+from pyproj import CRS
+from shapely.geometry import box, shape
+from tqdm import tqdm
+from exactextract import exact_extract
+
+from tm_api_utils import pull_tm_api_data
 from src.s3_utils import upload_to_s3
 from src.tools import get_gfw_access_token, get_opentopo_api_key
 
@@ -169,7 +170,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     percentage = (high_slope_pixels / len(valid_pixels)) * 100
     return round(percentage, 1)
 
-def opentopo_pull_wrapper(params, config, feats_df):
+def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: bool = True):
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates 
@@ -195,6 +196,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
     project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # still has an erroneous polygon that breaks the pipeline
     dfs_to_concat = []
     for name in project_names:
+        this_project = []
         project_df = feats_df[feats_df.project_name == name]
         project_id = project_df.project_id.iloc[0]
         stat_path = params['outfile']['project_stats'].format(name=name)
@@ -206,8 +208,8 @@ def opentopo_pull_wrapper(params, config, feats_df):
             print(f"Processing {name}")
         
         geojson_path = os.path.join(geojson_dir, f"{name}_{data_version}.geojson")
-        prj = gpd.read_file(geojson_path)
-        total_bounds = prj.total_bounds  
+        project_polygons = gpd.read_file(geojson_path)
+        total_bounds = project_polygons.total_bounds
         buffer_deg = 0.01  # ~1 km buffer; adjust if needed
         minx, miny, maxx, maxy = total_bounds
         query = {
@@ -233,36 +235,22 @@ def opentopo_pull_wrapper(params, config, feats_df):
                 raise Exception(f"Error downloading DEM for project {name}: {response.text}")
 
             with open(dem_path, 'wb') as f:
-                for chunk in response.iter_content(1024):
+                for chunk in response.iter_content(8192):
                     f.write(chunk)
 
-            # convert degrees to meters
-            latitude = (total_bounds[1] + total_bounds[3]) / 2
-            meters_per_degree = 111320 * math.cos(math.radians(latitude))
-            zscale = 1 / meters_per_degree
+            if process_in_utm_coordinates:
+                site_polygons, slope_raster = _prepare_utm_features(project_polygons, dem_path)
+            else:
+                site_polygons, slope_raster = _prepare_latlon_features(total_bounds, project_polygons, dem_path)
 
-            # Load the DEM and generate slope/aspect
-            dem = rd.LoadGDAL(dem_path)
-            slope = rd.TerrainAttribute(dem, 
-                                        attrib='slope_percentage', 
-                                        zscale=zscale).astype('float32')
-
-            with rs.open(dem_path) as dem_r:
-                profile = dem_r.profile
-            profile.update(dtype='float32', count=1)
-
-            with rs.open(slope_path, 'w', **profile) as dst:
-                dst.write(slope, 1)
-            slope_raster = rs.open(slope_path)
-
-            if slope_raster.crs != prj.crs:
+            if slope_raster.crs != site_polygons.crs:
                 print("CRS mismatch between raster and prj polygon")
 
             # get zonal stats for the entire prj at once
             aggregations = ['min', 'max', 'mean', 'median', 'majority']
-            slope_stats_list = exact_extract(slope_raster, prj, aggregations)
-            project_data = []
-            for idx, (row, slope_zs) in enumerate(zip(prj.itertuples(), slope_stats_list)):
+            slope_stats_list = exact_extract(slope_raster, site_polygons, aggregations)
+
+            for idx, (row, slope_zs) in enumerate(zip(site_polygons.itertuples(), slope_stats_list)):
                 
                 if isinstance(slope_zs, dict) and 'properties' in slope_zs:
                     slope_stats = slope_zs['properties']
@@ -273,6 +261,7 @@ def opentopo_pull_wrapper(params, config, feats_df):
                                                       row.geometry, 
                                                       threshold=slope_thresh)
 
+                project_data = []
                 project_data.append({
                     'project_name': name,
                     'project_id': project_id,
@@ -283,8 +272,14 @@ def opentopo_pull_wrapper(params, config, feats_df):
                 df = pd.DataFrame(project_data).round(1)
                 expanded = df["slope_stats"].apply(pd.Series).add_suffix("_slope")
                 df = pd.concat([df.drop("slope_stats", axis=1), expanded], axis=1)
-                df.to_csv(stat_path, index=False)
-                dfs_to_concat.append(df)
+
+                # Append project results to composite list of df
+                dfs_to_concat.append(df.copy())
+                this_project.append(df.copy())
+
+            # Cache project results to file
+            project_results_df = pd.concat(this_project, ignore_index=True)
+            project_results_df.to_csv(stat_path, index=False)
 
             slope_raster.close()
 
@@ -294,11 +289,180 @@ def opentopo_pull_wrapper(params, config, feats_df):
                 if os.path.exists(fpath):
                     os.remove(fpath)
 
-
+    # Convert list of dataframes to result dataframe
     result_df = pd.concat(dfs_to_concat, ignore_index=True)
 
     # merge slope results into feats df (polys with missing slope become NaN)
     comb = feats_df.merge(result_df,
                           on=['project_id', 'poly_id'],
                           how='left')
+
     return comb
+
+
+def _prepare_latlon_features(total_bounds, project_polygons, dem_path):
+    # convert degrees to meters
+    latitude = (total_bounds[1] + total_bounds[3]) / 2
+    meters_per_degree = 111320 * math.cos(math.radians(latitude))
+    z_factor = 1 / meters_per_degree
+
+    slope_raster = _compute_slope_percent(dem_path, z_factor, Resampling.bilinear)
+
+    return project_polygons, slope_raster
+
+
+def _prepare_utm_features(project_polygons, dem_path):
+    z_factor = 1
+
+    # determine best utm projection
+    with rs.open(dem_path) as dem_r:
+        profile = dem_r.profile
+        src_bbox = [dem_r.bounds[0], dem_r.bounds[1], dem_r.bounds[2], dem_r.bounds[3]]
+    profile.update(dtype='float32', count=1)
+    dst_crs = _get_utm_zone_epsg(src_bbox)
+
+    with (tempfile.TemporaryDirectory() as tmpdirname):
+        reproj_path = os.path.join(tmpdirname, 'reprojected_dem1.tif')
+        _reproject_raster(dem_path, reproj_path, dst_crs)
+        slope_raster = _compute_slope_percent(reproj_path, z_factor, Resampling.bilinear)
+
+    projected_project_polygons = project_polygons.to_crs(dst_crs)
+
+    return projected_project_polygons, slope_raster
+
+
+def _compute_slope_percent(
+    dem_path: str,
+    z_factor: float = 1.0,
+    resampling: Resampling = Resampling.bilinear
+):
+    """
+    Compute slope from a DEM using Horn's method and output slope as PERCENT.
+
+    Parameters
+    ----------
+    dem_path : str
+        Input DEM raster path.
+    z_factor : float
+        Ratio of vertical units to horizontal units.
+        Example: Elevation in feet, horizontal in meters -> z_factor = 0.3048
+    resampling : rasterio.enums.Resampling
+        Resampling method for reading DEM.
+
+    Notes
+    -----
+    - Slope (%) = sqrt((dz/dx)^2 + (dz/dy)^2) * 100
+    """
+
+    with rasterio.open(dem_path) as src:
+        dem = src.read(1, resampling=resampling).astype(np.float64)
+        transform = src.transform
+        nodata = src.nodata
+        profile = src.profile
+
+        cellsize_x = transform.a
+        cellsize_y = -transform.e
+
+        if cellsize_x <= 0 or cellsize_y <= 0:
+            raise ValueError("Invalid pixel size from transform.")
+
+        # Mask NoData
+        if nodata is not None:
+            mask = (dem == nodata) | ~np.isfinite(dem)
+        else:
+            mask = ~np.isfinite(dem)
+
+        # Apply z-factor
+        dem_scaled = dem * z_factor
+
+        # Pad for 3x3 neighborhood
+        padded = np.pad(dem_scaled, pad_width=1, mode='edge')
+
+        z1 = padded[:-2, :-2]; z2 = padded[:-2, 1:-1]; z3 = padded[:-2, 2:]
+        z4 = padded[1:-1, :-2]; z6 = padded[1:-1, 2:]
+        z7 = padded[2:, :-2];  z8 = padded[2:, 1:-1];  z9 = padded[2:, 2:]
+
+        dzdx = ((z7 + 2*z8 + z9) - (z1 + 2*z2 + z3)) / (8.0 * cellsize_x)
+        dzdy = ((z3 + 2*z6 + z9) - (z1 + 2*z4 + z7)) / (8.0 * cellsize_y)
+
+        # Gradient magnitude
+        slope_percent = np.sqrt(dzdx**2 + dzdy**2) * 100.0
+
+        # Apply mask
+        slope_percent[mask] = nodata if nodata is not None else np.nan
+
+        # Update profile
+        profile.update(
+            dtype=rasterio.float32,
+            count=1,
+            nodata=nodata if nodata is not None else np.nan,
+        )
+
+        # Write output
+        slope_raster_path = '/tmp/slope_raster.tif'
+        with rasterio.open(slope_raster_path, 'w', **profile) as dst:
+            dst.write(slope_percent.astype(np.float32), 1)
+        slope_raster = rs.open(slope_raster_path)
+
+        return slope_raster
+
+
+def _get_utm_zone_epsg(bbox):
+    """
+    Get the UTM zone projection for given a bounding box.
+
+    :param bbox: tuple of (min x, min y, max x, max y)
+    :return: the EPSG code for the UTM zone of the centroid of the bbox
+    """
+    centroid = box(*bbox).centroid
+    utm_x, utm_y, band, zone = utm.from_latlon(centroid.y, centroid.x)
+
+    if centroid.y > 0:  # Northern zone
+        epsg = 32600 + band
+    else:
+        epsg = 32700 + band
+
+    return CRS.from_string(f"EPSG:{epsg}")
+
+
+def _reproject_raster(input_path, output_path, dst_crs):
+    """
+    Reproject a raster (e.g., DEM) to another projection.
+
+    Parameters:
+        input_path (str): Path to the source raster file.
+        output_path (str): Path to save the reprojected raster.
+        dst_crs (str or dict): Target CRS (e.g., 'EPSG:3857' or rasterio CRS object).
+    """
+    try:
+        with rasterio.open(input_path) as src:
+            # Calculate transform and dimensions for the new projection
+            transform, width, height = calculate_default_transform(
+                src.crs, dst_crs, src.width, src.height, *src.bounds
+            )
+
+            # Update metadata for the output file
+            kwargs = src.meta.copy()
+            kwargs.update({
+                'crs': dst_crs,
+                'transform': transform,
+                'width': width,
+                'height': height
+            })
+
+            # Create and write the reprojected raster
+            with rasterio.open(output_path, 'w', **kwargs) as dst:
+                for i in range(1, src.count + 1):
+                    reproject(
+                        source=rasterio.band(src, i),
+                        destination=rasterio.band(dst, i),
+                        src_transform=src.transform,
+                        src_crs=src.crs,
+                        dst_transform=transform,
+                        dst_crs=dst_crs,
+                        resampling=Resampling.bilinear  # Bilinear is good for DEMs
+                    )
+
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)

@@ -57,7 +57,7 @@ class VerificationDecisionTree:
         # tm_clean.to_csv(self.project_feats_maxar, index=False)
 
         # compute slope statistics
-        slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean)
+        slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean, process_in_utm_coordinates=True)
         # slope_statistics.to_csv(self.slope_stats, index=False)
 
         # compute ev decision
@@ -77,8 +77,9 @@ class VerificationDecisionTree:
         # if save_to_asana:
         #     asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
         # # upload_to_s3.upload_results_to_s3(self.final_outfile, self.params, self.secrets)
+        
+        return slope_statistics, prj_results
 
-        b=2
 
 def compute_ev_statistics(params, tm_clean, maxar_meta, slope_statistics):
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)

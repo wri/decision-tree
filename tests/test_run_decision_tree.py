@@ -1,8 +1,8 @@
 import math
 import os
 import pandas as pd
+import csv
 from pathlib import Path
-
 import yaml
 
 from run_decision_tree import main, VerificationDecisionTree, compute_project_results, compute_ev_statistics
@@ -24,14 +24,19 @@ def test_run_decision_tree_full():
     project_ids_path = os.path.join(ROOT_PATH, "tests", "data", "source_csv", "prj_ids_c2_10-06-25.csv")
     # project_ids_path = os.path.join(ROOT_PATH, "data", "portfolio_csvs", "prj_ids_c2_10-06-25.csv")
 
-    project_ids = pd.read_csv(project_ids_path, skiprows=1)
+    project_ids = _read_csv_values_skip_header(project_ids_path)
 
     workflow = main(PARAMS_PATH, SECRETS_PATH, save_to_asana=False, parse_only=True)
 
-    # opentopo_key = get_opentopo_api_key(workflow.params)
-    # workflow.params['config']= {"opentopo_key": opentopo_key}
+    slope_statistics, prj_results = workflow.run(project_ids, save_to_asana = False)
 
-    workflow.run(project_ids, save_to_asana = False)
+    expected_project_count = 2
+    assert len(prj_results) == expected_project_count
+
+    sample_project_id = 'd1f355a2-3e0f-4ffd-bb2f-eec104bf8442'
+    expected_sum_median_slope = 481.5
+    actual_sum_median_slope = slope_statistics[slope_statistics['project_id'] == sample_project_id]['median_slope'].sum()
+    assert math.isclose(actual_sum_median_slope, expected_sum_median_slope, rel_tol=0.1), f"Expected {expected_sum_median_slope}, got {actual_sum_median_slope}"
 
 
 def test_run_decision_tree_partial():
@@ -68,7 +73,7 @@ def test_run_decision_tree_partial():
 
     # for project_b verify ev_decision for a specific polygon
     proj_a_poly_decision =  ev[(ev['project_name'] == PROJECT_NAME_A) & (ev['poly_id'] == 'b0b8236e-b4e2-48b3-a3a2-d1b90b3cf058')]['ev_decision'].iloc[0]
-    expected_proj_a_poly_decision = 'weak field'
+    expected_proj_a_poly_decision = 'strong field'
     assert proj_a_poly_decision == expected_proj_a_poly_decision
 
     # Clean up scratch file
@@ -141,3 +146,20 @@ def _delete_scratch_file(filename):
     scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "scratch_files", filename)
     if os.path.isfile(scratch_file_path1):
         os.remove(scratch_file_path1)
+
+
+def _read_csv_values_skip_header(file_path):
+    values = []
+    try:
+        with open(file_path, mode='r', newline='', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            next(reader, None)  # Skip the header row
+            for row in reader:
+                # Flatten all values into a single list
+                values.extend(row)
+        return values
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+    except Exception as e:
+        print(f"Error reading file: {e}")
+    return []

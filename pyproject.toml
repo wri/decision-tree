@@ -17,12 +17,12 @@ dependencies = [
     "pytest-xdist",
     "pyyaml",
     "rasterio",
-    "regex",
     "requests",
-    "richdem-fork>=3.0.0",
+    "pyproj[data]>=3.6.1",  # Includes PROJ database for proj.db
     "seaborn",
     "shapely",
     "tqdm",
+    "utm",
     "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop"
 ]
 
@@ -41,3 +41,13 @@ explicit = true
 name = "gdal-wheels"
 url = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple"
 explicit = true
+
+[tool.poetry.dependencies]
+pyproj = { version = "^3.6.1", extras = ["data"] }  # Includes proj.db file
+
+[tool.my_project.env]
+# Set PROJ_LIB to the directory where pyproj installs its data files
+PROJ_DATA = "${VIRTUAL_ENV}/share/proj"
+PROJ_LIB  = "${VIRTUAL_ENV}/share/proj"
+
+

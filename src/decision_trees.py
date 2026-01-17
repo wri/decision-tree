@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 import re
 import os
 
+from src.constants import DESIRED_COLS
+
+
 def parse_condition(value, actual):
     """
     Evaluate simple condition like '>=1', '<2', or direct value.
@@ -107,14 +110,7 @@ def apply_rules_baseline(params, df):
 
     df['baseline_decision'] = decisions
 
-    desired_cols = [
-    'project_id', 'poly_id', 'site_id', 'project_name',
-    'plantstart', 'practice', 'target_sys', 'baseline_year', 'ev_year',
-    'area','ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023',  'ttc_2024', 
-    'baseline_img_count', 'ev_img_count', 'baseline_canopy', 
-    'ev_canopy', 'slope_area', 'slope', 'baseline_decision'
-    ]
-    df = df[desired_cols]
+    df = df.filter(items=DESIRED_COLS)
 
     # Summary
     summary = df['baseline_decision'].value_counts().reset_index()
@@ -226,17 +222,11 @@ def apply_rules_ev(params, df):
 
         decisions.append(final or 'review required')
 
-    df['ev_decision'] = decisions
-
     # Optional: include only necessary columns (mirror structure)
-    desired_cols = [
-        'project_id', 'poly_id', 'site_id', 'project_name',
-        'plantstart', 'practice', 'target_sys', 'baseline_year', 'ev_year',
-        'area','ttc_2020', 'ttc_2021', 'ttc_2022', 'ttc_2023', 'ttc_2024', 
-        'baseline_img_count', 'ev_img_count', 'baseline_canopy', 
-        'ev_canopy', 'slope_area', 'slope', 'baseline_decision', 'ev_decision'
-    ]
-    df = df[desired_cols]
+    df = df.filter(items=DESIRED_COLS)
+
+    # Add column for ev decision
+    df['ev_decision'] = decisions
 
     # Summary
     summary = df['ev_decision'].value_counts().reset_index()

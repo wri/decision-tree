@@ -3,4 +3,6 @@ data/*
 .ipynb_checkpoints
 *__pycache__*
 *.pyc
+*scratch_files
 secrets.yaml
+tests/data/*

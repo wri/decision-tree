@@ -18,6 +18,7 @@ class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
         self.params = self._load_yaml(params_path)
         self.secrets = self._load_yaml(secrets_path)
+        self.mode = self.params.get("mode", "full")
         self._resolve_paths()
 
     def _load_yaml(self, path):
@@ -41,44 +42,72 @@ class VerificationDecisionTree:
         self.prj_score = convert_to_os_path(out["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
 
-    def run(self, project_ids, save_to_asana: bool):
-        print("Acquiring prj data from APIs.")
-        # pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
+    def run(self, project_ids):
+        if self.mode not in ["full", "partial", "score"]:
+            raise ValueError("Invalid mode")
 
-        tm_response = get_tm_feats(self.params, project_ids)
-        # with open(self.tm_outfile, "w") as f:
-        #     json.dump(tm_response, f, indent=4)
-        # with open(self.tm_outfile, "r") as f:
-        #     tm_response = json.load(f)
+        if self.mode == "full":
+            print("Running in FULL mode — acquiring prj data from APIs.")
+        elif self.mode == "partial":
+            print("Running in PARTIAL mode — using cached prj feats.")
+        else:
+            print("Running in SCORE mode — using cached tree results.")
 
-        # Clean TM data and save to csv files
-        tm_clean = clean.process_tm_api_results(self.params, tm_response)
-        # tm_clean.to_csv(self.project_feats, index=False)
-        # tm_clean.to_csv(self.project_feats_maxar, index=False)
+        if self.mode in ["full", "partial"]:
+            if self.mode == "full":
+                # uncomment below for testing
+                # ids = get_ids(self.params)
+                # pd.Series(ids, name="project_id").to_csv(self.portfolio, index=False)
 
-        # compute slope statistics
-        slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean, process_in_utm_coordinates=True)
-        # slope_statistics.to_csv(self.slope_stats, index=False)
+                tm_response = get_tm_feats(self.params, project_ids)
+                # uncomment below for testing
+                # with open(self.tm_outfile, "w") as f:
+                #     json.dump(tm_response, f, indent=4)
+                # with open(self.tm_outfile, "r") as f:
+                #     tm_response = json.load(f)
 
-        # compute ev decision
-        ev = compute_ev_statistics(self.params, tm_clean, self.maxar_meta, slope_statistics)
-        # ev.to_csv(self.tree_results, index=False)
+                # Clean TM data
+                tm_clean = clean.process_tm_api_results(self.params, tm_response)
+                # uncomment below for testing
+                # tm_clean.to_csv(self.project_feats, index=False)
+                # tm_clean.to_csv(self.project_feats_maxar, index=False)
+            else:
+                partial_mode_tm_clean_file = self.params['interim_file']['partial_mode_tm_clean']
+                tm_clean = pd.read_csv(partial_mode_tm_clean_file)
 
-        # Get results and save to csv files
+            # compute slope statistics
+            slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean, process_in_utm_coordinates=True)
+            # uncomment below for testing
+            # slope_statistics.to_csv(self.slope_stats, index=False)
+
+            # pipeline pause here to get maxar metadata
+            ev = compute_ev_statistics(self.params, tm_clean, self.maxar_meta, slope_statistics)
+            # uncomment below for testing
+            # ev.to_csv(self.tree_results, index=False)
+
+        else:
+            slope_statistics = None
+            score_mode_ev_file = self.params['interim_file']['score_mode_ev']
+            ev = pd.read_csv(score_mode_ev_file)
+
+        # Get results
         scored = scoring.apply_scoring(self.params, ev)
         poly_results = price.calc_cost_to_verify(self.params, scored)
+        # uncomment below for testing
         # poly_results.to_csv(self.poly_score, index=False)
 
         # calculate final project scale decision
         prj_results = scoring.aggregate_project_score(self.params, scored)
+        # uncomment below for testing
         # prj_results.to_csv(self.prj_score, index=False)
-        #
-        # # uploads
-        # if save_to_asana:
-        #     asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
-        # # upload_to_s3.upload_results_to_s3(self.final_outfile, self.params, self.secrets)
+
+        # uploads
+        if self.params['asana']['upload']:
+            asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
+        # if self.params['s3']['upload']:
+        #     upload_to_s3(self.final_outfile, self.params, self.secrets)  # TODO Jessica - where is this method signature defined in the codebase?
         
-        return slope_statistics, prj_results
+        return slope_statistics, poly_results, prj_results
 
 
 def compute_ev_statistics(params, tm_clean, maxar_meta, slope_statistics):
@@ -100,7 +129,7 @@ def compute_project_results(params, ev):
     return poly_results, prj_results
 
 
-def main(params_file_path: str, secrets_file_path: str = None, save_to_asana: bool = False, parse_only: bool = False):
+def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
     workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
     if parse_only:
         return workflow
@@ -108,7 +137,7 @@ def main(params_file_path: str, secrets_file_path: str = None, save_to_asana: bo
         print("Acquiring prj data from APIs.")
         project_ids = get_ids(workflow.params)
 
-        workflow.run(project_ids, save_to_asana)
+        workflow.run(project_ids)
         return None
 
 
@@ -119,8 +148,6 @@ if __name__ == "__main__":
                         help='Path to params configuration yaml file')
     parser.add_argument('--secrets_yaml_path', metavar='path', required=True,
                         help='Path to secrets configuration yaml file')
-    parser.add_argument('--save_to_asana', action="store_false", required=True,
-                        help='Indicate whether results should be saved to asana or not.')
     args = parser.parse_args()
 
-    main(args.params_yaml_path, args.secrets_yaml_path, args.save_to_asana)
+    main(args.params_yaml_path, args.secrets_yaml_path)

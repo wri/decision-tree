@@ -15,6 +15,8 @@ import math
 from rasterio.warp import calculate_default_transform, reproject, Resampling
 from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
+from contextlib import contextmanager
+from typing import Union
 from pyproj import CRS
 from shapely.geometry import box, shape
 from tqdm import tqdm
@@ -307,7 +309,18 @@ def _prepare_latlon_features(total_bounds, project_polygons, dem_path):
     meters_per_degree = 111320 * math.cos(math.radians(latitude))
     z_factor = 1 / meters_per_degree
 
-    slope_raster = _compute_slope_percent(dem_path, z_factor, Resampling.bilinear)
+    # Read DEM into memory
+    try:
+        dem_memory_file = _load_dem_to_memoryfile(dem_path)
+
+        slope_raster = _compute_slope_percent_from_memory(dem_memory_file, z_factor, Resampling.bilinear)
+
+    except Exception as ex:
+        print(ex)
+
+    finally:
+        # close memory files
+        dem_memory_file.close()
 
     return project_polygons, slope_raster
 
@@ -317,58 +330,114 @@ def _prepare_utm_features(project_polygons, dem_path):
 
     # determine best utm projection
     with rs.open(dem_path) as dem_r:
-        profile = dem_r.profile
         src_bbox = [dem_r.bounds[0], dem_r.bounds[1], dem_r.bounds[2], dem_r.bounds[3]]
-    profile.update(dtype='float32', count=1)
     dst_crs = _get_utm_zone_epsg(src_bbox)
 
-    with (tempfile.TemporaryDirectory() as tmpdirname):
-        reproj_path = os.path.join(tmpdirname, 'reprojected_dem1.tif')
-        _reproject_raster(dem_path, reproj_path, dst_crs)
-        slope_raster = _compute_slope_percent(reproj_path, z_factor, Resampling.bilinear)
+    try:
+        # Read DEM into memory and project to uTM
+        dem_memory_file = _load_dem_to_memoryfile(dem_path)
+        reprojected_mem_file = _reproject_raster_in_memory(dem_memory_file, dst_crs)
+
+        slope_raster = _compute_slope_percent_from_memory(reprojected_mem_file, z_factor, Resampling.bilinear)
+
+    except Exception as ex:
+        print(ex)
+
+    finally:
+        # close memory files
+        dem_memory_file.close()
+        reprojected_mem_file.close()
 
     projected_project_polygons = project_polygons.to_crs(dst_crs)
 
     return projected_project_polygons, slope_raster
 
 
-def _compute_slope_percent(
-    dem_path: str,
+def _load_dem_to_memoryfile(dem_path: str):
+    """
+    Reads a DEM file from disk into a rasterio MemoryFile and returns the MemoryFile.
+    The caller is responsible for closing the returned MemoryFile.
+    """
+    # Read DEM bytes from disk
+    with open(dem_path, "rb") as dem_r:
+        dem_bytes = dem_r.read()
+
+    # Create MemoryFile containing the DEM
+    memfile = MemoryFile(dem_bytes)
+
+    return memfile
+
+
+def _compute_slope_percent_from_memory(
+    dem_source: Union[MemoryFile, rasterio.io.DatasetReader],
     z_factor: float = 1.0,
     resampling: Resampling = Resampling.bilinear
-):
+) -> rasterio.io.DatasetReader:
     """
-    Compute slope from a DEM using Horn's method and output slope as PERCENT.
+    Compute slope (%) from an in-memory DEM using Horn's method.
 
     Parameters
     ----------
-    dem_path : str
-        Input DEM raster path.
+    dem_source : rasterio.io.MemoryFile | rasterio.io.DatasetReader
+        In-memory DEM raster. Can be a MemoryFile or an already-open DatasetReader.
+        Must be a single-band elevation raster (or first band is elevation).
     z_factor : float
         Ratio of vertical units to horizontal units.
         Example: Elevation in feet, horizontal in meters -> z_factor = 0.3048
     resampling : rasterio.enums.Resampling
         Resampling method for reading DEM.
 
+    Returns
+    -------
+    rasterio.io.DatasetReader
+        An open dataset reader for a new in-memory raster with slope in percent.
+        The caller is responsible for closing it when done.
+
     Notes
     -----
     - Slope (%) = sqrt((dz/dx)^2 + (dz/dy)^2) * 100
+    - Uses Horn 3x3 operator for dz/dx and dz/dy.
     """
 
-    with rasterio.open(dem_path) as src:
+    @contextmanager
+    def _ensure_reader(src_obj):
+        """
+        Context manager that yields a DatasetReader from either a MemoryFile or
+        an existing DatasetReader. If src_obj is a MemoryFile, opens it here.
+        If it's already a DatasetReader, yields it as-is without closing it.
+        """
+        needs_close = False
+        if isinstance(src_obj, MemoryFile):
+            src = src_obj.open()
+            needs_close = True
+        elif isinstance(src_obj, rasterio.io.DatasetReader):
+            src = src_obj
+        else:
+            raise TypeError(
+                "dem_source must be a rasterio MemoryFile or DatasetReader."
+            )
+        try:
+            yield src
+        finally:
+            if needs_close:
+                src.close()
+
+    with _ensure_reader(dem_source) as src:
+        # Read DEM band 1 with requested resampling
         dem = src.read(1, resampling=resampling).astype(np.float64)
         transform = src.transform
         nodata = src.nodata
         profile = src.profile
 
+        # Pixel sizes (absolute values)
         cellsize_x = transform.a
-        cellsize_y = -transform.e
+        cellsize_y = -transform.e  # transform.e is typically negative for north-up rasters
 
-        if cellsize_x <= 0 or cellsize_y <= 0:
+        if not np.isfinite(cellsize_x) or not np.isfinite(cellsize_y) or cellsize_x <= 0 or cellsize_y <= 0:
             raise ValueError("Invalid pixel size from transform.")
 
-        # Mask NoData
-        if nodata is not None:
+        # Build mask (true where NoData)
+        if nodata is not None and np.isfinite(nodata):
             mask = (dem == nodata) | ~np.isfinite(dem)
         else:
             mask = ~np.isfinite(dem)
@@ -376,36 +445,39 @@ def _compute_slope_percent(
         # Apply z-factor
         dem_scaled = dem * z_factor
 
-        # Pad for 3x3 neighborhood
+        # Pad for 3x3 neighborhood using edge replication
         padded = np.pad(dem_scaled, pad_width=1, mode='edge')
 
+        # Neighbors (Horn)
         z1 = padded[:-2, :-2]; z2 = padded[:-2, 1:-1]; z3 = padded[:-2, 2:]
-        z4 = padded[1:-1, :-2]; z6 = padded[1:-1, 2:]
-        z7 = padded[2:, :-2];  z8 = padded[2:, 1:-1];  z9 = padded[2:, 2:]
+        z4 = padded[1:-1, :-2];                           z6 = padded[1:-1, 2:]
+        z7 = padded[2:,  :-2]; z8 = padded[2:,  1:-1];  z9 = padded[2:,  2:]
 
-        dzdx = ((z7 + 2*z8 + z9) - (z1 + 2*z2 + z3)) / (8.0 * cellsize_x)
-        dzdy = ((z3 + 2*z6 + z9) - (z1 + 2*z4 + z7)) / (8.0 * cellsize_y)
+        # Partial derivatives
+        dzdx = ((z7 + 2.0*z8 + z9) - (z1 + 2.0*z2 + z3)) / (8.0 * cellsize_x)
+        dzdy = ((z3 + 2.0*z6 + z9) - (z1 + 2.0*z4 + z7)) / (8.0 * cellsize_y)
 
-        # Gradient magnitude
+        # Gradient magnitude -> percent
         slope_percent = np.sqrt(dzdx**2 + dzdy**2) * 100.0
 
         # Apply mask
-        out_nodata = nodata if nodata is not None else np.nan
+        # Keep output nodata consistent: if src had nodata, use it; otherwise use NaN
+        out_nodata = nodata if (nodata is not None) else np.nan
         slope_percent[mask] = out_nodata
 
-        # Update raster profile
+        # Update raster profile for the output
         profile.update(
             dtype=rasterio.float32,
             count=1,
             nodata=out_nodata
         )
 
-    # ---- Return as in‑memory raster ----
+    # ---- Write and return as a new in‑memory raster ----
     memfile = MemoryFile()
-    with memfile.open(**profile) as dataset:
-        dataset.write(slope_percent.astype(np.float32), 1)
+    with memfile.open(**profile) as dst:
+        dst.write(slope_percent.astype(np.float32), 1)
 
-    # Return an open dataset reader
+    # Return an open dataset reader (caller should close it when done)
     return memfile.open()
 
 
@@ -427,44 +499,47 @@ def _get_utm_zone_epsg(bbox):
     return CRS.from_string(f"EPSG:{epsg}")
 
 
-def _reproject_raster(input_path, output_path, dst_crs):
+def _reproject_raster_in_memory(input_memfile, dst_crs):
     """
-    Reproject a raster (e.g., DEM) to another projection.
+    Reproject a raster stored in a rasterio MemoryFile into another projection.
 
     Parameters:
-        input_path (str): Path to the source raster file.
-        output_path (str): Path to save the reprojected raster.
-        dst_crs (str or dict): Target CRS (e.g., 'EPSG:3857' or rasterio CRS object).
+        input_memfile (MemoryFile): MemoryFile containing the source raster.
+        dst_crs (str or dict): Target CRS (e.g., 'EPSG:3857').
+
+    Returns:
+        MemoryFile: A new MemoryFile containing the reprojected raster.
     """
-    try:
-        with rasterio.open(input_path) as src:
-            # Calculate transform and dimensions for the new projection
-            transform, width, height = calculate_default_transform(
-                src.crs, dst_crs, src.width, src.height, *src.bounds
-            )
 
-            # Update metadata for the output file
-            kwargs = src.meta.copy()
-            kwargs.update({
-                'crs': dst_crs,
-                'transform': transform,
-                'width': width,
-                'height': height
-            })
+    # Open source raster from memory
+    with input_memfile.open() as src:
+        # Compute new transform and shape
+        transform, width, height = calculate_default_transform(
+            src.crs, dst_crs, src.width, src.height, *src.bounds
+        )
 
-            # Create and write the reprojected raster
-            with rasterio.open(output_path, 'w', **kwargs) as dst:
-                for i in range(1, src.count + 1):
-                    reproject(
-                        source=rasterio.band(src, i),
-                        destination=rasterio.band(dst, i),
-                        src_transform=src.transform,
-                        src_crs=src.crs,
-                        dst_transform=transform,
-                        dst_crs=dst_crs,
-                        resampling=Resampling.bilinear  # Bilinear is good for DEMs
-                    )
+        # Update metadata
+        kwargs = src.meta.copy()
+        kwargs.update({
+            "crs": dst_crs,
+            "transform": transform,
+            "width": width,
+            "height": height,
+        })
 
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+        # Create output MemoryFile
+        output_memfile = MemoryFile()
+        with output_memfile.open(**kwargs) as dst:
+            for i in range(1, src.count + 1):
+                reproject(
+                    source=rasterio.band(src, i),
+                    destination=rasterio.band(dst, i),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=dst_crs,
+                    resampling=Resampling.bilinear
+                )
+
+    # IMPORTANT: return the MemoryFile itself — not the open dataset
+    return output_memfile

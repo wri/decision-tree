@@ -1,4 +1,5 @@
 config: secrets.yaml
+mode: full
 
 s3:
   upload: false
@@ -6,6 +7,7 @@ s3:
   folder_prefix: tree_verification/output/project_data
 
 asana:
+  upload: False
   project_gid: 1209713669431043
   section: Remote
   dry_run: True
@@ -32,6 +34,10 @@ criteria:
 cost:
   field: 0.32
   remote: 20.0
+
+interim_file:
+  partial_mode_tm_clean = 'data/source_csv/tm_api_c1_07-14-2025.csv'
+  score_mode_ev = ''data/source_csv/dtree_output_c1_07-14-2025_exp5.csv'
 
 outfile:
   data_version: 07-14-2025 # 06-30-2025

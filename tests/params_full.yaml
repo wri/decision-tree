@@ -1,21 +1,5 @@
-
-# =============================================================================
-# Project Parameters File (params.yaml)
-#
-# This file stores all configuration values for the Decision Tree pipeline.
-# Update paths, thresholds, scoring rules, and API settings here.
-#
-# Notes:
-# - 'mode' indicates where the pipeline begins. Options: full, partial, score
-# File storage:
-# - files are named according to the 'data_version', 'experiment_id' and 'cohort'
-#   - 'data version' identifies cached inputs by the date they were downloaded
-#   - 'experiment id' tracks different experiments using same input data
-#   - 'cohort' refers to the batch of TerraFund projects that will be processed
-# =============================================================================
-
 config: secrets.yaml
-mode: full  # options: full, partial, score
+mode: full
 
 s3:
   upload: false
@@ -23,7 +7,7 @@ s3:
   folder_prefix: tree_verification/output/project_data
 
 asana:
-  upload: false
+  upload: False
   project_gid: 1209713669431043
   section: Remote
   dry_run: True
@@ -45,7 +29,7 @@ criteria:
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
-  rules: data/rule_template.csv
+  rules: data/source_csv/rule_template.csv
 
 cost:
   field: 0.32
@@ -55,24 +39,24 @@ infile:
   mode_file:  # specify when using either partial or score mode
 
 outfile:
-  data_version: 07-14-2025
-  experiment_id: exp2
+  data_version: 07-14-2025 # 06-30-2025
+  experiment_id: exp1
   cohort: c1
-  portfolio: data/portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
-  geojsons: data/geojsons/
-  tm_response: data/tm_api_response/{cohort}_{data_version}.json
-  slope_stats: data/slope/slope_statistics_{cohort}_{data_version}.csv
-  project_stats: data/slope/project_statistics/{name}_slope_stats.csv
-  feats: data/feats/tm_api_{cohort}_{data_version}.csv
-  feats_maxar: /Users/jessica.ertel/github/maxar-tools/data/tm_project_feats/tm_api_{cohort}_{data_version}.csv
-  maxar_meta: data/imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
-  tree_results: data/tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
-  poly_decision: data/decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
-  prj_decision: data/decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+  portfolio: data/source_csv/prj_ids_{cohort}_{data_version}.csv
+  geojsons: data/source_geojsons/
+  tm_response: data/scratch_files/{cohort}_{data_version}.json
+  slope_stats: data/scratch_files/slope_statistics_{cohort}_{data_version}.csv
+  project_stats: data/scratch_files/{name}_slope_stats.csv
+  feats: data/source_csv/tm_api_{cohort}_{data_version}.csv
+  feats_maxar: data/source_csv/tm_api_{cohort}_{data_version}.csv
+  maxar_meta: data/source_csv/comb_img_availability_{cohort}_{data_version}.csv
+  tree_results: data/source_csv/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: data/source_csv/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: data/scratch_files/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 suitability:
   area_col: area
-  min_coverage: 0.6                        # require at least 60% of project area to have a valid polygon score
+  min_coverage: 0.6         # require at least 60% of project area to have a valid polygon score
   thresholds:
     weak_field: 30
     weak_remote: 55

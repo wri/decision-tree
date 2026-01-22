@@ -1,9 +1,4 @@
 import pandas as pd
-import geopandas as gpd
-import numpy as np
-import os
-import process_api_results as clean
-import yaml
 
 def analyze_image_availability(params, proj_df, maxar_fp):
     """
@@ -40,7 +35,8 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     num_cols = ['eo:cloud_cover', 'view:sun_elevation', 'view:off_nadir']
     img_df[num_cols] = img_df[num_cols].apply(pd.to_numeric, errors='coerce')
     proj_df['plantstart'] = pd.to_datetime(proj_df['plantstart'], errors='coerce')
-    proj_df['plantend'] = pd.to_datetime(proj_df['plantend'], errors='coerce')
+    if 'plantend' in proj_df.columns:
+        proj_df['plantend'] = pd.to_datetime(proj_df['plantend'], errors='coerce')
     merged = img_df.merge(proj_df, on=['project_id', 'poly_id'], how='left')
 
     # Compute image availability window

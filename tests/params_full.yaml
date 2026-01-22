@@ -35,9 +35,8 @@ cost:
   field: 0.32
   remote: 20.0
 
-interim_file:
-  partial_mode_tm_clean: None
-  score_mode_ev: None
+infile:
+  mode_file:  # specify when using either partial or score mode
 
 outfile:
   data_version: 07-14-2025 # 06-30-2025

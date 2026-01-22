@@ -48,10 +48,13 @@ class VerificationDecisionTree:
 
         if self.mode == "full":
             print("Running in FULL mode — acquiring prj data from APIs.")
-        elif self.mode == "partial":
-            print("Running in PARTIAL mode — using cached prj feats.")
+            input_mode_file = None
         else:
-            print("Running in SCORE mode — using cached tree results.")
+            input_mode_file = self.params['infile']['mode_file']
+            if self.mode == "partial":
+                print("Running in PARTIAL mode — using cached prj feats.")
+            else:
+                print("Running in SCORE mode — using cached tree results.")
 
         if self.mode in ["full", "partial"]:
             if self.mode == "full":
@@ -72,8 +75,7 @@ class VerificationDecisionTree:
                 # tm_clean.to_csv(self.project_feats, index=False)
                 # tm_clean.to_csv(self.project_feats_maxar, index=False)
             else:
-                partial_mode_tm_clean_file = self.params['interim_file']['partial_mode_tm_clean']
-                tm_clean = pd.read_csv(partial_mode_tm_clean_file)
+                tm_clean = pd.read_csv(input_mode_file)
 
             # compute slope statistics
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, tm_clean, process_in_utm_coordinates=True)
@@ -87,8 +89,7 @@ class VerificationDecisionTree:
 
         else:
             slope_statistics = None
-            score_mode_ev_file = self.params['interim_file']['score_mode_ev']
-            ev = pd.read_csv(score_mode_ev_file)
+            ev = pd.read_csv(input_mode_file)
 
         # Get results
         scored = scoring.apply_scoring(self.params, ev)

@@ -15,6 +15,7 @@
 # =============================================================================
 
 config: secrets.yaml
+mode: full  # options: full, partial, score
 
 s3:
   upload: false
@@ -22,6 +23,7 @@ s3:
   folder_prefix: tree_verification/output/project_data
 
 asana:
+  upload: false
   project_gid: 1209713669431043
   section: Remote
   dry_run: True
@@ -48,6 +50,10 @@ criteria:
 cost:
   field: 0.32
   remote: 20.0
+
+interim_file:
+  partial_mode_tm_clean: None # specify for mode = partial
+  score_mode_ev: None # specify for mode = score
 
 outfile:
   data_version: 07-14-2025

@@ -8,7 +8,7 @@ import src.process_api_results as clean
 
 ROOT_PATH = get_project_root()
 
-parms_path = os.path.join(ROOT_PATH, "tests", "params.yaml")
+parms_path = os.path.join(ROOT_PATH, "tests", "params_full.yaml")
 with open(parms_path, 'r') as file:
     PARAMS = yaml.safe_load(file)
 

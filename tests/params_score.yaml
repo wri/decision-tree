@@ -1,5 +1,5 @@
 config: secrets.yaml
-mode: full
+mode: score
 
 s3:
   upload: false
@@ -36,8 +36,8 @@ cost:
   remote: 20.0
 
 interim_file:
-  partial_mode_tm_clean = 'data/source_csv/tm_api_c1_07-14-2025.csv'
-  score_mode_ev = ''data/source_csv/dtree_output_c1_07-14-2025_exp5.csv'
+  partial_mode_tm_clean: None
+  score_mode_ev: 'data/source_csv/dtree_output_c1_07-14-2025_exp5.csv'
 
 outfile:
   data_version: 07-14-2025 # 06-30-2025

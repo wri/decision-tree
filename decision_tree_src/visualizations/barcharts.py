@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import math
 import seaborn as sns
 from matplotlib import patches as mpatches
-from src.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
+from decision_tree_src.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
 
 
 def style_axis(ax, 

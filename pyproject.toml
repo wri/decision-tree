@@ -26,6 +26,16 @@ dependencies = [
     "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop"
 ]
 
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["decision_tree_src*"]
+exclude = ["notebooks*", "tests*", "docs*"]
+
+
 [tool.uv.sources]
 gdal = [
  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },

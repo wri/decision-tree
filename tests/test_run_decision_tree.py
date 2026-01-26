@@ -1,14 +1,8 @@
-import math
 import os
-import pandas as pd
-import csv
-from pathlib import Path
-import yaml
 
-from run_decision_tree import main, VerificationDecisionTree, compute_project_results, compute_ev_statistics
-from decision_tree_src.api_utils import opentopo_pull_wrapper
-from tests.tools import get_project_root, get_opentopo_api_key, standardize_test_param_paths, delete_scratch_file, \
-    delete_source_geojsons_file
+from decision_tree_src.run_decision_tree import VerificationDecisionTree
+from tests.tools import get_project_root
+from runner import main
 
 ROOT_PATH = get_project_root()
 PARAMS_DIR = os.path.join(ROOT_PATH, "tests")

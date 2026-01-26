@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import re
 import os
 
-from src.constants import DESIRED_COLS
+from decision_tree_src.constants import DESIRED_COLS
 
 
 def parse_condition(value, actual):

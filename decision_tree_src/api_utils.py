@@ -23,8 +23,8 @@ from tqdm import tqdm
 from exactextract import exact_extract
 
 from tm_api_utils import pull_tm_api_data
-from src.s3_utils import upload_to_s3
-from src.tools import get_gfw_access_token, get_opentopo_api_key
+from decision_tree_src.s3_utils import upload_to_s3
+from decision_tree_src.tools import get_gfw_access_token, get_opentopo_api_key
 
 
 def get_ids(params):

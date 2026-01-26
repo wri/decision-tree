@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from run_decision_tree import main, VerificationDecisionTree, compute_project_results, compute_ev_statistics
-from src.api_utils import opentopo_pull_wrapper
+from decision_tree_src.api_utils import opentopo_pull_wrapper
 from tests.tools import get_project_root, get_opentopo_api_key, standardize_test_param_paths, delete_scratch_file, \
     delete_source_geojsons_file
 

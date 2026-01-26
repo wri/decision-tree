@@ -2,16 +2,16 @@ import yaml
 import json
 import pandas as pd
 
-from src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
-import src.process_api_results as clean
-from src.image_availability import analyze_image_availability
-from src.canopy_cover import apply_canopy_classification
-from src.slope import apply_slope_classification
-import src.decision_trees as tree
-import src.cost_calculator as price
-import src.weighted_scoring as scoring
-import src.update_asana as asana
-from src.tools import convert_to_os_path
+from decision_tree_src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
+import decision_tree_src.process_api_results as clean
+from decision_tree_src.image_availability import analyze_image_availability
+from decision_tree_src.canopy_cover import apply_canopy_classification
+from decision_tree_src.slope import apply_slope_classification
+import decision_tree_src.decision_trees as tree
+import decision_tree_src.cost_calculator as price
+import decision_tree_src.weighted_scoring as scoring
+import decision_tree_src.update_asana as asana
+from decision_tree_src.tools import convert_to_os_path
 
 
 class VerificationDecisionTree:

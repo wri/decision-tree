@@ -1,7 +1,7 @@
 import os
 import yaml
 
-from src.tools import get_project_root
+from decision_tree_src.tools import get_project_root
 
 ROOT_PATH = get_project_root()
 

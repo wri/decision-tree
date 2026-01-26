@@ -272,6 +272,57 @@ def filter_images(merged_gdf, filters, debug=False):
 
     return filtered_images
 
+def filter_images_by_task(merged_gdf, global_filters, task_filters, debug=False):
+    """
+    Filters the merged dataset to retain only images that meet filters for image quality.
+    Uses global filters for sun elevation angle & off-nadir angle and task-specific filters for baseline date range.
+    The values for the global filters can be changed in the parameters section.
+
+    Args:
+        merged_gdf (GeoDataFrame): Merged dataset of images and polygons. MUST contain a task_id column (project_id_plantstart-year)
+        global_filters (dict): Dictionary containing global filter thresholds (cloud cover, off nadir, sun elevationa angle, optional default date range) 
+                               (from the Parameters section of notebook)
+        task_filters (dict): Dictionary mapping the task_id to baseline date range filters for each task (imported in CSV)
+                             task_id -> (date_range_start, date_range_end) (e.g. {'..._2021': (-366, 90), ...})
+    
+    Returns:
+        GeoDataFrame: Filtered dataset containing only the images that meet the criteria
+    """
+    # Ensure date columns are in correct datetime format
+    merged_gdf['img_date'] = pd.to_datetime(merged_gdf['img_date'], errors='coerce')
+    merged_gdf['plantstart'] = pd.to_datetime(merged_gdf['plantstart'], errors='coerce')
+
+    # Compute the date difference (image capture date - plant start date)
+    merged_gdf['date_diff'] = (merged_gdf['img_date'] - merged_gdf['plantstart']).dt.days
+
+    # Default date range if a task_id is missing from task_filters
+    default_date_range = global_filters.get('date_range', (-366, 90)) # PPC default baseline
+
+    # Map per-task date ranges onto each row
+    # task_filters: task_id -> (start, end)
+    date_ranges = merged_gdf['task_id'].map(lambda tid: task_filters.get(tid, default_date_range))
+
+    merged_gdf['date_range_start'] = date_ranges.apply(lambda dr: dr[0])
+    merged_gdf['date_range_end'] = date_ranges.apply(lambda dr: dr[1])
+
+    # Apply filtering criteria to retain only images within the desired time range, cloud cover, 
+    # off nadir angle, and sun elevation parameters
+    #  - per-row date_range_start / date_range_end
+    #  - global cloud_cover / off_nadir_angle / sun_elevation
+    filtered_images = merged_gdf[
+        (merged_gdf['date_diff'] >= merged_gdf['date_range_start']) &
+        (merged_gdf['date_diff'] <= merged_gdf['date_range_end']) &
+        (merged_gdf['area:cloud_cover_percentage'] < global_filters['cloud_cover']) &
+        (merged_gdf['area:avg_off_nadir_angle'] <= global_filters['off_nadir']) &
+        (merged_gdf['view:sun_elevation'] >= global_filters['sun_elevation'])
+    ].copy()  # Copy to avoid SettingWithCopyWarning
+
+    print(f"Total images before filtering: {len(merged_gdf)}")
+    print(f"Total images after filtering: {len(filtered_images)}")
+    print(f"Polygons with at least one valid filtered image: {filtered_images['poly_id'].nunique()}")
+
+    return filtered_images
+
 def get_best_image(poly_images, debug=False):
     """
     Selects the best image for a given polygon. Selects the most recent image with < 10% cloud cover. If no images have < 10% cloud cover, selects

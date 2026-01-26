@@ -24,7 +24,7 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     params_path = os.path.join(PARAMS_DIR, "params_full.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 #
-#     slope_statistics, poly_results, prj_results = workflow.run(project_ids)
+#     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids)
 #
 #     # cleanup
 #     delete_source_geojsons_file('GHA_22_TILAA_07-14-2025.geojson')
@@ -49,7 +49,7 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     params_path = os.path.join(PARAMS_DIR, "params_partial.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 #
-#     slope_statistics, poly_results, prj_results = workflow.run(None)
+#     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 #
 #     # Clean up scratch file
 #     delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
@@ -73,7 +73,7 @@ def test_run_decision_tree_score():
     params_path = os.path.join(PARAMS_DIR, "params_score.yaml")
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
-    slope_statistics, poly_results, prj_results = workflow.run(None)
+    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
     # verify that two projects were returned
     expected_project_count = 2

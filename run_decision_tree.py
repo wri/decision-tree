@@ -42,7 +42,7 @@ class VerificationDecisionTree:
         self.prj_score = convert_to_os_path(out["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
 
-    def run(self, project_ids):
+    def run_decision_tree(self, project_ids):
         if self.mode not in ["full", "partial", "score"]:
             raise ValueError("Invalid mode")
 
@@ -138,7 +138,7 @@ def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool 
         print("Acquiring prj data from APIs.")
         project_ids = get_ids(workflow.params)
 
-        workflow.run(project_ids)
+        workflow.run_decision_tree(project_ids)
         return None
 
 

@@ -1,4 +1,4 @@
-config: secrets.yaml
+config: ../secrets.yaml
 mode: full
 
 s3:

@@ -12,6 +12,10 @@ parms_path = os.path.join(ROOT_PATH, "tests", "params_full.yaml")
 with open(parms_path, 'r') as file:
     PARAMS = yaml.safe_load(file)
 
+def test_get_ids():
+    project_ids = get_ids(PARAMS)
+    assert len(project_ids) >= 84
+
 
 def test_tm_features():
     project_id = '468bee12-bfbc-4387-a00a-d7e915576427'

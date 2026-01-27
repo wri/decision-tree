@@ -39,7 +39,8 @@ def get_ids(params):
     
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
-    headers = {'Authorization': f"Bearer {auth['access_token']}"}
+    access_token = auth['gfw_api']['access_token']
+    headers = {'Authorization': f"Bearer {access_token}"}
     api_param_dict = {'projectCohort[]': keyword,
                     'polygonStatus[]': 'approved',
                     'includeTestProjects': 'false',

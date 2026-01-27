@@ -138,11 +138,28 @@ def get_tm_feats(params, project_ids):
             progress.update(1)
 
     if outfile:
+        dir = Path(outfile)
+        _create_folder_if_not_exists(dir)
         with open(outfile, "w") as f:
             json.dump(all_results, f, indent=4)
         print(f"Results saved to {outfile}")
 
     return all_results
+
+
+def _create_folder_if_not_exists(folder_path):
+    """
+    Creates a folder if it does not already exist.
+
+    Args:
+        folder_path (str): The path of the folder to create.
+    """
+    try:
+        # os.makedirs with exist_ok=True will not raise an error if the folder exists
+        os.makedirs(folder_path, exist_ok=True)
+        print(f"Folder ready at: {folder_path}")
+    except OSError as e:
+        print(f"Error creating folder '{folder_path}': {e}")
 
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):

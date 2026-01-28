@@ -1,6 +1,9 @@
+import os
+
 import yaml
 import json
 import pandas as pd
+
 
 from decision_tree_src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
 import decision_tree_src.process_api_results as clean
@@ -11,7 +14,7 @@ import decision_tree_src.decision_trees as tree
 import decision_tree_src.cost_calculator as price
 import decision_tree_src.weighted_scoring as scoring
 import decision_tree_src.update_asana as asana
-from decision_tree_src.tools import convert_to_os_path
+from decision_tree_src.tools import convert_to_os_path, get_project_root
 
 
 class VerificationDecisionTree:
@@ -26,7 +29,7 @@ class VerificationDecisionTree:
             return yaml.safe_load(f)
 
     def _resolve_paths(self):
-        out = self.params["outfile"]
+        out = self.params['outfile']
         cohort = out["cohort"]
         data_v = out["data_version"]
         experiment_id = out["experiment_id"]

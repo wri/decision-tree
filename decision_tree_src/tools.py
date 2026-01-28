@@ -57,23 +57,39 @@ def get_opentopo_api_key(config):
     return api_key
 
 
-def get_project_root(marker_files=("pyproject.toml", "requirements.txt", ".git")) -> str:
-    """Return the absolute path to the project root directory."""
-    # Start from the directory of the current file
-    # return str(Path(os.path.dirname(__file__)).parent)
-    # Get the path of the script that started execution
-    if hasattr(sys.modules['__main__'], '__file__'):
-        start_path = Path(sys.modules['__main__'].__file__).resolve()
-    else:
-        # Fallback for interactive sessions
-        start_path = Path.cwd()
+def get_project_root(start_path=None, markers=None):
+    """
+    Get the root directory of a project by searching for marker files.
 
-    # Walk upward until we find a marker
-    for parent in [start_path] + list(start_path.parents):
-        for marker in marker_files:
-            if (parent / marker).exists():
-                return str(parent)
+    Args:
+        start_path (str, optional): Directory to start searching from.
+            Defaults to current working directory.
+        markers (list of str, optional): Files or directories that indicate the root.
+            Defaults to ['pyproject.toml', 'setup.py', '.git'].
 
-    raise FileNotFoundError(
-        f"Could not find project root. None of {marker_files} found above {start_path}"
-    )
+    Returns:
+        str: Absolute path to the project root directory.
+
+    Raises:
+        FileNotFoundError: If no root directory found.
+    """
+    if start_path is None:
+        start_path = os.getcwd()
+
+    if markers is None:
+        markers = ['pyproject.toml', 'setup.py', '.git']
+
+    current_path = os.path.abspath(start_path)
+
+    while True:
+        if any(os.path.exists(os.path.join(current_path, marker)) for marker in markers):
+            return current_path
+
+        parent_path = os.path.dirname(current_path)
+        if parent_path == current_path:
+            # Reached root of filesystem without finding markers
+            raise FileNotFoundError(
+                f"Could not find project root starting from {start_path} "
+                f"using markers: {markers}"
+            )
+        current_path = parent_path

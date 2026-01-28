@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import requests
 import yaml
 import pandas as pd
@@ -24,13 +26,15 @@ from exactextract import exact_extract
 
 from tm_api_utils import pull_tm_api_data
 from decision_tree_src.s3_utils import upload_to_s3
-from decision_tree_src.tools import get_gfw_access_token, get_opentopo_api_key
+from decision_tree_src.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root
 
 
 def get_ids(params):
 
     print("Requesting project IDs from TerraMatch...")
-    out = params['outfile']
+    outfile = params['outfile']
+    project_root = get_project_root()
+    out = os.path.join(project_root, outfile)
     cohort = out['cohort']
     keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
     url = params['tm_api']['tm_prod_url']

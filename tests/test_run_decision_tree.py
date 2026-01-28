@@ -1,7 +1,7 @@
 import os
 
 from decision_tree_src.run_decision_tree import VerificationDecisionTree
-from tests.tools import get_project_root
+from decision_tree_src.tools import get_project_root
 from runner import main
 
 ROOT_PATH = get_project_root()

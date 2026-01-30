@@ -1,8 +1,8 @@
 import math
 import os
 
-from decision_tree_src.run_decision_tree import VerificationDecisionTree
-from decision_tree_src.tools import get_project_root
+from decision_tree.run_decision_tree import VerificationDecisionTree
+from decision_tree.tools import get_project_root
 from run_app import main
 from tests.tools import delete_scratch_file
 
@@ -41,28 +41,28 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
 #
 #
-# def test_run_decision_tree_partial():
-#     params_path = os.path.join(PARAMS_DIR, "params_partial.yaml")
-#     workflow = main(params_path, SECRETS_PATH, parse_only=True)
-#
-#     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
-#
-#     # Clean up scratch file
-#     delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
-#     delete_scratch_file('TGO_22_APAF_slope_stats.csv')
-#
-#     # verify that two projects were returned
-#     expected_project_count = 2
-#     assert len(prj_results) == expected_project_count
-#
-#     sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
-#     expected_sum_median_slope = 307.4
-#     actual_sum_median_slope = slope_statistics[slope_statistics['project_id'] == sample_project_id]['median_slope'].sum()
-#     assert math.isclose(actual_sum_median_slope, expected_sum_median_slope, rel_tol=0.1), f"Expected {expected_sum_median_slope}, got {actual_sum_median_slope}"
-#
-#     expected_project_label = 'strong remote'
-#     actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
-#     assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
+def test_run_decision_tree_partial():
+    params_path = os.path.join(PARAMS_DIR, "params_partial.yaml")
+    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+
+    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
+
+    # Clean up scratch file
+    delete_scratch_file('RWA_22_ICRAF_slope_stats.csv')
+    delete_scratch_file('TGO_22_APAF_slope_stats.csv')
+
+    # verify that two projects were returned
+    expected_project_count = 2
+    assert len(prj_results) == expected_project_count
+
+    sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
+    expected_sum_median_slope = 307.4
+    actual_sum_median_slope = slope_statistics[slope_statistics['project_id'] == sample_project_id]['median_slope'].sum()
+    assert math.isclose(actual_sum_median_slope, expected_sum_median_slope, rel_tol=0.1), f"Expected {expected_sum_median_slope}, got {actual_sum_median_slope}"
+
+    expected_project_label = 'strong remote'
+    actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
+    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
 
 
 def test_run_decision_tree_score():

@@ -1,5 +1,5 @@
-from decision_tree_src.api_utils import get_ids
-from decision_tree_src.run_decision_tree import VerificationDecisionTree
+from decision_tree.api_utils import get_ids
+from decision_tree.run_decision_tree import VerificationDecisionTree
 
 
 def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
@@ -12,7 +12,6 @@ def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool 
 
 
 if __name__ == "__main__":
-    print("hi")
     import argparse
     parser = argparse.ArgumentParser(description='Main entry point for decision tree.')
     parser.add_argument('--params_yaml_path', metavar='path', required=True,

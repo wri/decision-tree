@@ -1,9 +1,9 @@
 import os
 import yaml
 
-from decision_tree_src.api_utils import opentopo_pull_wrapper, get_tm_feats
-from decision_tree_src.process_api_results import process_tm_api_results
-from decision_tree_src.tools import get_project_root
+from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats
+from decision_tree.process_api_results import process_tm_api_results
+from decision_tree.tools import get_project_root
 from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
 
 ROOT_PATH = get_project_root()

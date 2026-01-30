@@ -1,8 +1,8 @@
 import pandas as pd
 from datetime import datetime, timedelta
 
-from decision_tree_src.constants import DESIRED_COLS
-from decision_tree_src.tools import convert_to_os_path
+from decision_tree.constants import DESIRED_COLS
+from decision_tree.tools import convert_to_os_path
 
 
 def parse_condition(value, actual):

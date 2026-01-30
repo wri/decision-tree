@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches as mpatches
-from decision_tree_src.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
+from decision_tree.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
 
 
 def style_axis(ax, 

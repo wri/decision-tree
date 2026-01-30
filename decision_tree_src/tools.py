@@ -22,13 +22,8 @@ def convert_to_os_path(path_str):
     # Replace common wrong separators with OS-specific ones
     normalized_path = path_str.replace("\\", os.sep).replace("/", os.sep)
 
-    # Use pathlib to resolve and normalize
-    try:
-        path_obj = Path(normalized_path).expanduser().resolve(strict=False)
-    except Exception as e:
-        raise ValueError(f"Invalid path format: {e}")
-
-    return str(path_obj)
+    abs_path = os.path.join(get_project_root(), normalized_path)
+    return abs_path
 
 
 def get_gfw_access_token(params):

@@ -15,7 +15,7 @@
 # =============================================================================
 
 config: secrets.yaml
-mode: full  # options: full, partial, score
+mode: partial  # options: full, partial, score
 
 s3:
   upload: false
@@ -51,10 +51,10 @@ cost:
   field: 0.32
   remote: 20.0
 
-infile:
-  mode_file:  # specify when using either partial or score mode
+infile: # file paths are relative to the project root
+  mode_file: data/feats/tm_api_c1_07-14-2025.csv # specify when using either partial or score mode
 
-outfile:
+outfile: # file paths are relative to the project root
   data_version: 07-14-2025
   experiment_id: exp2
   cohort: c1

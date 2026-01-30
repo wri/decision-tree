@@ -1,10 +1,10 @@
 import os
 import yaml
 
-from decision_tree_src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
-from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
+from decision_tree_src.api_utils import opentopo_pull_wrapper, get_tm_feats
+from decision_tree_src.process_api_results import process_tm_api_results
 from decision_tree_src.tools import get_project_root
-import decision_tree_src.process_api_results as clean
+from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
 
 ROOT_PATH = get_project_root()
 
@@ -29,7 +29,7 @@ def test_clean_tm_features():
     project_id = '468bee12-bfbc-4387-a00a-d7e915576427'
     features = _get_project_tm_features(project_id)
 
-    cleaned_features = clean.process_tm_api_results(PARAMS, features)
+    cleaned_features = process_tm_api_results(PARAMS, features)
 
     # cleanup
     delete_source_geojsons_file('468bee12-bfbc-4387-a00a-d7e915576427_07-14-2025.geojson')
@@ -49,7 +49,7 @@ def test_clean_tm_features():
 def test_slope_statistics(tmp_path):
     project_id = '44c352fb-0581-4b97-92d7-6cbe459e13d0'  # KEN_22_EFK
     features = _get_project_tm_features(project_id)
-    cleaned_features = clean.process_tm_api_results(PARAMS, features)
+    cleaned_features = process_tm_api_results(PARAMS, features)
 
     # get open_topo api key
     opentopo_key = get_opentopo_api_key(PARAMS)
@@ -74,9 +74,5 @@ def test_slope_statistics(tmp_path):
 
 
 def _get_project_tm_features(project_id):
-    # Clear the tm_response outfile path
-    PARAMS['outfile']['tm_response'] = ''
-    PARAMS['outfile']['geojsons'] = os.path.join(ROOT_PATH, "tests", "data", "source_geojsons")
-
     features = get_tm_feats(PARAMS, [project_id])
     return features

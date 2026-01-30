@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import requests
 import yaml
 import pandas as pd
@@ -14,7 +12,7 @@ import rasterio.mask
 import tempfile
 import math
 
-from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.warp import calculate_default_transform, reproject
 from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
 from contextlib import contextmanager
@@ -26,55 +24,55 @@ from exactextract import exact_extract
 
 from tm_api_utils import pull_tm_api_data
 from decision_tree_src.s3_utils import upload_to_s3
-from decision_tree_src.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root
+from decision_tree_src.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root, convert_to_os_path
 
 
 def get_ids(params):
-
     print("Requesting project IDs from TerraMatch...")
     outfile = params['outfile']
     project_root = get_project_root()
-    out = os.path.join(project_root, outfile)
+    out = convert_to_os_path(os.path.join(project_root, outfile))
+
     cohort = out['cohort']
     keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
     url = params['tm_api']['tm_prod_url']
-    out = params['outfile']
     tm_auth_path = params['config']
-    
+
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
     access_token = auth['gfw_api']['access_token']
     headers = {'Authorization': f"Bearer {access_token}"}
     api_param_dict = {'projectCohort[]': keyword,
-                    'polygonStatus[]': 'approved',
-                    'includeTestProjects': 'false',
-                    'page[size]': '100'
-            }
+                      'polygonStatus[]': 'approved',
+                      'includeTestProjects': 'false',
+                      'page[size]': '100'
+                      }
     try:
         results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
-        
+
         ids = list({
-        str(r["projectId"])
-        for r in results
-        if "projectId" in r and r["projectId"] is not None
-         })
+            str(r["projectId"])
+            for r in results
+            if "projectId" in r and r["projectId"] is not None
+        })
         if len(ids) < 1:
             print(f"Error: only found {len(ids)} project IDs. Exiting.")
             sys.exit(1)
         else:
             print(f"Found {len(ids)} project IDs for {cohort}.")
-    
+
     except Exception as e:
         print(f"Error pulling project ids: {e}")
-    
-    return ids 
+
+    return ids
+
 
 def get_tm_feats(params, project_ids):
     """
     Wrapper function around the TM API package.
 
     Iterates over a list of project IDs and aggregates results.
-    Saves GeoJSON locally only if geojson_dir is provided.  
+    Saves GeoJSON locally only if geojson_dir is provided.
     Uploads GeoJSON to S3 only if geojson_s3_bucket is set.
     Skips local file creation entirely if only S3 is used
 
@@ -88,13 +86,13 @@ def get_tm_feats(params, project_ids):
     url = params['tm_api']['tm_prod_url']
     out = params['outfile']
     data_version = out['data_version']
-    outfile = out['tm_response'].format(cohort=out['cohort'], data_version=data_version)
-    geojson_dir = out['geojsons']
+    outfile = convert_to_os_path(out['tm_response'].format(cohort=out['cohort'], data_version=data_version))
+    geojson_dir = convert_to_os_path(out['geojsons'])
 
     headers = get_gfw_access_token(params)
-    
+
     all_results = []
-    
+
     if geojson_dir:
         os.makedirs(geojson_dir, exist_ok=True)
 
@@ -109,7 +107,7 @@ def get_tm_feats(params, project_ids):
             }
 
             try:
-                results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False) 
+                results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
                 if results is None:
                     print(f"No results returned for project: {project_id}")
                     progress.update(1)
@@ -120,17 +118,18 @@ def get_tm_feats(params, project_ids):
                     r['project_id'] = project_id
 
                 all_results.extend(results)
-            
+
             except Exception as e:
                 print(f"Error pulling project {project_id}: {e}")
-            
+
             try:
                 gdf = gpd.GeoDataFrame(
                     results,
                     geometry=[shape(feature['geometry']) for feature in results],
                     crs='EPSG:4326'
                 )
-                project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')), project_id)
+                project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')),
+                                    project_id)
                 filename = f"{project_name}_{data_version}.geojson"
                 gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
             except Exception as e:
@@ -142,11 +141,12 @@ def get_tm_feats(params, project_ids):
             progress.update(1)
 
     if outfile:
-        dir = Path(outfile)
+        dir = os.path.dirname(outfile)
         _create_folder_if_not_exists(dir)
-        with open(outfile, "w") as f:
+        outfile_path = os.path.join(get_project_root(), outfile)
+        with open(outfile_path, "w") as f:
             json.dump(all_results, f, indent=4)
-        print(f"Results saved to {outfile}")
+        print(f"Results saved to {outfile_path}")
 
     return all_results
 
@@ -167,11 +167,10 @@ def _create_folder_if_not_exists(folder_path):
 
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
-
     '''
     Masks the slope raster with the polygon to determine the
     percentage of polygon area with steep slope.
-    If none of the valid pixels are above thresh then the 
+    If none of the valid pixels are above thresh then the
     output will be zero
 
     NaN values indicate no data available for poly
@@ -181,7 +180,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     '''
     # Mask the slope raster with the polygon
     out_image, out_transform = rasterio.mask.mask(slope_raster, [polygon], crop=True, nodata=np.nan)
-    out_image = out_image[0] 
+    out_image = out_image[0]
 
     # Flatten and analyze the values
     slope_values = out_image.flatten()
@@ -195,12 +194,13 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     percentage = (high_slope_pixels / len(valid_pixels)) * 100
     return round(percentage, 1)
 
+
 def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: bool = True):
     '''
     Checks for existing outputs to reduce API requests.
-    Downloads DEM data using the project bounding box + buffer, then calculates 
-    slope and aspect rasters, saved as temp disk files. Calculates zonal statistics 
-    for an entire project (due to exact extract specifications) at the polygon level. 
+    Downloads DEM data using the project bounding box + buffer, then calculates
+    slope and aspect rasters, saved as temp disk files. Calculates zonal statistics
+    for an entire project (due to exact extract specifications) at the polygon level.
     Calculates area with high slope.
     If a polygon falls outside the DEM extent, stats default to NaN.
 
@@ -213,25 +213,26 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
     '''
     dem_url = params['opt_api']['opt_url']
     api_key = get_opentopo_api_key(config)
-    geojson_dir = params['outfile']['geojsons']
-    slope_thresh = params['criteria']['slope_thresh']
+    geojson_dir = convert_to_os_path(params['outfile']['geojsons'])
     data_version = params['outfile']['data_version']
+    slope_thresh = params['criteria']['slope_thresh']
 
     project_names = feats_df['project_name'].unique()
-    project_names = [i for i in project_names if i != 'MLI_22_ASIC'] # still has an erroneous polygon that breaks the pipeline
+    project_names = [i for i in project_names if
+                     i != 'MLI_22_ASIC']  # still has an erroneous polygon that breaks the pipeline
     dfs_to_concat = []
     for name in project_names:
         this_project = []
         project_df = feats_df[feats_df.project_name == name]
         project_id = project_df.project_id.iloc[0]
-        stat_path = params['outfile']['project_stats'].format(name=name)
+        stat_path = convert_to_os_path(params['outfile']['project_stats'].format(name=name))
         if os.path.exists(stat_path):
             dfs_to_concat.append(pd.read_csv(stat_path))
-            print(f"{name} already processed, skipping.")
+            print(f"{name} already processed, skipping. Data available in {stat_path}")
             continue
         else:
             print(f"Processing {name}")
-        
+
         geojson_path = os.path.join(geojson_dir, f"{name}_{data_version}.geojson")
         project_polygons = gpd.read_file(geojson_path)
         total_bounds = project_polygons.total_bounds
@@ -248,11 +249,10 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
         }
         # Create temporary files for DEM, slope, and aspect
         with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as dem_tmp, \
-             tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as slope_tmp:
-            
+                tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as slope_tmp:
             dem_path = dem_tmp.name
             slope_path = slope_tmp.name
-            
+
         try:
             # Download the DEM
             response = requests.get(dem_url, stream=True, params=query)
@@ -260,7 +260,7 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
                 raise Exception(f"Error downloading DEM for project {name}: {response.text}")
 
             with open(dem_path, 'wb') as f:
-                for chunk in response.iter_content(8192): # 8k generally works well for chunking of data.
+                for chunk in response.iter_content(8192):  # 8k generally works well for chunking of data.
                     f.write(chunk)
 
             if process_in_utm_coordinates:
@@ -276,14 +276,13 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
             slope_stats_list = exact_extract(slope_raster, site_polygons, aggregations)
 
             for idx, (row, slope_zs) in enumerate(zip(site_polygons.itertuples(), slope_stats_list)):
-                
                 if isinstance(slope_zs, dict) and 'properties' in slope_zs:
                     slope_stats = slope_zs['properties']
                 else:
                     slope_stats = {stat: np.nan for stat in aggregations}
                 # now calculate the area statistic for the decision
-                area_stat = calculate_high_slope_area(slope_raster, 
-                                                      row.geometry, 
+                area_stat = calculate_high_slope_area(slope_raster,
+                                                      row.geometry,
                                                       threshold=slope_thresh)
 
                 project_data = []
@@ -293,7 +292,7 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
                     'poly_id': getattr(row, 'poly_id'),
                     'slope_stats': slope_stats,
                     'slope_area': area_stat})
-                
+
                 df = pd.DataFrame(project_data).round(1)
                 expanded = df["slope_stats"].apply(pd.Series).add_suffix("_slope")
                 df = pd.concat([df.drop("slope_stats", axis=1), expanded], axis=1)
@@ -304,6 +303,9 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
 
             # Cache project results to file
             project_results_df = pd.concat(this_project, ignore_index=True)
+
+            stats_dir = os.path.dirname(stat_path)
+            _create_folder_if_not_exists(stats_dir)
             project_results_df.to_csv(stat_path, index=False)
 
             slope_raster.close()
@@ -391,9 +393,9 @@ def _load_dem_to_memoryfile(dem_path: str):
 
 
 def _compute_slope_percent_from_memory(
-    dem_source: Union[MemoryFile, rasterio.io.DatasetReader],
-    z_factor: float = 1.0,
-    resampling: Resampling = Resampling.bilinear
+        dem_source: Union[MemoryFile, rasterio.io.DatasetReader],
+        z_factor: float = 1.0,
+        resampling: Resampling = Resampling.bilinear
 ) -> rasterio.io.DatasetReader:
     """
     Compute slope (%) from an in-memory DEM using Horn's method.
@@ -471,16 +473,21 @@ def _compute_slope_percent_from_memory(
         padded = np.pad(dem_scaled, pad_width=1, mode='edge')
 
         # Neighbors (Horn)
-        z1 = padded[:-2, :-2]; z2 = padded[:-2, 1:-1]; z3 = padded[:-2, 2:]
-        z4 = padded[1:-1, :-2];                           z6 = padded[1:-1, 2:]
-        z7 = padded[2:,  :-2]; z8 = padded[2:,  1:-1];  z9 = padded[2:,  2:]
+        z1 = padded[:-2, :-2];
+        z2 = padded[:-2, 1:-1];
+        z3 = padded[:-2, 2:]
+        z4 = padded[1:-1, :-2];
+        z6 = padded[1:-1, 2:]
+        z7 = padded[2:, :-2];
+        z8 = padded[2:, 1:-1];
+        z9 = padded[2:, 2:]
 
         # Partial derivatives
-        dzdx = ((z7 + 2.0*z8 + z9) - (z1 + 2.0*z2 + z3)) / (8.0 * cellsize_x)
-        dzdy = ((z3 + 2.0*z6 + z9) - (z1 + 2.0*z4 + z7)) / (8.0 * cellsize_y)
+        dzdx = ((z7 + 2.0 * z8 + z9) - (z1 + 2.0 * z2 + z3)) / (8.0 * cellsize_x)
+        dzdy = ((z3 + 2.0 * z6 + z9) - (z1 + 2.0 * z4 + z7)) / (8.0 * cellsize_y)
 
         # Gradient magnitude -> percent
-        slope_percent = np.sqrt(dzdx**2 + dzdy**2) * 100.0
+        slope_percent = np.sqrt(dzdx ** 2 + dzdy ** 2) * 100.0
 
         # Apply mask
         # Keep output nodata consistent: if src had nodata, use it; otherwise use NaN

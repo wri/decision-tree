@@ -1,20 +1,18 @@
-import os
-
 import yaml
-import json
 import pandas as pd
 
 
-from decision_tree_src.api_utils import get_ids, opentopo_pull_wrapper, get_tm_feats
+from decision_tree_src.api_utils import opentopo_pull_wrapper, get_tm_feats
 import decision_tree_src.process_api_results as clean
 from decision_tree_src.image_availability import analyze_image_availability
 from decision_tree_src.canopy_cover import apply_canopy_classification
 from decision_tree_src.slope import apply_slope_classification
 import decision_tree_src.decision_trees as tree
 import decision_tree_src.cost_calculator as price
+# from src import decision_tree_src as scoring, decision_tree_src as asana
 import decision_tree_src.weighted_scoring as scoring
-import decision_tree_src.update_asana as asana
-from decision_tree_src.tools import convert_to_os_path, get_project_root
+import decision_tree_src.update_asana as update_asana
+from decision_tree_src.tools import convert_to_os_path
 
 
 class VerificationDecisionTree:
@@ -53,7 +51,7 @@ class VerificationDecisionTree:
             print("Running in FULL mode — acquiring prj data from APIs.")
             input_mode_file = None
         else:
-            input_mode_file = self.params['infile']['mode_file']
+            input_mode_file = convert_to_os_path(self.params['infile']['mode_file'])
             if self.mode == "partial":
                 print("Running in PARTIAL mode — using cached prj feats.")
             else:
@@ -107,10 +105,10 @@ class VerificationDecisionTree:
 
         # uploads
         if self.params['asana']['upload']:
-            asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
+            update_asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
         # if self.params['s3']['upload']:
         #     upload_to_s3(self.final_outfile, self.params, self.secrets)  # TODO Jessica - where is this method signature defined in the codebase?
-        
+
         return slope_statistics, poly_results, prj_results
 
 

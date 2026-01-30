@@ -1,8 +1,10 @@
+import math
 import os
 
 from decision_tree_src.run_decision_tree import VerificationDecisionTree
 from decision_tree_src.tools import get_project_root
-from runner import main
+from run_app import main
+from tests.tools import delete_scratch_file
 
 ROOT_PATH = get_project_root()
 PARAMS_DIR = os.path.join(ROOT_PATH, "tests")

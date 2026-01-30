@@ -1,12 +1,8 @@
 import pandas as pd
-import geopandas as gpd
-import numpy as np
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-import re
-import os
 
 from decision_tree_src.constants import DESIRED_COLS
+from decision_tree_src.tools import convert_to_os_path
 
 
 def parse_condition(value, actual):
@@ -35,8 +31,8 @@ def apply_rules_baseline(params, df):
       • for first_decision=='field', look only at slope rules  
       • mangrove stays as is (final_decision = 'mangrove')
     """
-
-    rules = pd.read_csv(params['criteria']['rules'])
+    rules_file = convert_to_os_path(params['criteria']['rules'])
+    rules = pd.read_csv(rules_file)
 
     # clean rules df
     for col in rules.columns:
@@ -137,7 +133,8 @@ def apply_rules_ev(params, df):
       • if EV year is current or future, decision is 'not available'
     """
     df = df.copy()
-    rules = pd.read_csv(params['criteria']['rules'])
+    rules_file = convert_to_os_path(params['criteria']['rules'])
+    rules = pd.read_csv(rules_file)
 
     # Clean rules df
     for col in rules.columns:

@@ -5,25 +5,23 @@ import yaml
 from pathlib import Path
 
 
-def convert_to_os_path(path_str):
+def convert_to_os_path(target_dir, subfolder, path_str):
     """
     Convert a given directory path string to a valid path format
     for the current operating system.
-
-    Args:
-        path_str (str): The input path string (any format).
-
-    Returns:
-        str: A normalized, OS-valid path string.
     """
     if not isinstance(path_str, str) or not path_str.strip():
         raise ValueError("Path must be a non-empty string.")
 
-    # Replace common wrong separators with OS-specific ones
-    normalized_path = path_str.replace("\\", os.sep).replace("/", os.sep)
+    if subfolder is None:
+        abs_path = os.path.join(get_project_root(), target_dir, path_str)
+    else:
+        abs_path = os.path.join(get_project_root(), target_dir, subfolder, path_str)
 
-    abs_path = os.path.join(get_project_root(), normalized_path)
-    return abs_path
+    # Replace common wrong separators with OS-specific ones
+    normalized_path = abs_path.replace("\\", os.sep).replace("/", os.sep)
+
+    return normalized_path
 
 
 def get_gfw_access_token(params):

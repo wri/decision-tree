@@ -1,9 +1,6 @@
 import pandas as pd
 from datetime import datetime, timedelta
-
 from decision_tree.constants import DESIRED_COLS
-from decision_tree.tools import convert_to_os_path
-
 
 def parse_condition(value, actual):
     """
@@ -18,7 +15,7 @@ def parse_condition(value, actual):
             return False
     return actual == value
 
-def apply_rules_baseline(params, df):
+def apply_rules_baseline(rules_file_path, df):
     """
     Decision tree for baseline classification.
     
@@ -31,8 +28,7 @@ def apply_rules_baseline(params, df):
       • for first_decision=='field', look only at slope rules  
       • mangrove stays as is (final_decision = 'mangrove')
     """
-    rules_file = convert_to_os_path(params['criteria']['rules'])
-    rules = pd.read_csv(rules_file)
+    rules = pd.read_csv(rules_file_path)
 
     # clean rules df
     for col in rules.columns:
@@ -117,7 +113,7 @@ def apply_rules_baseline(params, df):
 
     return df
 
-def apply_rules_ev(params, df):
+def apply_rules_ev(params, rules_file_path, df):
     """
     Decision tree for early verification (EV) classification.
 
@@ -133,8 +129,7 @@ def apply_rules_ev(params, df):
       • if EV year is current or future, decision is 'not available'
     """
     df = df.copy()
-    rules_file = convert_to_os_path(params['criteria']['rules'])
-    rules = pd.read_csv(rules_file)
+    rules = pd.read_csv(rules_file_path)
 
     # Clean rules df
     for col in rules.columns:

@@ -29,11 +29,8 @@ from decision_tree.tools import get_gfw_access_token, get_opentopo_api_key, get_
 
 def get_ids(params):
     print("Requesting project IDs from TerraMatch...")
-    outfile = params['outfile']
-    project_root = get_project_root()
-    out = convert_to_os_path(os.path.join(project_root, outfile))
 
-    cohort = out['cohort']
+    cohort = params['outfile']['cohort']
     keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
     url = params['tm_api']['tm_prod_url']
     tm_auth_path = params['config']
@@ -67,7 +64,7 @@ def get_ids(params):
     return ids
 
 
-def get_tm_feats(params, project_ids):
+def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
     """
     Wrapper function around the TM API package.
 
@@ -86,8 +83,6 @@ def get_tm_feats(params, project_ids):
     url = params['tm_api']['tm_prod_url']
     out = params['outfile']
     data_version = out['data_version']
-    outfile = convert_to_os_path(out['tm_response'].format(cohort=out['cohort'], data_version=data_version))
-    geojson_dir = convert_to_os_path(out['geojsons'])
 
     headers = get_gfw_access_token(params)
 
@@ -140,10 +135,10 @@ def get_tm_feats(params, project_ids):
 
             progress.update(1)
 
-    if outfile:
-        dir = os.path.dirname(outfile)
+    if tm_outfile:
+        dir = os.path.dirname(tm_outfile)
         _create_folder_if_not_exists(dir)
-        outfile_path = os.path.join(get_project_root(), outfile)
+        outfile_path = os.path.join(get_project_root(), tm_outfile)
         with open(outfile_path, "w") as f:
             json.dump(all_results, f, indent=4)
         print(f"Results saved to {outfile_path}")
@@ -195,7 +190,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     return round(percentage, 1)
 
 
-def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: bool = True):
+def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates
@@ -213,7 +208,9 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
     '''
     dem_url = params['opt_api']['opt_url']
     api_key = get_opentopo_api_key(config)
-    geojson_dir = convert_to_os_path(params['outfile']['geojsons'])
+
+    project_data_dir =  params['outfile']["project_data_folder"]
+
     data_version = params['outfile']['data_version']
     slope_thresh = params['criteria']['slope_thresh']
 
@@ -225,7 +222,7 @@ def opentopo_pull_wrapper(params, config, feats_df, process_in_utm_coordinates: 
         this_project = []
         project_df = feats_df[feats_df.project_name == name]
         project_id = project_df.project_id.iloc[0]
-        stat_path = convert_to_os_path(params['outfile']['project_stats'].format(name=name))
+        stat_path = convert_to_os_path(project_data_dir, 'slope/project_statistics', params['outfile']['project_stats'].format(name=name))
         if os.path.exists(stat_path):
             dfs_to_concat.append(pd.read_csv(stat_path))
             print(f"{name} already processed, skipping. Data available in {stat_path}")

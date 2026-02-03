@@ -3,7 +3,7 @@ import yaml
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats
 from decision_tree.process_api_results import process_tm_api_results
-from decision_tree.tools import get_project_root
+from decision_tree.tools import get_project_root, convert_to_os_path
 from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
 
 ROOT_PATH = get_project_root()
@@ -60,13 +60,16 @@ def test_slope_statistics(tmp_path):
     PARAMS['outfile']['project_stats'] = sub_dir
 
     # TODO Why are there so many duplicates?
-    slope_statistics = opentopo_pull_wrapper(PARAMS, config, cleaned_features)
-    unique_stats = slope_statistics.drop_duplicates(subset=['project_id','poly_id'])
+    outfile = PARAMS['outfile']
+    project_data_dir = outfile["project_data_folder"]
+    geojson_dir = convert_to_os_path(project_data_dir, None, outfile['geojsons'])
+
+    slope_statistics = opentopo_pull_wrapper(PARAMS, config, geojson_dir, cleaned_features)
 
     # cleanup
     delete_source_geojsons_file('KEN_22_EFK_07-14-2025.geojson')
 
-    assert len(unique_stats) == len(cleaned_features)
+    assert len(slope_statistics) == len(cleaned_features)
 
     actual_attribute_count = slope_statistics.shape[1]
     expected_attribute_count = 20
@@ -74,5 +77,13 @@ def test_slope_statistics(tmp_path):
 
 
 def _get_project_tm_features(project_id):
-    features = get_tm_feats(PARAMS, [project_id])
+    outfile = PARAMS['outfile']
+    data_v = outfile["data_version"]
+    project_data_dir = outfile["project_data_folder"]
+
+    geojson_dir = convert_to_os_path(project_data_dir, None, outfile['geojsons'])
+    tm_outfile = convert_to_os_path(project_data_dir, 'tm_api_response',
+                                         outfile['tm_response'].format(cohort=outfile['cohort'], data_version=data_v))
+
+    features = get_tm_feats(PARAMS, geojson_dir, tm_outfile, [project_id])
     return features

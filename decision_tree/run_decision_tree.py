@@ -54,10 +54,10 @@ class VerificationDecisionTree:
         self.rules_file_path = convert_to_os_path(project_data_dir, None, self.params['criteria']['rules'])
 
     def run_decision_tree(self, project_ids):
-        if self.mode not in ["full", "partial", "score"]:
+        if self.mode not in ["full", "id_list", "partial", "score"]:
             raise ValueError("Invalid mode")
 
-        if self.mode == "full":
+        if self.mode in ("full", "id_list"):
             print("Running in FULL mode — acquiring prj data from APIs.")
             input_mode_file = None
         else:
@@ -68,12 +68,13 @@ class VerificationDecisionTree:
                 print("Running in SCORE mode — using cached tree results.")
                 input_mode_file = self.tree_results
 
-        if self.mode in ["full", "partial"]:
-            if self.mode == "full":
-                project_ids = get_ids(self.params)
-                # uncomment below for testing
-                # project_ids = project_ids[:n] # if desired, specify the number of projects to test
-                # pd.Series(project_ids, name="project_id").to_csv(self.full_portfolio, index=False)
+        if self.mode in ["full", "id_list", "partial"]:
+            if self.mode in ("full", "id_list"):
+                if self.mode == "full":
+                    project_ids = get_ids(self.params)
+                    # uncomment below for testing
+                    # project_ids = project_ids[:n] # if desired, specify the number of projects to test
+                    # pd.Series(project_ids, name="project_id").to_csv(self.full_portfolio, index=False)
 
                 tm_response = get_tm_feats(self.params, self.geojson_dir, self.tm_outfile, project_ids)
                 # uncomment below for testing

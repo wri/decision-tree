@@ -33,25 +33,24 @@ class VerificationDecisionTree:
         experiment_id = outfile["experiment_id"]
         project_data_dir = outfile["project_data_folder"]
 
-        # decision-tree input files
-        self.portfolio = convert_to_os_path(project_data_dir, 'portfolio_csvs', outfile["portfolio"].format(cohort=cohort, data_version=data_v))
-        self.full_portfolio = convert_to_os_path(project_data_dir, 'portfolio_csvs', f'prj_ids_full_set_{data_v}.csv')
-        self.tm_outfile = convert_to_os_path(project_data_dir, 'tm_api_response', outfile['tm_response'].format(cohort=outfile['cohort'], data_version=data_v))
-        self.geojson_dir = convert_to_os_path(project_data_dir, None, outfile['geojsons'])
-        self.project_feats = convert_to_os_path(project_data_dir, 'feats', outfile["feats"].format(cohort=cohort, data_version=data_v))
-        self.maxar_meta = convert_to_os_path(project_data_dir, 'imagery_availability', outfile["maxar_meta"].format(cohort=cohort, data_version=data_v))
+        # decision-tree input files for full or id_list mode
+        self.portfolio = convert_to_os_path(project_data_dir, outfile["portfolio"].format(cohort=cohort, data_version=data_v))
+        self.tm_outfile = convert_to_os_path(project_data_dir, outfile['tm_response'].format(cohort=outfile['cohort'], data_version=data_v))
+        self.maxar_meta = convert_to_os_path(project_data_dir, outfile["maxar_meta"].format(cohort=cohort, data_version=data_v))
 
         # decision-tree intermediate files
-        self.project_feats_maxar = convert_to_os_path(project_data_dir, 'maxar-tools', outfile["feats_maxar"].format(cohort=cohort, data_version=data_v))
-        self.slope_stats = convert_to_os_path(project_data_dir, 'slope', outfile["slope_stats"].format(cohort=cohort, data_version=data_v))
-        self.tree_results = convert_to_os_path(project_data_dir, 'tree_output', outfile["tree_results"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
-        self.poly_score = convert_to_os_path(project_data_dir, 'decision_scores', outfile["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        self.geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
+        self.project_feats = convert_to_os_path(project_data_dir, outfile["feats"].format(cohort=cohort, data_version=data_v))
+        self.project_feats_maxar = convert_to_os_path(project_data_dir, outfile["feats_maxar"].format(cohort=cohort, data_version=data_v))
+        self.slope_stats = convert_to_os_path(project_data_dir, outfile["slope_stats"].format(cohort=cohort, data_version=data_v))
+        self.tree_results = convert_to_os_path(project_data_dir, outfile["tree_results"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        self.poly_score = convert_to_os_path(project_data_dir, outfile["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
         # decision-tree output files
-        self.prj_score = convert_to_os_path(project_data_dir, 'decision_scores', outfile["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        self.prj_score = convert_to_os_path(project_data_dir, outfile["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
-        self.rules_file_path = convert_to_os_path(project_data_dir, None, self.params['criteria']['rules'])
+        self.rules_file_path = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
 
     def run_decision_tree(self, project_ids):
         if self.mode not in ["full", "id_list", "partial", "score"]:

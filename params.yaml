@@ -56,21 +56,18 @@ outfile: # file paths are relative to the project root
   experiment_id: exp2
   cohort: c1
   project_data_folder: 'data'
-  # input files
-  portfolio: 'prj_ids_{cohort}_{data_version}.csv'
-  geojsons: 'geojsons/'
-  feats: 'tm_api_{cohort}_{data_version}.csv'
-  maxar_meta: 'comb_img_availability_{cohort}_{data_version}.csv'
-  # intermediate files
-  tm_response: '{cohort}_{data_version}.json'
-  feats_maxar: 'tm_api_{cohort}_{data_version}.csv'
-  slope_stats: 'slope_statistics_{cohort}_{data_version}.csv'
-  tree_results: 'dtree_output_{cohort}_{data_version}_{experiment_id}.csv'
-  poly_decision: 'poly_output_{cohort}_{data_version}_{experiment_id}.csv'
-  # output files
-  prj_decision: 'prj_output_{cohort}_{data_version}_{experiment_id}.csv'
-  # where used?
-  project_stats: '{name}_slope_stats.csv'
+  # file paths are relative to the project_data_folder under the project root
+  portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
+  geojsons: geojsons/
+  tm_response: tm_api_response/{cohort}_{data_version}.json
+  slope_stats: slope/slope_statistics_{cohort}_{data_version}.csv
+  project_stats: slope/project_statistics/{name}_slope_stats.csv
+  feats: feats/tm_api_{cohort}_{data_version}.csv
+  feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv
+  maxar_meta: imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
+  tree_results: tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 suitability:
   area_col: area

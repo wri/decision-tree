@@ -222,7 +222,7 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
         this_project = []
         project_df = feats_df[feats_df.project_name == name]
         project_id = project_df.project_id.iloc[0]
-        stat_path = convert_to_os_path(project_data_dir, 'slope/project_statistics', params['outfile']['project_stats'].format(name=name))
+        stat_path = convert_to_os_path(project_data_dir, params['outfile']['project_stats'].format(name=name))
         if os.path.exists(stat_path):
             dfs_to_concat.append(pd.read_csv(stat_path))
             print(f"{name} already processed, skipping. Data available in {stat_path}")

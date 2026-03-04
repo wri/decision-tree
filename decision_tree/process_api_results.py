@@ -122,7 +122,7 @@ def resolve_multipractice(df):
         singlepractice_rows = group[~group['is_multipractice'].astype(bool)]
 
         if len(multipractice_rows) == 1 and len(singlepractice_rows) > 0:
-            unique_single = singlepractice_rows['practice'].unique()
+            unique_single = singlepractice_rows['practice'].apply(tuple).unique()
             if len(unique_single) == 1:
                 consistent_value = unique_single[0]
                 idx_to_update = multipractice_rows.index[0]

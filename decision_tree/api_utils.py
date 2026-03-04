@@ -59,7 +59,7 @@ def get_ids(params):
             print(f"Found {len(ids)} project IDs for {cohort}.")
 
     except Exception as e:
-        print(f"Error pulling project ids: {e}")
+        raise Exception(f"Error pulling project ids: {e}")
 
     return ids
 

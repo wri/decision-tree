@@ -24,25 +24,24 @@ def test_tm_features():
     assert len(features) >= 1
 
 
-# def test_clean_tm_features():
-#     project_id = '468bee12-bfbc-4387-a00a-d7e915576427'
-#     features = _get_project_tm_features(project_id)
-#
-#     cleaned_features = process_tm_api_results(PARAMS, features)
-#
-#     # cleanup
-#     delete_source_geojsons_file('468bee12-bfbc-4387-a00a-d7e915576427_07-14-2025.geojson')
-#
-#     expected_minimum_poly_count = 19
-#     assert len(features) >= expected_minimum_poly_count
-#
-#     actual_attribute_count = cleaned_features.shape[1]
-#     expected_column_count = 11
-#     assert actual_attribute_count == expected_column_count
-#
-#     expected_columns = ['project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
-#     all_exist = all(col in cleaned_features.columns for col in expected_columns)
-#     assert all_exist
+def test_clean_tm_features():
+    project_id = '468bee12-bfbc-4387-a00a-d7e915576427'
+    features = _get_project_tm_features(project_id)
+
+    cleaned_features = process_tm_api_results(PARAMS, features)
+
+    # cleanup
+    delete_source_geojsons_file('468bee12-bfbc-4387-a00a-d7e915576427_07-14-2025.geojson')
+
+    assert len(features) >= 1
+
+    actual_attribute_count = cleaned_features.shape[1]
+    expected_column_count = 11
+    assert actual_attribute_count == expected_column_count
+
+    expected_columns = ['project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
+    all_exist = all(col in cleaned_features.columns for col in expected_columns)
+    assert all_exist
 
 
 def test_slope_statistics(tmp_path):

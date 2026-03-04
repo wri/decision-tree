@@ -35,7 +35,7 @@ cost:
   field: 0.32
   remote: 20.0
 
-outfile: # file paths are relative to the project root
+outfile:
   data_version: 07-14-2025 # 06-30-2025
   experiment_id: exp1
   cohort: c1

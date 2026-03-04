@@ -8,9 +8,10 @@ from tests.tools import delete_scratch_file
 
 ROOT_PATH = get_project_root()
 PARAMS_DIR = os.path.join(ROOT_PATH, "tests")
+# SECRETS_PATH = os.path.join(PARAMS_DIR, "secrets.yaml")
 SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 
-# TODO - Three tests are commented out pending creation of imaginary project data by John
+# TODO - Most tests are commented out pending creation of imaginary project data by John
 # def test_run_decision_tree_full():
 #     params_path = os.path.join(PARAMS_DIR, "params_full.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
@@ -70,8 +71,7 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     expected_project_label = 'strong remote'
 #     actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
 #     assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
-#
-#
+
 # def test_run_decision_tree_score():
 #     params_path = os.path.join(PARAMS_DIR, "params_score.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)

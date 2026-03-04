@@ -3,13 +3,13 @@ name = "decision-tree"
 version = "0.1.0"
 description = "Cleaning and analysis scripts for TerraFund portfolio data"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "asana",
     "boto3",
     "exactextract",
     "fiona",
-    "gdal",
+    "gdal==3.10.3; sys_platform == 'linux'",
     "matplotlib",
     "geopandas",
     "pandas",

@@ -7,13 +7,14 @@ from run_app import main
 from tests.tools import delete_scratch_file
 
 ROOT_PATH = get_project_root()
-PARAMS_DIR = os.path.join(ROOT_PATH, "tests")
-# SECRETS_PATH = os.path.join(PARAMS_DIR, "secrets.yaml")
 SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
+TEST_DIR = os.path.join(ROOT_PATH, "tests")
+TEST_SECRETS_PATH = os.path.join(TEST_DIR, "secrets.yaml")
+
 
 # TODO - Most tests are commented out pending creation of imaginary project data by John
 # def test_run_decision_tree_full():
-#     params_path = os.path.join(PARAMS_DIR, "params_full.yaml")
+#     params_path = os.path.join(TEST_DIR, "params_full.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 #
 #     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
@@ -23,7 +24,7 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #
 #
 # def test_run_decision_tree_id_list():
-#     params_path = os.path.join(PARAMS_DIR, "params_id_list.yaml")
+#     params_path = os.path.join(TEST_DIR, "params_id_list.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 #
 #     project_ids = ['d1f355a2-3e0f-4ffd-bb2f-eec104bf8442', '5fb3f47f-c209-4752-adc6-dea2c0de02de']
@@ -49,7 +50,7 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #
 #
 # def test_run_decision_tree_partial():
-#     params_path = os.path.join(PARAMS_DIR, "params_partial.yaml")
+#     params_path = os.path.join(TEST_DIR, "params_partial.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 #
 #     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
@@ -71,9 +72,9 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     expected_project_label = 'strong remote'
 #     actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
 #     assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
-
+#
 # def test_run_decision_tree_score():
-#     params_path = os.path.join(PARAMS_DIR, "params_score.yaml")
+#     params_path = os.path.join(TEST_DIR, "params_score.yaml")
 #     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 #
 #     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
@@ -81,7 +82,7 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     # verify that two projects were returned
 #     expected_project_count = 2
 #     assert len(prj_results) == expected_project_count
-#
+# 
 #     sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
 #     expected_project_label = 'strong remote'
 #     actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
@@ -89,8 +90,8 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 
 
 def test_run_decision_tree_param_parsing():
-    params_path = os.path.join(PARAMS_DIR, "params_full.yaml")
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+    params_path = os.path.join(TEST_DIR, "params_full_for_tests.yaml")
+    workflow = main(params_path, TEST_SECRETS_PATH, parse_only=True)
 
     expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
                      "maxar_meta", "tree_results", "poly_score", "prj_score"}

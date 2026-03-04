@@ -12,7 +12,7 @@ from tests.tools import get_project_root, get_opentopo_api_key, standardize_test
 
 ROOT_PATH = get_project_root()
 PARAMS_DIR = os.path.join(ROOT_PATH, "tests")
-SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
+SECRETS_PATH = os.path.join(PARAMS_DIR, "secrets.yaml")
 
 # TODO - Three tests are commented out pending creation of imaginary project data by John
 # def test_run_decision_tree_full():

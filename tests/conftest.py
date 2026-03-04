@@ -2,7 +2,7 @@
 from pathlib import Path
 
 # Block any collection under paths containing these names
-BLOCKED = {"terramatch-researcher-api"}
+BLOCKED = {"tm-api-utils", "terramatch-researcher-api"}
 
 def pytest_ignore_collect(path=None, config=None, collection_path=None):
     """

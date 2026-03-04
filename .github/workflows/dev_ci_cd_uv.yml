@@ -20,11 +20,9 @@ jobs:
     steps:
      - name: Checkout code
        uses: actions/checkout@v4
-       with:
-         path: main-repo
 
      - name: Checkout private repo
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
           repository: wri/terramatch-researcher-api # Replace with the private repo name
           ref: develop
@@ -34,14 +32,15 @@ jobs:
      - name: Install UV
        uses: astral-sh/setup-uv@v6
 
+      # Authenticate git+https://github.com/... for uv/pip
+     - name: Configure Git auth for private GitHub deps
+       run: |
+         git config --global url."https://${{ secrets.PRIVATE_REPO_PAT }}:@github.com/".insteadOf "https://github.com/"
+
      - name: Sync dependencies
-       working-directory: main-repo
-       env:
-         GH_TOKEN: ${{ secrets.GH_TOKEN }}
        run: uv sync --locked --all-extras --dev
 
      - name: Install Linux dependencies
-       working-directory: main-repo
        run: |
         sudo apt update
         sudo apt install -y gdal-bin libgdal-dev
@@ -53,9 +52,7 @@ jobs:
          aws-region: us-east-1
 
      - name: Run Tests
-       working-directory: main-repo
        env:
         GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
         OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
-        SKIP_REMOTE_TESTS: true
        run: uv run pytest tests/

@@ -54,7 +54,26 @@ def get_opentopo_api_key(config):
     return api_key
 
 
-def get_project_root() -> str:
-    """Return the absolute path to the project root directory."""
-    # Start from the directory of the current file
-    return str(Path(os.path.dirname(__file__)).parent)
+def get_project_root(start_path=None, markers=None):
+    """
+    Get the root directory of a project by searching for marker files.
+    """
+    if start_path is None:
+        start_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Project root from src/tools.py location
+
+    if markers is None:
+        markers = ['pyproject.toml', 'setup.py', '.git']
+
+    current_path = os.path.abspath(start_path)
+
+    while True:
+        if any(os.path.exists(os.path.join(current_path, marker)) for marker in markers):
+            return current_path
+
+        parent_path = os.path.dirname(current_path)
+        if parent_path == current_path:
+            raise FileNotFoundError(
+                f"Could not find project root starting from {start_path} "
+                f"using markers: {markers}"
+            )
+        current_path = parent_path

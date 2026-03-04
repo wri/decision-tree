@@ -35,11 +35,13 @@ jobs:
        uses: astral-sh/setup-uv@v6
 
      - name: Sync dependencies
+       working-directory: main-repo
        env:
          GH_TOKEN: ${{ secrets.GH_TOKEN }}
        run: uv sync --locked --all-extras --dev
 
      - name: Install Linux dependencies
+       working-directory: main-repo
        run: |
         sudo apt update
         sudo apt install -y gdal-bin libgdal-dev
@@ -51,6 +53,7 @@ jobs:
          aws-region: us-east-1
 
      - name: Run Tests
+       working-directory: main-repo
        env:
         GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
         OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}

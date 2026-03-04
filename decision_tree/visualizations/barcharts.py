@@ -1,11 +1,8 @@
 import pandas as pd
-import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
-import math
-import seaborn as sns
 from matplotlib import patches as mpatches
-from src.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
+from decision_tree.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
 
 
 def style_axis(ax, 

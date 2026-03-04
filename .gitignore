@@ -1,8 +1,9 @@
-data/*
+tests/data*
+data*
 *.DS_Store
 .ipynb_checkpoints
 *__pycache__*
 *.pyc
+.idea*
 *scratch_files
 secrets.yaml
-tests/data/*

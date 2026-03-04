@@ -1,32 +1,24 @@
 import os
+import sys
+
 import yaml
 from pathlib import Path
 
 
-def convert_to_os_path(path_str):
+def convert_to_os_path(target_dir, path_str):
     """
     Convert a given directory path string to a valid path format
     for the current operating system.
-
-    Args:
-        path_str (str): The input path string (any format).
-
-    Returns:
-        str: A normalized, OS-valid path string.
     """
     if not isinstance(path_str, str) or not path_str.strip():
         raise ValueError("Path must be a non-empty string.")
 
+    abs_path = os.path.join(get_project_root(), target_dir, path_str)
+
     # Replace common wrong separators with OS-specific ones
-    normalized_path = path_str.replace("\\", os.sep).replace("/", os.sep)
+    normalized_path = abs_path.replace("\\", os.sep).replace("/", os.sep)
 
-    # Use pathlib to resolve and normalize
-    try:
-        path_obj = Path(normalized_path).expanduser().resolve(strict=False)
-    except Exception as e:
-        raise ValueError(f"Invalid path format: {e}")
-
-    return str(path_obj)
+    return normalized_path
 
 
 def get_gfw_access_token(params):
@@ -40,7 +32,8 @@ def get_gfw_access_token(params):
         tm_auth_path = os.path.join(get_project_root(), tm_auth_file)
         with open(tm_auth_path) as auth_file:
             auth = yaml.safe_load(auth_file)
-        auth_headers = {'Authorization': f"Bearer {auth['access_token']}"}
+        access_token = auth['gfw_api']['access_token']
+        auth_headers = {'Authorization': f"Bearer {access_token}"}
 
     return auth_headers
 
@@ -57,9 +50,21 @@ def get_opentopo_api_key(config):
 def get_project_root(start_path=None, markers=None):
     """
     Get the root directory of a project by searching for marker files.
+
+    Args:
+        start_path (str, optional): Directory to start searching from.
+            Defaults to current working directory.
+        markers (list of str, optional): Files or directories that indicate the root.
+            Defaults to ['pyproject.toml', 'setup.py', '.git'].
+
+    Returns:
+        str: Absolute path to the project root directory.
+
+    Raises:
+        FileNotFoundError: If no root directory found.
     """
     if start_path is None:
-        start_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Project root from src/tools.py location
+        start_path = os.getcwd()
 
     if markers is None:
         markers = ['pyproject.toml', 'setup.py', '.git']
@@ -72,6 +77,7 @@ def get_project_root(start_path=None, markers=None):
 
         parent_path = os.path.dirname(current_path)
         if parent_path == current_path:
+            # Reached root of filesystem without finding markers
             raise FileNotFoundError(
                 f"Could not find project root starting from {start_path} "
                 f"using markers: {markers}"

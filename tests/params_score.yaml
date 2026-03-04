@@ -29,30 +29,29 @@ criteria:
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
-  rules: data/source_csv/rule_template.csv
+  rules: rule_template.csv
 
 cost:
   field: 0.32
   remote: 20.0
 
-infile:
-  mode_file: 'data/source_csv/dtree_output_c1_07-14-2025_exp5.csv' # specify when using either partial or score mode
-
 outfile:
   data_version: 07-14-2025 # 06-30-2025
   experiment_id: exp1
   cohort: c1
-  portfolio: data/source_csv/prj_ids_{cohort}_{data_version}.csv
-  geojsons: data/source_geojsons/
-  tm_response: data/scratch_files/{cohort}_{data_version}.json
-  slope_stats: data/scratch_files/slope_statistics_{cohort}_{data_version}.csv
-  project_stats: data/scratch_files/{name}_slope_stats.csv
-  feats: data/source_csv/tm_api_{cohort}_{data_version}.csv
-  feats_maxar: data/source_csv/tm_api_{cohort}_{data_version}.csv
-  maxar_meta: data/source_csv/comb_img_availability_{cohort}_{data_version}.csv
-  tree_results: data/source_csv/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
-  poly_decision: data/source_csv/poly_output_{cohort}_{data_version}_{experiment_id}.csv
-  prj_decision: data/scratch_files/prj_output_{cohort}_{data_version}_{experiment_id}.csv
+  project_data_folder: 'tests/data'
+  # file paths are relative to the project_data_folder under the project root
+  portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
+  geojsons: geojsons/
+  tm_response: tm_api_response/{cohort}_{data_version}.json
+  slope_stats: slope/slope_statistics_{cohort}_{data_version}.csv
+  project_stats: slope/project_statistics/{name}_slope_stats.csv
+  feats: feats/tm_api_{cohort}_{data_version}.csv
+  feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv
+  maxar_meta: imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
+  tree_results: tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
+  poly_decision: decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
+  prj_decision: decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 suitability:
   area_col: area

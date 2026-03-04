@@ -27,6 +27,7 @@ jobs:
           repository: wri/terramatch-researcher-api # Replace with the private repo name
           ref: develop
           token: ${{ secrets.PRIVATE_REPO_PAT }} # Use the PAT stored in secrets
+          path: terramatch-researcher-api
 
      - name: Install UV
        uses: astral-sh/setup-uv@v6

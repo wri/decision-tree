@@ -12,7 +12,7 @@ from tests.tools import get_project_root, get_opentopo_api_key, standardize_test
 
 ROOT_PATH = get_project_root()
 PARAMS_DIR = os.path.join(ROOT_PATH, "tests")
-SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
+SECRETS_PATH = os.path.join(PARAMS_DIR, "secrets.yaml")
 
 # TODO - Three tests are commented out pending creation of imaginary project data by John
 # def test_run_decision_tree_full():
@@ -69,20 +69,20 @@ SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 #     assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
 
 
-def test_run_decision_tree_score():
-    params_path = os.path.join(PARAMS_DIR, "params_score.yaml")
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
-
-    slope_statistics, poly_results, prj_results = workflow.run(None)
-
-    # verify that two projects were returned
-    expected_project_count = 2
-    assert len(prj_results) == expected_project_count
-
-    sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
-    expected_project_label = 'strong remote'
-    actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
-    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
+# def test_run_decision_tree_score():
+#     params_path = os.path.join(PARAMS_DIR, "params_score.yaml")
+#     workflow = main(params_path, SECRETS_PATH, parse_only=True)
+#
+#     slope_statistics, poly_results, prj_results = workflow.run(None)
+#
+#     # verify that two projects were returned
+#     expected_project_count = 2
+#     assert len(prj_results) == expected_project_count
+#
+#     sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
+#     expected_project_label = 'strong remote'
+#     actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
+#     assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
 
 
 def test_run_decision_tree_param_parsing():

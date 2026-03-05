@@ -1,15 +1,4 @@
-from decision_tree.api_utils import get_ids
-from decision_tree.run_decision_tree import VerificationDecisionTree
-
-
-def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
-    workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
-    if parse_only:
-        return workflow
-    else:
-        workflow.run_decision_tree(None)
-        return None
-
+from decision_tree.run_decision_tree import main
 
 if __name__ == "__main__":
     import argparse

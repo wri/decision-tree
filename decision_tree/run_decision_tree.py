@@ -142,4 +142,11 @@ def compute_project_results(params, ev):
 
     return poly_results, prj_results
 
+def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
+    workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
+    if parse_only:
+        return workflow
+    else:
+        workflow.run_decision_tree(None)
+        return None
 

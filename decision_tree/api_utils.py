@@ -23,6 +23,8 @@ from tqdm import tqdm
 from exactextract import exact_extract
 
 from tm_api_utils import pull_tm_api_data
+
+from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root, convert_to_os_path
 
@@ -32,8 +34,8 @@ def get_ids(params):
 
     cohort = params['outfile']['cohort']
     keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
-    url = params['tm_api']['tm_prod_url']
-    tm_auth_path = params['config']
+    url = TM_PROD_URI
+    tm_auth_path = os.path.abspath(params['config'])
 
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
@@ -80,7 +82,7 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
         outfile (str): Optional path to write output JSON.
         geojson_dir (str): Optional directory to save project-level GeoJSONs.
     """
-    url = params['tm_api']['tm_prod_url']
+    url = TM_PROD_URI if params['tm_api']['tm_environment'] == 'prod' else TM_STAGING_URI
     out = params['outfile']
     data_version = out['data_version']
 

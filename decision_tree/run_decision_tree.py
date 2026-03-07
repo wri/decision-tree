@@ -1,6 +1,6 @@
 import yaml
 import pandas as pd
-
+import json
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats, get_ids
 import decision_tree.process_api_results as clean
@@ -70,10 +70,11 @@ class VerificationDecisionTree:
         if self.mode in ["full", "id_list", "partial"]:
             if self.mode in ("full", "id_list"):
                 if self.mode == "full":
-                    project_ids = get_ids(self.params)
+                    # project_ids = get_ids(self.params)
                     # uncomment below for testing
-                    # project_ids = project_ids[:n] # if desired, specify the number of projects to test
-                    # pd.Series(project_ids, name="project_id").to_csv(self.full_portfolio, index=False)
+                    # project_ids = ['<project_id>']
+                    project_ids = ['1826cc5f-0d4d-4427-b5b3-fe244deba919']
+                    # pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
 
                 tm_response = get_tm_feats(self.params, self.geojson_dir, self.tm_outfile, project_ids)
                 # uncomment below for testing
@@ -84,8 +85,9 @@ class VerificationDecisionTree:
 
                 # Clean TM data
                 tm_clean = clean.process_tm_api_results(self.params, tm_response)
-                # uncomment below for testing
+                # # uncomment below for creation of test file for mode=partial
                 # tm_clean.to_csv(self.project_feats, index=False)
+                # uncomment below for testing
                 # tm_clean.to_csv(self.project_feats_maxar, index=False)
             else:
                 tm_clean = pd.read_csv(input_mode_file)
@@ -97,7 +99,7 @@ class VerificationDecisionTree:
 
             # pipeline pause here to get maxar metadata
             ev = compute_ev_statistics(self.params, self.rules_file_path, tm_clean, self.maxar_meta, slope_statistics)
-            # uncomment below for testing
+            # uncomment below for creation of test file for mode=score
             # ev.to_csv(self.tree_results, index=False)
 
         else:

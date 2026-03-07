@@ -1,4 +1,6 @@
 import os
+import shutil
+
 import yaml
 
 from decision_tree.tools import get_project_root
@@ -18,11 +20,14 @@ def get_opentopo_api_key(params):
     return api_key
 
 
-def delete_scratch_file(sub_folder, filename):
-    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", sub_folder, filename)
+def delete_file(folder, filename):
+    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", folder, filename)
     if os.path.isfile(scratch_file_path1):
         os.remove(scratch_file_path1)
 
+def delete_folder(folder):
+    if os.path.isdir(folder):
+        shutil.rmtree(folder)
 
 def delete_source_geojsons_file(filename):
     scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "geojsons", filename)

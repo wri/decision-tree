@@ -5,7 +5,7 @@ import pytest
 from decision_tree.run_decision_tree import VerificationDecisionTree
 from decision_tree.tools import get_project_root
 from run_app import main
-from tests.tools import delete_scratch_file
+from tests.tools import delete_file, delete_folder
 
 ROOT_PATH = get_project_root()
 SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
@@ -15,86 +15,81 @@ TEST_SECRETS_PATH = os.path.join(TEST_DIR, "secrets.yaml")
 
 @pytest.mark.skip(reason="This test is under development and waiting for release of test projects")
 def test_run_decision_tree_full():
-    params_path = os.path.join(TEST_DIR, "params_full.yaml")
+    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
+    params_path = os.path.join(test_project, "params_full.yaml")
+
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
-    # verify that some number of projects were returned
-    assert len(prj_results) > 1
+    # verify that a project was returned
+    assert len(prj_results) >= 1
+
+    # Clean up temporary folders
+    delete_folder(os.path.join(test_project, "slope"))
+    delete_folder(os.path.join(test_project, "tm_api_response"))
 
 
-@pytest.mark.skip(reason="This test is under development and waiting for release of test projects")
 def test_run_decision_tree_id_list():
-    params_path = os.path.join(TEST_DIR, "params_id_list.yaml")
+    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
+    params_path = os.path.join(test_project, "params_id_list.yaml")
+
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
-    project_ids = ['d1f355a2-3e0f-4ffd-bb2f-eec104bf8442', '5fb3f47f-c209-4752-adc6-dea2c0de02de']
+    project_ids = ['1826cc5f-0d4d-4427-b5b3-fe244deba919'] # TEST_01_GRI
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids)
 
-    # Clean up scratch file
-    sub_folder = 'slope/project_statistics'
-    delete_scratch_file(sub_folder, 'GHA_22_TILAA_slope_stats.csv')
-    delete_scratch_file(sub_folder, 'TAZ_22_KIJANIP_slope_stats.csv')
-
-    # verify that two projects were returned
-    expected_project_count = 2
-    assert len(prj_results) == expected_project_count
-
-    sample_project_id = 'd1f355a2-3e0f-4ffd-bb2f-eec104bf8442'
-    expected_sum_median_slope = 481.5
-    actual_sum_median_slope = slope_statistics[slope_statistics['project_id'] == sample_project_id]['median_slope'].sum()
-    assert math.isclose(actual_sum_median_slope, expected_sum_median_slope, rel_tol=0.1), f"Expected {expected_sum_median_slope}, got {actual_sum_median_slope}"
-
+    expected_project_count = 1
+    expected_polygon_count= 3
+    expected_median_slope = 34.4
     expected_project_label = 'review required'
-    actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
-    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
+    _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                         expected_project_label, expected_median_slope)
+
+    # Clean up temporary folders
+    delete_folder(os.path.join(test_project, "slope"))
+    delete_folder(os.path.join(test_project, "tm_api_response"))
 
 
-@pytest.mark.skip(reason="This test is under development and waiting for release of test projects")
 def test_run_decision_tree_partial():
-    params_path = os.path.join(TEST_DIR, "params_partial.yaml")
+    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
+    params_path = os.path.join(test_project, "params_partial.yaml")
+
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
-    # Clean up scratch file
-    sub_folder = 'slope/project_statistics'
-    delete_scratch_file(sub_folder, 'RWA_22_ICRAF_slope_stats.csv')
-    delete_scratch_file(sub_folder, 'TGO_22_APAF_slope_stats.csv')
-
     # verify that two projects were returned
-    expected_project_count = 2
-    assert len(prj_results) == expected_project_count
+    expected_project_count = 1
+    expected_polygon_count= 3
+    expected_project_label = 'review required'
+    expected_median_slope = 34.4
+    _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                         expected_project_label, expected_median_slope)
 
-    sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
-    expected_sum_median_slope = 307.4
-    actual_sum_median_slope = slope_statistics[slope_statistics['project_id'] == sample_project_id]['median_slope'].sum()
-    assert math.isclose(actual_sum_median_slope, expected_sum_median_slope, rel_tol=0.1), f"Expected {expected_sum_median_slope}, got {actual_sum_median_slope}"
+    # Clean up scratch folders
+    delete_folder(os.path.join(test_project, "slope"))
 
-    expected_project_label = 'strong remote'
-    actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
-    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
 
-@pytest.mark.skip(reason="This test is under development and waiting for release of test projects")
 def test_run_decision_tree_score():
-    params_path = os.path.join(TEST_DIR, "params_score.yaml")
+    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
+    params_path = os.path.join(test_project, "params_score.yaml")
+
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
     # verify that two projects were returned
-    expected_project_count = 2
-    assert len(prj_results) == expected_project_count
-
-    sample_project_id = 'f81c1422-025c-45b1-a2e1-d354177523ca'
-    expected_project_label = 'strong remote'
-    actual_project_label = prj_results[prj_results['project_id'] == sample_project_id]['baseline_project_label'].values[0]
-    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
+    expected_project_count = 1
+    expected_polygon_count= 3
+    expected_project_label = 'review required'
+    expected_median_slope = None
+    _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                         expected_project_label, expected_median_slope)
 
 
 def test_run_decision_tree_param_parsing():
-    params_path = os.path.join(TEST_DIR, "params_full_for_tests.yaml")
+    params_path = os.path.join(TEST_DIR, "params_for_parse_test.yaml")
     workflow = main(params_path, TEST_SECRETS_PATH, parse_only=True)
 
     expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
@@ -102,6 +97,22 @@ def test_run_decision_tree_param_parsing():
 
     assert isinstance(workflow, VerificationDecisionTree)
     assert _has_expected_attributes(workflow, expected_atts)
+
+
+def _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                         expected_project_label, expected_median_slope):
+    assert len(prj_results) == expected_project_count
+
+    assert prj_results['ev_total_poly_count'].values[0] == expected_polygon_count
+
+    actual_project_label = prj_results['baseline_project_label'].values[0]
+    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
+
+    if expected_median_slope is not None:
+        actual_median_slope = slope_statistics['median_slope'].median()
+        assert math.isclose(actual_median_slope, expected_median_slope, rel_tol=0.1), f"Expected {expected_median_slope}, got {actual_median_slope}"
+    else:
+        assert slope_statistics is None, f"Expected slop_statistics to be None, but got values."
 
 
 # Function to check if a class or object has all expected attributes

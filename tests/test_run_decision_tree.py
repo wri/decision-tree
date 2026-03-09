@@ -9,7 +9,7 @@ from tests.tools import delete_file, delete_folder
 
 ROOT_PATH = get_project_root()
 SECRETS_FILE_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
-TEST_PROJECTS = os.path.join(ROOT_PATH, "data", "test_projects")
+TEST_PROJECTS = os.path.join(ROOT_PATH, "tests", "data", "test_projects")
 TEST_PARAMS_DIR = os.path.join(ROOT_PATH, "tests", "param_files")
 
 

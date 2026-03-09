@@ -8,7 +8,7 @@ from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
 
 ROOT_PATH = get_project_root()
 
-parms_path = os.path.join(ROOT_PATH, "tests", "params_full.yaml")
+parms_path = os.path.join(ROOT_PATH, "tests", "param_files", "params_full.yaml")
 with open(parms_path, 'r') as file:
     PARAMS = yaml.safe_load(file)
 

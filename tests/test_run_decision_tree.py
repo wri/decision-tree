@@ -9,14 +9,14 @@ from tests.tools import delete_file, delete_folder
 
 ROOT_PATH = get_project_root()
 SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
-TEST_DIR = os.path.join(ROOT_PATH, "tests")
-TEST_SECRETS_PATH = os.path.join(TEST_DIR, "secrets.yaml")
+TEST_PROJECTS = os.path.join(ROOT_PATH, "data", "test_projects")
+TEST_PARAMS_DIR = os.path.join(ROOT_PATH, "tests", "param_files")
 
 
 @pytest.mark.skip(reason="This option is very slow and expensive so not normally executed.")
 def test_run_decision_tree_full():
-    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
-    params_path = os.path.join(test_project, "params_full.yaml")
+    test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
+    params_path = os.path.join(TEST_PARAMS_DIR, "params_full.yaml")
 
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
@@ -31,8 +31,8 @@ def test_run_decision_tree_full():
 
 
 def test_run_decision_tree_id_list():
-    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
-    params_path = os.path.join(test_project, "params_id_list.yaml")
+    test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
+    params_path = os.path.join(TEST_PARAMS_DIR, "params_id_list.yaml")
 
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
@@ -52,8 +52,8 @@ def test_run_decision_tree_id_list():
 
 
 def test_run_decision_tree_partial():
-    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
-    params_path = os.path.join(test_project, "params_partial.yaml")
+    test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
+    params_path = os.path.join(TEST_PARAMS_DIR, "params_partial.yaml")
 
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
@@ -72,8 +72,7 @@ def test_run_decision_tree_partial():
 
 
 def test_run_decision_tree_score():
-    test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
-    params_path = os.path.join(test_project, "params_score.yaml")
+    params_path = os.path.join(TEST_PARAMS_DIR, "params_score.yaml")
 
     workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
@@ -89,8 +88,8 @@ def test_run_decision_tree_score():
 
 
 def test_run_decision_tree_param_parsing():
-    params_path = os.path.join(TEST_DIR, "params_for_parse_test.yaml")
-    workflow = main(params_path, TEST_SECRETS_PATH, parse_only=True)
+    params_path = os.path.join(TEST_PARAMS_DIR, "params_for_parse_test.yaml")
+    workflow = main(params_path, SECRETS_PATH, parse_only=True)
 
     expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
                      "maxar_meta", "tree_results", "poly_score", "prj_score"}

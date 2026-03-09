@@ -1,3 +1,5 @@
+import os
+
 import yaml
 import pandas as pd
 import json
@@ -12,13 +14,13 @@ import decision_tree.cost_calculator as price
 # from src import decision_tree as scoring, decision_tree as asana
 import decision_tree.weighted_scoring as scoring
 import decision_tree.update_asana as update_asana
-from decision_tree.tools import convert_to_os_path
+from decision_tree.tools import convert_to_os_path, load_secrets
 
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
         self.params = self._load_yaml(params_path)
-        self.secrets = self._load_yaml(secrets_path)
+        self.secrets = load_secrets(secrets_path)
         self.mode = self.params.get("mode", "full")
         self._resolve_paths()
 
@@ -76,7 +78,7 @@ class VerificationDecisionTree:
                     project_ids = ['1826cc5f-0d4d-4427-b5b3-fe244deba919']
                     # pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
 
-                tm_response = get_tm_feats(self.params, self.geojson_dir, self.tm_outfile, project_ids)
+                tm_response = get_tm_feats(self.params, self.secrets, self.geojson_dir, self.tm_outfile, project_ids)
                 # uncomment below for testing
                 # with open(self.tm_outfile, "w") as f:
                 #     json.dump(tm_response, f, indent=4)

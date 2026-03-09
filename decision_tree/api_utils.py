@@ -26,7 +26,7 @@ from tm_api_utils import pull_tm_api_data
 
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
-from decision_tree.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root, convert_to_os_path
+from decision_tree.tools import get_project_root, convert_to_os_path
 
 
 def get_ids(params):
@@ -66,7 +66,7 @@ def get_ids(params):
     return ids
 
 
-def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
+def get_tm_feats(params, secrets, geojson_dir, tm_outfile, project_ids):
     """
     Wrapper function around the TM API package.
 
@@ -86,7 +86,8 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
     out = params['outfile']
     data_version = out['data_version']
 
-    headers = get_gfw_access_token(params)
+    access_token = secrets['gfw']['gfw_access_token']
+    auth_headers = {'Authorization': f"Bearer {access_token}"}
 
     all_results = []
 
@@ -104,7 +105,7 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
             }
 
             try:
-                results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
+                results = pull_tm_api_data(url, auth_headers, api_param_dict, normalize_column_names=False)
                 if results is None:
                     print(f"No results returned for project: {project_id}")
                     progress.update(1)
@@ -192,7 +193,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     return round(percentage, 1)
 
 
-def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
+def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates
@@ -200,16 +201,9 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
     for an entire project (due to exact extract specifications) at the polygon level.
     Calculates area with high slope.
     If a polygon falls outside the DEM extent, stats default to NaN.
-
-    Parameters:
-        dem_url (str): API endpoint for DEM.
-        api_key (str): API key for authentication.
-        input_df (pd.DataFrame): DataFrame containing list of project_ids to process.
-        geojson_dir (str): Directory where per-project GeoJSON files are saved.
-        outfile (str): Output CSV file path.
     '''
     dem_url = params['opt_api']['opt_url']
-    api_key = get_opentopo_api_key(config)
+    api_key = secrets['opentopo']['opentopo_api_key']
 
     project_data_dir =  params['outfile']["project_data_folder"]
 

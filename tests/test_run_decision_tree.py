@@ -8,7 +8,7 @@ from run_app import main
 from tests.tools import delete_file, delete_folder
 
 ROOT_PATH = get_project_root()
-SECRETS_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
+SECRETS_FILE_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 TEST_PROJECTS = os.path.join(ROOT_PATH, "data", "test_projects")
 TEST_PARAMS_DIR = os.path.join(ROOT_PATH, "tests", "param_files")
 
@@ -18,7 +18,7 @@ def test_run_decision_tree_full():
     test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(TEST_PARAMS_DIR, "params_full.yaml")
 
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
@@ -34,7 +34,7 @@ def test_run_decision_tree_id_list():
     test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(TEST_PARAMS_DIR, "params_id_list.yaml")
 
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     project_ids = ['1826cc5f-0d4d-4427-b5b3-fe244deba919'] # TEST_01_GRI
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids)
@@ -55,7 +55,7 @@ def test_run_decision_tree_partial():
     test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(TEST_PARAMS_DIR, "params_partial.yaml")
 
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
@@ -74,7 +74,7 @@ def test_run_decision_tree_partial():
 def test_run_decision_tree_score():
     params_path = os.path.join(TEST_PARAMS_DIR, "params_score.yaml")
 
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
 
@@ -89,7 +89,7 @@ def test_run_decision_tree_score():
 
 def test_run_decision_tree_param_parsing():
     params_path = os.path.join(TEST_PARAMS_DIR, "params_for_parse_test.yaml")
-    workflow = main(params_path, SECRETS_PATH, parse_only=True)
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
                      "maxar_meta", "tree_results", "poly_score", "prj_score"}

@@ -13,7 +13,7 @@ TEST_DIR = os.path.join(ROOT_PATH, "tests")
 TEST_SECRETS_PATH = os.path.join(TEST_DIR, "secrets.yaml")
 
 
-@pytest.mark.skip(reason="This test is under development and waiting for release of test projects")
+@pytest.mark.skip(reason="This option is very slow and expensive so not normally executed.")
 def test_run_decision_tree_full():
     test_project = os.path.join(TEST_DIR, "data", "test_projects", "test_01_gri")
     params_path = os.path.join(test_project, "params_full.yaml")

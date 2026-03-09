@@ -1,7 +1,14 @@
 # Release notes for decision-tree
 
+## 2026/03/09
+1. Enabled tests for all options using test project
+2. Removed URL specifications from params.yaml file and moved into constants.py file.
+3. Added tm_environment option to specify whether to use prod or staging URL
+
+
 ## 2026/01/30
 1. Resolved relative paths to absolute paths
+
 
 ## 2026/01/21
 1. modified run_decision_tree.py to include two arguments on the main function, thereby allowing both manual and programmatic execution.

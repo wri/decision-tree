@@ -82,7 +82,7 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
         outfile (str): Optional path to write output JSON.
         geojson_dir (str): Optional directory to save project-level GeoJSONs.
     """
-    url = TM_PROD_URI if params['tm_api']['tm_environment'] == 'prod' else TM_STAGING_URI
+    url = TM_STAGING_URI if params['tm_api']['tm_environment'] == 'staging' else TM_PROD_URI
     out = params['outfile']
     data_version = out['data_version']
 

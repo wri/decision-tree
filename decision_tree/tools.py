@@ -22,7 +22,9 @@ def convert_to_os_path(target_dir, path_str):
 
 
 def get_gfw_access_token(params):
+    print ("getting GFW access token")
     if 'GFW_ACCESS_TOKEN' in os.environ:
+        print("hit GFW_ACCESS_TOKEN environment variable")
         access_token = os.environ['GFW_ACCESS_TOKEN']
         auth_headers = {
             'Authorization': f"Bearer {access_token}"
@@ -39,7 +41,9 @@ def get_gfw_access_token(params):
 
 
 def get_opentopo_api_key(config):
-    if 'GFW_ACCESS_TOKEN' in os.environ:
+    print("getting opentopo API key")
+    if 'OPENTOPO_API_KEY' in os.environ:
+        print("hit OPENTOPO_API_KEY environment variable")
         api_key = os.environ['OPENTOPO_API_KEY']
     else:
         api_key = config['opentopo_key']

@@ -3,8 +3,8 @@
 ## 2026/03/09
 1. Restructured secrets file for opentopo, asana, and gfw. See secrets_template.yaml file for updated format.
 2. Enabled tests for all options using test project
-3. 3.Removed URL specifications from params.yaml file and moved into constants.py file.
-4. Added tm_environment option to specify whether to use prod or staging URL
+3. params.yaml - Removed URL specifications from params.yaml file and moved into constants.py file.
+4. params.yaml - Added tm_environment option to params.yaml file to specify whether to use prod or staging URL
 
 ## 2026/01/30
 1. Resolved relative paths to absolute paths

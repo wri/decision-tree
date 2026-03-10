@@ -1,5 +1,7 @@
 import os
 import sys
+import time
+
 
 import yaml
 from pathlib import Path
@@ -87,3 +89,41 @@ def get_project_root(start_path=None, markers=None):
                 f"using markers: {markers}"
             )
         current_path = parent_path
+
+
+def file_exists_and_fresh(path, max_age_days=1):
+    """
+    Returns True if the file exists and is less than `max_age_days` old.
+    Otherwise returns False.
+    """
+    if not os.path.isfile(path):
+        return False
+
+    # Current time
+    now = time.time()
+
+    # Last modification time of the file
+    file_mtime = os.path.getmtime(path)
+
+    # Age in seconds
+    age_seconds = now - file_mtime
+
+    # Convert days to seconds
+    max_age_seconds = max_age_days * 24 * 60 * 60
+
+    return age_seconds < max_age_seconds
+
+
+def create_folder_if_not_exists(folder_path):
+    """
+    Creates a folder if it does not already exist.
+
+    Args:
+        folder_path (str): The path of the folder to create.
+    """
+    try:
+        # os.makedirs with exist_ok=True will not raise an error if the folder exists
+        os.makedirs(folder_path, exist_ok=True)
+        print(f"Folder ready at: {folder_path}")
+    except OSError as e:
+        print(f"Error creating folder '{folder_path}': {e}")

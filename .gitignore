@@ -7,3 +7,4 @@ data*
 .idea*
 *scratch_files
 secrets.yaml
+*.egg-info

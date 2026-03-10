@@ -8,3 +8,4 @@ data*
 *scratch_files
 secrets.yaml
 *.egg-info
+local*

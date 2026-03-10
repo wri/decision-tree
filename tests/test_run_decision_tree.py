@@ -1,11 +1,10 @@
-import math
 import os
 import pytest
 
 from decision_tree.run_decision_tree import VerificationDecisionTree
 from decision_tree.tools import get_project_root
 from run_app import main
-from tests.tools import delete_file, delete_folder
+from tests.tools import delete_folder, has_expected_project_ev_values
 
 ROOT_PATH = get_project_root()
 SECRETS_FILE_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
@@ -45,8 +44,8 @@ def test_run_decision_tree_id_list():
     expected_polygon_count= 3
     expected_median_slope = 34.4
     expected_project_label = 'review required'
-    _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                         expected_project_label, expected_median_slope)
+    has_expected_project_ev_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                                   expected_project_label, expected_median_slope)
 
     # Clean up temporary folders
     delete_folder(os.path.join(test_project, "slope"))
@@ -66,8 +65,8 @@ def test_run_decision_tree_partial():
     expected_polygon_count= 3
     expected_project_label = 'review required'
     expected_median_slope = 34.4
-    _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                         expected_project_label, expected_median_slope)
+    has_expected_project_ev_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                                   expected_project_label, expected_median_slope)
 
     # Clean up scratch folders
     delete_folder(os.path.join(test_project, "slope"))
@@ -85,8 +84,8 @@ def test_run_decision_tree_score():
     expected_polygon_count= 3
     expected_project_label = 'review required'
     expected_median_slope = None
-    _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                         expected_project_label, expected_median_slope)
+    has_expected_project_ev_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
+                                   expected_project_label, expected_median_slope)
 
 
 def test_run_decision_tree_param_parsing():
@@ -98,22 +97,6 @@ def test_run_decision_tree_param_parsing():
 
     assert isinstance(workflow, VerificationDecisionTree)
     assert _has_expected_attributes(workflow, expected_atts)
-
-
-def _has_expected_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                         expected_project_label, expected_median_slope):
-    assert len(prj_results) == expected_project_count
-
-    assert prj_results['ev_total_poly_count'].values[0] == expected_polygon_count
-
-    actual_project_label = prj_results['baseline_project_label'].values[0]
-    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
-
-    if expected_median_slope is not None:
-        actual_median_slope = slope_statistics['median_slope'].median()
-        assert math.isclose(actual_median_slope, expected_median_slope, rel_tol=0.1), f"Expected {expected_median_slope}, got {actual_median_slope}"
-    else:
-        assert slope_statistics is None, f"Expected slop_statistics to be None, but got values."
 
 
 # Function to check if a class or object has all expected attributes

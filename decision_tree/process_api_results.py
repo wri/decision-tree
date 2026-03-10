@@ -98,18 +98,22 @@ def missing_features(df, drop=False):
     
 def resolve_multipractice(df):
     """
-    Resolves projects where a single row contains a multi-practice entry by 
-    replacing it with the consistent single-practice value used in other rows 
-    of the same project.
+    Resolve projects where one row has multiple practices and the other rows
+    in the same project consistently use a single practice.
 
-    Only applies when:
-      - The project has exactly one multi-practice row.
-      - All other rows in the project use the same single practice.
+    This function assumes:
+    - single-practice rows contain scalar strings like 'tree-planting'
+    - multi-practice rows contain a delimiter like '|', for example
+      'direct-seeding|tree-planting'
+
+    A multi-practice row is updated only when:
+    - the project has exactly one multi-practice row
+    - all other rows in that project share the same single practice
     """
     df = df.copy()
-    df['is_multipractice'] = df['practice'].astype(str).str.contains(',', na=False).astype(bool)
-    
-    # If there are no multipractice rows at all, just return
+    df['is_multipractice'] = df['practice'].astype(str).str.contains(r'\|', na=False)
+
+    # If there are no multi-practice rows, return unchanged
     if not df['is_multipractice'].any():
         print("No multi-practice rows found; nothing to resolve.")
         df.drop(columns='is_multipractice', inplace=True)
@@ -119,16 +123,19 @@ def resolve_multipractice(df):
 
     for project_id, group in df.groupby('project_id'):
         multipractice_rows = group[group['is_multipractice']]
-        singlepractice_rows = group[~group['is_multipractice'].astype(bool)]
+        singlepractice_rows = group[~group['is_multipractice']]
 
+        # Only resolve projects with one multi-practice row and 
+        # at least one single-practice row
         if len(multipractice_rows) == 1 and len(singlepractice_rows) > 0:
-            unique_single = singlepractice_rows['practice'].apply(tuple).unique()
+            unique_single = singlepractice_rows['practice'].dropna().unique()
+
+            # Only update if all single-practice rows agree on one value
             if len(unique_single) == 1:
                 consistent_value = unique_single[0]
                 idx_to_update = multipractice_rows.index[0]
                 df.at[idx_to_update, 'practice'] = consistent_value
 
-                # Get the project name from the first row
                 project_name = group['project_name'].iloc[0]
                 updated_projects.append((project_name, consistent_value))
 
@@ -136,11 +143,61 @@ def resolve_multipractice(df):
 
     if updated_projects:
         for name, val in updated_projects:
-            print(f"{name} updated one polygon to → '{val}'")
+            print(f"{name} updated one polygon to -> '{val}'")
     else:
         print("No single-row multi-practice projects were updated.")
 
     return df
+
+def normalize_practice(value):
+    """
+    Normalize practice values so they match scalar values in the rule template.
+
+    Handles:
+    - real Python lists/tuples
+    - strings that look like lists, e.g. "['tree-planting']"
+    - strings that look like tuples, e.g. "('tree-planting')"
+    - plain strings, e.g. "tree-planting"
+
+    Returns:
+    - a scalar string for single-practice cases
+    - a pipe-delimited string for multi-practice cases
+    - pd.NA for missing values
+    """
+    # Case 1: already a real Python list or tuple
+    if isinstance(value, (list, tuple)):
+        cleaned = [str(v).strip().lower() for v in value if pd.notna(v)]
+        if len(cleaned) == 1:
+            return cleaned[0]
+        return "|".join(cleaned)
+
+    # Case 2: string input
+    if isinstance(value, str):
+        s = value.strip()
+
+        # Try to parse strings that look like Python containers
+        if (s.startswith("[") and s.endswith("]")) or (s.startswith("(") and s.endswith(")")):
+            try:
+                parsed = ast.literal_eval(s)
+
+                # If parsed into a real list/tuple, clean it
+                if isinstance(parsed, (list, tuple)):
+                    cleaned = [str(v).strip().lower() for v in parsed if pd.notna(v)]
+                    if len(cleaned) == 1:
+                        return cleaned[0]
+                    return "|".join(cleaned)
+
+                # If parsed into a scalar, return it
+                return str(parsed).strip().lower()
+
+            except (ValueError, SyntaxError):
+                pass
+
+        # Otherwise treat it as a plain scalar string
+        return s.lower()
+
+    # Fallback for unexpected types
+    return str(value).strip().lower()
 
 def process_tm_api_results(params, results):
     """
@@ -206,12 +263,11 @@ def process_tm_api_results(params, results):
     raw_df.columns = raw_df.columns.str.lower()
     pre_clean_ids = list(set(raw_df['project_id']))
 
-    # Clean up start and end dates and missing info
+    # Clean up start and end dates, missing info, multipractice issues
     clean_df = clean_datetime_column(raw_df, 'plantstart')
     clean_df = missing_planting_dates(clean_df, drop_missing)
     clean_df = missing_features(clean_df, drop_missing)
-    
-    # fix multipractice issues
+    clean_df['practice'] = clean_df['practice'].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
 
     # final clean up

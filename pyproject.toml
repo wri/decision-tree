@@ -3,13 +3,13 @@ name = "decision-tree"
 version = "0.1.0"
 description = "Cleaning and analysis scripts for TerraFund portfolio data"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "asana",
     "boto3",
     "exactextract",
     "fiona",
-    "gdal==3.10.3; sys_platform == 'linux'",
+    "gdal<=3.12",
     "matplotlib",
     "geopandas",
     "pandas",
@@ -60,4 +60,9 @@ pyproj = { version = "^3.6.1", extras = ["data"] }  # Includes proj.db file
 PROJ_DATA = "${VIRTUAL_ENV}/share/proj"
 PROJ_LIB  = "${VIRTUAL_ENV}/share/proj"
 
-
+[tool.uv]
+environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64' and python_version >= '3.12'",
+  "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version == '3.12'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64' and python_version == '3.12'"
+]

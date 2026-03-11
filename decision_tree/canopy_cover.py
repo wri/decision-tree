@@ -33,10 +33,13 @@ def apply_canopy_classification(params, df):
 
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
+    baseline_range = criteria.get("baseline_range", [-365, 0])
+    ev_range = criteria.get("ev_range", [730, 1095])
 
     current_year = datetime.today().year
-    df['baseline_year'] = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
-    df['ev_year'] = pd.to_datetime(df['plantstart'], errors='coerce').dt.year + 2
+
+    df['plantstart_dt'] = pd.to_datetime(df['plantstart'], errors='coerce')
+    df['baseline_year'] = df['plantstart_dt'].dt.year
     df.loc[:, 'baseline_canopy'] = 'unknown'
     df.loc[:, 'ev_canopy'] = 'unknown'
 
@@ -54,12 +57,13 @@ def apply_canopy_classification(params, df):
     eligible = ~(invalid_years | all_ttc_nan)
 
     for idx, row in df[eligible].iterrows():
-
-        year = row['baseline_year']
+        plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_year = year - 1
+        baseline_target_date = plant_date + pd.Timedelta(days=baseline_range[0])
+        baseline_year = int(baseline_target_date.year)
         baseline_col = f'ttc_{baseline_year}'
+
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):
             val = row[baseline_col]
             df.at[idx, 'baseline_canopy'] = 'closed' if val > canopy_thresh else 'open'
@@ -67,19 +71,17 @@ def apply_canopy_classification(params, df):
             df.at[idx, 'baseline_canopy'] = 'investigate'
 
         # EV classification
-        plant_date = pd.to_datetime(row['plantstart'], errors='coerce')
         days_since_planting = (datetime.today() - plant_date).days
 
-        if days_since_planting < 730:
+        if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:
-            ev_year = year + 2
-            valid_ev_cols = [col for col in ttc_cols if int(col[4:]) >= ev_year and pd.notna(row[col])]
-            if valid_ev_cols:
-                closest_ev = min(valid_ev_cols, key=lambda col: int(col[4:]))
-                val = row[closest_ev]
+            ev_target_date = plant_date + pd.Timedelta(days=ev_range[0])
+            ev_year = int(ev_target_date.year)
+            ev_col = f'ttc_{ev_year}'
+            if ev_col in ttc_cols and pd.notna(row[ev_col]):
+                val = row[ev_col]
                 df.at[idx, 'ev_canopy'] = 'closed' if val > canopy_thresh else 'open'
             else:
                 df.at[idx, 'ev_canopy'] = 'investigate'
-   
     return df

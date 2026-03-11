@@ -44,8 +44,10 @@ def test_run_decision_tree_id_list():
     expected_polygon_count= 3
     expected_median_slope = 34.4
     expected_project_label = 'review required'
-    has_expected_project_ev_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                                   expected_project_label, expected_median_slope)
+    expected_baseline_total = 19.8
+    expected_ev_total = 19.8
+    has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
+                                   expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
     # Clean up temporary folders
     delete_folder(os.path.join(test_project, "slope"))
@@ -65,8 +67,10 @@ def test_run_decision_tree_partial():
     expected_polygon_count= 3
     expected_project_label = 'review required'
     expected_median_slope = 34.4
-    has_expected_project_ev_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                                   expected_project_label, expected_median_slope)
+    expected_baseline_total = 19.8
+    expected_ev_total = 19.8
+    has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
+                                   expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
     # Clean up scratch folders
     delete_folder(os.path.join(test_project, "slope"))
@@ -84,8 +88,10 @@ def test_run_decision_tree_score():
     expected_polygon_count= 3
     expected_project_label = 'review required'
     expected_median_slope = None
-    has_expected_project_ev_values(slope_statistics, prj_results, expected_project_count, expected_polygon_count,
-                                   expected_project_label, expected_median_slope)
+    expected_baseline_total = 19.8
+    expected_ev_total = 19.8
+    has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
+                                   expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
 
 def test_run_decision_tree_param_parsing():

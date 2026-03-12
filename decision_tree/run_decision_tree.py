@@ -1,6 +1,6 @@
 import yaml
 import pandas as pd
-
+import json
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats, get_ids
 import decision_tree.process_api_results as clean
@@ -68,17 +68,16 @@ class VerificationDecisionTree:
                 input_mode_file = self.tree_results
 
         if self.mode in ["full", "id_list", "partial"]:
-            if self.mode in ("full", "id_list"):
-                if self.mode == "full":
-                    project_ids = get_ids(self.params)
+            if self.mode == "full":
+                project_ids = get_ids(self.params)
                     # uncomment below for testing
                     # project_ids = project_ids[:n] # if desired, specify the number of projects to test
-                    # pd.Series(project_ids, name="project_id").to_csv(self.full_portfolio, index=False)
+                pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
 
                 tm_response = get_tm_feats(self.params, self.geojson_dir, self.tm_outfile, project_ids)
                 # uncomment below for testing
-                # with open(self.tm_outfile, "w") as f:
-                #     json.dump(tm_response, f, indent=4)
+                with open(self.tm_outfile, "w") as f:
+                    json.dump(tm_response, f, indent=4)
                 # with open(self.tm_outfile, "r") as f:
                 #     tm_response = json.load(f)
 

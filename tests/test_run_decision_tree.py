@@ -1,12 +1,13 @@
 import os
 import pytest
+from shared_library.os_tools import remove_folder
 
 from decision_tree.run_decision_tree import VerificationDecisionTree
-from decision_tree.tools import get_project_root
+from shared_library.os_tools import get_project_root_dir
 from run_app import main
-from tests.tools import delete_folder, has_expected_project_ev_values
+from tests.tools import has_expected_project_ev_values
 
-ROOT_PATH = get_project_root()
+ROOT_PATH = get_project_root_dir()
 SECRETS_FILE_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
 TEST_PROJECTS = os.path.join(ROOT_PATH, "tests", "data", "test_projects")
 TEST_PARAMS_DIR = os.path.join(ROOT_PATH, "tests", "param_files")
@@ -27,8 +28,8 @@ def test_run_decision_tree_full():
     assert len(prj_results) >= 1
 
     # Clean up temporary folders
-    delete_folder(os.path.join(test_project, "slope"))
-    delete_folder(os.path.join(test_project, "tm_api_response"))
+    remove_folder(os.path.join(test_project, "slope"))
+    remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
 def test_run_decision_tree_id_list():
@@ -50,8 +51,8 @@ def test_run_decision_tree_id_list():
                                    expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
     # Clean up temporary folders
-    delete_folder(os.path.join(test_project, "slope"))
-    delete_folder(os.path.join(test_project, "tm_api_response"))
+    remove_folder(os.path.join(test_project, "slope"))
+    remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
 def test_run_decision_tree_partial():
@@ -73,7 +74,7 @@ def test_run_decision_tree_partial():
                                    expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
     # Clean up scratch folders
-    delete_folder(os.path.join(test_project, "slope"))
+    remove_folder(os.path.join(test_project, "slope"))
 
 
 def test_run_decision_tree_score():

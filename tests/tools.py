@@ -4,19 +4,10 @@ import shutil
 
 import yaml
 
-from decision_tree.tools import get_project_root
+from shared_library.os_tools import get_project_root_dir
 
-ROOT_PATH = get_project_root()
+ROOT_PATH = get_project_root_dir()
 
-
-def delete_file(folder, filename):
-    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", folder, filename)
-    if os.path.isfile(scratch_file_path1):
-        os.remove(scratch_file_path1)
-
-def delete_folder(folder):
-    if os.path.isdir(folder):
-        shutil.rmtree(folder)
 
 def delete_source_geojsons_file(filename):
     scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "geojsons", filename)

@@ -3,10 +3,11 @@ import yaml
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats
 from decision_tree.process_api_results import process_tm_api_results
-from decision_tree.tools import get_project_root, convert_to_os_path, load_secrets
+from decision_tree.tools import convert_to_os_path, load_secrets
+from shared_library.os_tools import get_project_root_dir
 from tests.tools import delete_source_geojsons_file
 
-ROOT_PATH = get_project_root()
+ROOT_PATH = get_project_root_dir()
 
 parms_path = os.path.join(ROOT_PATH, "tests", "param_files", "params_full.yaml")
 with open(parms_path, 'r') as file:

@@ -28,7 +28,8 @@ from tm_api_utils import pull_tm_api_data
 
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
-from decision_tree.tools import get_project_root, convert_to_os_path, file_exists_and_fresh, create_folder_if_not_exists
+from decision_tree.tools import convert_to_os_path
+from shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder
 
 
 def get_ids(params):
@@ -142,8 +143,8 @@ def get_tm_feats(params, secrets, geojson_dir, tm_outfile, project_ids):
 
     if tm_outfile:
         dir = os.path.dirname(tm_outfile)
-        create_folder_if_not_exists(dir)
-        outfile_path = os.path.join(get_project_root(), tm_outfile)
+        create_folder(dir)
+        outfile_path = os.path.join(get_project_root_dir(), tm_outfile)
         with open(outfile_path, "w") as f:
             json.dump(all_results, f, indent=4)
         print(f"Results saved to {outfile_path}")
@@ -235,10 +236,10 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
 
         try:
             cached_dem_dir = convert_to_os_path(project_data_dir, "dem_cache")
-            create_folder_if_not_exists(cached_dem_dir)
+            create_folder(cached_dem_dir)
 
             cached_dem_file_path = os.path.join(cached_dem_dir, f"{name}_{data_version}.tif")
-            fresh_dem_exists = file_exists_and_fresh(cached_dem_file_path, max_age_days=1)
+            fresh_dem_exists = is_file_recent(cached_dem_file_path)
 
             if fresh_dem_exists:
                 # read cached file
@@ -298,7 +299,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
             project_results_df = pd.concat(this_project, ignore_index=True)
 
             stats_dir = os.path.dirname(stat_path)
-            create_folder_if_not_exists(stats_dir)
+            create_folder(stats_dir)
             project_results_df.to_csv(stat_path, index=False)
 
             slope_raster.close()

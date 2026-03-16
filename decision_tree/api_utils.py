@@ -27,125 +27,6 @@ from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root, convert_to_os_path
 
 
-def get_ids(params):
-    print("Requesting project IDs from TerraMatch...")
-
-    cohort = params['outfile']['cohort']
-    keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
-    url = params['tm_api']['tm_prod_url']
-    tm_auth_path = params['config']
-
-    with open(tm_auth_path) as auth_file:
-        auth = yaml.safe_load(auth_file)
-    access_token = auth['gfw_api']['access_token']
-    headers = {'Authorization': f"Bearer {access_token}"}
-    api_param_dict = {'projectCohort[]': keyword,
-                      'polygonStatus[]': 'approved',
-                      'includeTestProjects': 'false',
-                      'page[size]': '100'
-                      }
-    try:
-        results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
-
-        ids = list({
-            str(r["projectId"])
-            for r in results
-            if "projectId" in r and r["projectId"] is not None
-        })
-        if len(ids) < 1:
-            print(f"Error: only found {len(ids)} project IDs. Exiting.")
-            sys.exit(1)
-        else:
-            print(f"Found {len(ids)} project IDs for {cohort}.")
-
-    except Exception as e:
-        raise Exception(f"Error pulling project ids: {e}")
-
-    return ids
-
-
-def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
-    """
-    Wrapper function around the TM API package.
-
-    Iterates over a list of project IDs and aggregates results.
-    Saves GeoJSON locally only if geojson_dir is provided.
-    Uploads GeoJSON to S3 only if geojson_s3_bucket is set.
-    Skips local file creation entirely if only S3 is used
-
-    Parameters:
-        url (str): TerraMatch API endpoint.
-        headers (dict): Auth headers.
-        project_ids (list): List of project UUIDs.
-        outfile (str): Optional path to write output JSON.
-        geojson_dir (str): Optional directory to save project-level GeoJSONs.
-    """
-    url = params['tm_api']['tm_prod_url']
-    out = params['outfile']
-    data_version = out['data_version']
-
-    headers = get_gfw_access_token(params)
-
-    all_results = []
-
-    if geojson_dir:
-        os.makedirs(geojson_dir, exist_ok=True)
-
-    with tqdm(total=len(project_ids), desc="Pulling Projects", unit="project") as progress:
-        for project_id in project_ids:
-
-            api_param_dict = {
-                'projectId[]': project_id,
-                'polygonStatus[]': 'approved',
-                'includeTestProjects': 'false',
-                'page[size]': '100'
-            }
-
-            try:
-                results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
-                if results is None:
-                    print(f"No results returned for project: {project_id}")
-                    progress.update(1)
-                    continue
-
-                # Add project_id for traceability
-                for r in results:
-                    r['project_id'] = project_id
-
-                all_results.extend(results)
-
-            except Exception as e:
-                print(f"Error pulling project {project_id}: {e}")
-
-            try:
-                gdf = gpd.GeoDataFrame(
-                    results,
-                    geometry=[shape(feature['geometry']) for feature in results],
-                    crs='EPSG:4326'
-                )
-                project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')),
-                                    project_id)
-                filename = f"{project_name}_{data_version}.geojson"
-                gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
-            except Exception as e:
-                print(f"Geojson creation error for {project_name}: {e}")
-
-            if params['s3']['upload']:
-                upload_to_s3(params, params["config"], project_name, data_version)
-
-            progress.update(1)
-
-    if tm_outfile:
-        dir = os.path.dirname(tm_outfile)
-        _create_folder_if_not_exists(dir)
-        outfile_path = os.path.join(get_project_root(), tm_outfile)
-        with open(outfile_path, "w") as f:
-            json.dump(all_results, f, indent=4)
-        print(f"Results saved to {outfile_path}")
-
-    return all_results
-
-
 def _create_folder_if_not_exists(folder_path):
     """
     Creates a folder if it does not already exist.
@@ -160,6 +41,105 @@ def _create_folder_if_not_exists(folder_path):
     except OSError as e:
         print(f"Error creating folder '{folder_path}': {e}")
 
+def get_tm_feats(params, geojson_dir, tm_outfile):
+    """
+    Wrapper function around the TM API package.
+
+    Pulls all approved site polygons for the cohort in a single bulk request.
+    Saves results to JSON if tm_outfile is provided.
+    Saves project-level GeoJSONs separately if geojson_dir is provided.
+    Uploads project GeoJSONs to S3 only if params['s3']['upload'] is True.
+
+    Parameters:
+        params (dict): Pipeline parameters/config.
+        geojson_dir (str): Optional directory to save project-level GeoJSONs.
+        tm_outfile (str): Optional path to write full output JSON.
+
+    Returns:
+        list: All API results across all projects in the cohort.
+    """
+    print("Requesting project data from TerraMatch...")
+
+    url = params['tm_api']['tm_prod_url']
+    out = params['outfile']
+    cohort = out['cohort']
+    data_version = out['data_version']
+
+    keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
+    headers = get_gfw_access_token(params)
+
+    api_param_dict = {
+        'projectCohort[]': keyword,
+        'polygonStatus[]': 'approved',
+        'includeTestProjects': 'false',
+        'page[size]': '100'
+    }
+
+    try:
+        all_results = pull_tm_api_data(
+            url,
+            headers,
+            api_param_dict,
+            normalize_column_names=False
+        )
+
+        if all_results is None or len(all_results) < 1:
+            print(f"Error: no results returned for cohort {cohort}.")
+            sys.exit(1)
+
+    except Exception as e:
+        raise Exception(f"Error pulling TerraMatch project data: {e}")
+
+    # Add project_id for traceability
+    for r in all_results:
+        r['project_id'] = r.get('projectId')
+
+    # Save full JSON output
+    if tm_outfile:
+        dir = os.path.dirname(tm_outfile)
+        _create_folder_if_not_exists(dir)
+        outfile_path = os.path.join(get_project_root(), tm_outfile)
+        with open(outfile_path, "w") as f:
+            json.dump(all_results, f, indent=4)
+        print(f"Results saved to {outfile_path}")
+
+    # Save project-scale GeoJSONs if requested
+    if geojson_dir:
+        os.makedirs(geojson_dir, exist_ok=True)
+        print("Saving project GeoJSONs...")
+
+        # Group records by project_id
+        results_by_project = {}
+        for r in all_results:
+            project_id = r.get('projectId')
+            # set project id as the key
+            results_by_project.setdefault(project_id, []).append(r)
+
+        for project_id, results in results_by_project.items():
+            try:
+                gdf = gpd.GeoDataFrame(
+                    results,
+                    geometry=[shape(feature['geometry']) for feature in results],
+                    crs='EPSG:4326'
+                )
+                project_name = next(
+                    (r.get('projectShortName') for r in results if r.get('projectShortName')),
+                    project_id
+                )
+                filename = f"{project_name}_{data_version}.geojson"
+                gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
+
+            except Exception as e:
+                print(f"Geojson creation error for {project_name}: {e}")
+                continue
+
+            if params['s3']['upload']:
+                try:
+                    upload_to_s3(params, params["config"], project_name, data_version)
+                except Exception as e:
+                    print(f"S3 upload error for {project_name}: {e}")
+
+    return all_results
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     '''
@@ -225,7 +205,7 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
         stat_path = convert_to_os_path(project_data_dir, params['outfile']['project_stats'].format(name=name))
         if os.path.exists(stat_path):
             dfs_to_concat.append(pd.read_csv(stat_path))
-            print(f"{name} already processed, skipping. Data available in {stat_path}")
+            print(f"{name} already processed, skipping.") #Data available in {stat_path}")
             continue
         else:
             print(f"Processing {name}")

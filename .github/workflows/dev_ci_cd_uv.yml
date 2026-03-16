@@ -31,6 +31,8 @@ jobs:
 
      - name: Install UV
        uses: astral-sh/setup-uv@v6
+       with:
+          token: ${{ secrets.KENNC_REPO_PAT }} # Use the PAT stored in secrets
 
       # Authenticate git+https://github.com/... for uv/pip
      - name: Configure Git auth for private GitHub deps

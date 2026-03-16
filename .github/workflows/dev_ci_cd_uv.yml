@@ -29,10 +29,13 @@ jobs:
           token: ${{ secrets.KENNC_REPO_PAT }} # Use the PAT stored in secrets
           path: terramatch-researcher-api
 
+       env:
+        GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
+        OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
+        KENNC_REPO_PAT: ${{ secrets.KENNC_REPO_PAT }}
+        
      - name: Install UV
        uses: astral-sh/setup-uv@v6
-       with:
-          token: ${{ secrets.KENNC_REPO_PAT }} # Use the PAT stored in secrets
 
       # Authenticate git+https://github.com/... for uv/pip
      - name: Configure Git auth for private GitHub deps
@@ -54,8 +57,4 @@ jobs:
          aws-region: us-east-1
 
      - name: Run Tests
-       env:
-        GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
-        OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
-        KENNC_REPO_PAT: ${{ secrets.KENNC_REPO_PAT }}
        run: uv run pytest tests/

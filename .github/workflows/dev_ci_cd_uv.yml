@@ -10,6 +10,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
+      OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
+      KENNC_REPO_PAT: ${{ secrets.KENNC_REPO_PAT }}
     defaults:
       run:
         shell: bash -l {0}
@@ -29,11 +33,6 @@ jobs:
           token: ${{ secrets.KENNC_REPO_PAT }} # Use the PAT stored in secrets
           path: terramatch-researcher-api
 
-       env:
-        GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
-        OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
-        KENNC_REPO_PAT: ${{ secrets.KENNC_REPO_PAT }}
-        
      - name: Install UV
        uses: astral-sh/setup-uv@v6
 

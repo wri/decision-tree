@@ -214,11 +214,11 @@ def process_tm_api_results(params, results):
     """
     drop_missing = params['criteria']['drop_missing']
     extracted_data = []
-    input_ids = {project.get('project_id') for project in results if project.get('project_id')}
+    input_ids = {project.get('projectId') for project in results if project.get('projectId')}
 
     # Iterate over each project to extract project details & tree cover statistics
     for project in results:
-        project_id = project.get('project_id')
+        project_id = project.get('projectId')
         poly_id = project.get('poly_id')
         site_id = project.get('siteId')
         project_name = project.get('projectShortName')
@@ -272,7 +272,11 @@ def process_tm_api_results(params, results):
 
     # final clean up
     output_ids = list(set(clean_df['project_id']))
-    assert len(input_ids) == len(pre_clean_ids) == len(output_ids)
+    assert len(input_ids) == len(pre_clean_ids) == len(output_ids), (
+        f"input: {len(input_ids)}, "
+        f"preclean: {len(pre_clean_ids)}, "
+        f"output: {len(output_ids)}"
+    )
 
     missing_projects = input_ids - set(clean_df['project_id'])
     if missing_projects:

@@ -169,6 +169,23 @@ There is currently no orchestration (manual trigger via CLI) but this pipeline n
 
 can create a requirements.txt when the time comes.
 
+### VS Code Dev Container
+
+This repository includes a VS Code dev container at [.devcontainer/devcontainer.json](./.devcontainer/devcontainer.json). It builds a Python 3.12 development image and installs `gdal` and `uv` during the image build so you can work in a consistent Linux environment.
+
+To use it in VS Code:
+
+1. Install a container runtime (if you don't have one) and start it:
+   [Docker Desktop install docs](https://docs.docker.com/desktop/setup/install/mac-install/) or
+   [Podman install docs](https://podman.io/docs/installation)
+2. Install the [`Dev Containers` VS Code extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
+3. Open this repository in VS Code.
+4. Run `Dev Containers: Reopen in Container` from the [Command Palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette).
+
+Once VS Code finishes building the container, you should be connected to the dev container and able to run the code within it. The first time you build the container, it may take some time to install all dependencies.
+
+If dependency resolution changes, rebuild the container with `Dev Containers: Rebuild Container`.
+
 ## 🔍 Observability
 
 ### Logging

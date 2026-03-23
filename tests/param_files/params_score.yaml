@@ -1,5 +1,5 @@
 config: secrets.yaml
-mode: partial
+mode: score
 
 s3:
   upload: false
@@ -16,8 +16,7 @@ opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
 
 tm_api:
-  tm_staging_url: https://api-staging.terramatch.org/research/v3/sitePolygons?  
-  tm_prod_url: https://api.terramatch.org/research/v3/sitePolygons?
+  tm_environment: prod # prod or staging
 
 criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
@@ -36,10 +35,10 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 07-14-2025 # 06-30-2025
+  data_version: 03-05-2026
   experiment_id: exp1
   cohort: c1
-  project_data_folder: 'tests/data'
+  project_data_folder: 'tests/data/test_projects/test_01_gri'
   # file paths are relative to the project_data_folder under the project root
   portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: geojsons/

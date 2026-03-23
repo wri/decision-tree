@@ -3,14 +3,16 @@ import yaml
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats
 from decision_tree.process_api_results import process_tm_api_results
-from decision_tree.tools import get_project_root, convert_to_os_path
-from tests.tools import get_opentopo_api_key, delete_source_geojsons_file
+from decision_tree.tools import convert_to_os_path, load_secrets
+from shared_library.os_tools import get_project_root_dir
+from tests.tools import delete_source_geojsons_file
 
-ROOT_PATH = get_project_root()
+ROOT_PATH = get_project_root_dir()
 
-parms_path = os.path.join(ROOT_PATH, "tests", "params_full.yaml")
+parms_path = os.path.join(ROOT_PATH, "tests", "param_files", "params_full.yaml")
 with open(parms_path, 'r') as file:
     PARAMS = yaml.safe_load(file)
+SECRETS = load_secrets(os.path.join(ROOT_PATH, "secrets.yaml"))
 
 
 def test_tm_features():
@@ -49,20 +51,15 @@ def test_slope_statistics(tmp_path):
     features = _get_project_tm_features(project_id)
     cleaned_features = process_tm_api_results(PARAMS, features)
 
-    # get open_topo api key
-    opentopo_key = get_opentopo_api_key(PARAMS)
-    config = {"opentopo_key": opentopo_key}
-
     # Specify csv-path to temp directory
     sub_dir = os.path.join(tmp_path, "test_slope_stats.csv")
     PARAMS['outfile']['project_stats'] = sub_dir
 
-    # TODO Why are there so many duplicates?
     outfile = PARAMS['outfile']
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    slope_statistics = opentopo_pull_wrapper(PARAMS, config, geojson_dir, cleaned_features)
+    slope_statistics = opentopo_pull_wrapper(PARAMS, SECRETS, geojson_dir, cleaned_features)
 
     # cleanup
     delete_source_geojsons_file('KEN_22_EFK_07-14-2025.geojson')
@@ -82,5 +79,5 @@ def _get_project_tm_features(project_id):
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
     tm_outfile = convert_to_os_path(project_data_dir, outfile['tm_response'].format(cohort=outfile['cohort'], data_version=data_v))
 
-    features = get_tm_feats(PARAMS, geojson_dir, tm_outfile, [project_id])
+    features = get_tm_feats(PARAMS, SECRETS, geojson_dir, tm_outfile, [project_id])
     return features

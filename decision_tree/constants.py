@@ -17,3 +17,6 @@ fixed_cols = [
 ]
 
 DESIRED_COLS = fixed_cols + ttc_years
+
+TM_STAGING_URI = 'https://api-staging.terramatch.org/research/v3/sitePolygons?' # not currently used
+TM_PROD_URI = 'https://api.terramatch.org/research/v3/sitePolygons?'

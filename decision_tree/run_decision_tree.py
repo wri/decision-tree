@@ -1,6 +1,8 @@
+import os
+
 import yaml
 import pandas as pd
-
+import json
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats, get_ids
 import decision_tree.process_api_results as clean
@@ -12,13 +14,13 @@ import decision_tree.cost_calculator as price
 # from src import decision_tree as scoring, decision_tree as asana
 import decision_tree.weighted_scoring as scoring
 import decision_tree.update_asana as update_asana
-from decision_tree.tools import convert_to_os_path
+from decision_tree.tools import convert_to_os_path, load_secrets
 
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
         self.params = self._load_yaml(params_path)
-        self.secrets = self._load_yaml(secrets_path)
+        self.secrets = load_secrets(secrets_path)
         self.mode = self.params.get("mode", "full")
         self._resolve_paths()
 
@@ -70,12 +72,13 @@ class VerificationDecisionTree:
         if self.mode in ["full", "id_list", "partial"]:
             if self.mode in ("full", "id_list"):
                 if self.mode == "full":
-                    project_ids = get_ids(self.params)
+                    # project_ids = get_ids(self.params)
                     # uncomment below for testing
-                    # project_ids = project_ids[:n] # if desired, specify the number of projects to test
-                    # pd.Series(project_ids, name="project_id").to_csv(self.full_portfolio, index=False)
+                    # project_ids = ['<project_id>']
+                    project_ids = ['1826cc5f-0d4d-4427-b5b3-fe244deba919']
+                    # pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
 
-                tm_response = get_tm_feats(self.params, self.geojson_dir, self.tm_outfile, project_ids)
+                tm_response = get_tm_feats(self.params, self.secrets, self.geojson_dir, self.tm_outfile, project_ids)
                 # uncomment below for testing
                 # with open(self.tm_outfile, "w") as f:
                 #     json.dump(tm_response, f, indent=4)
@@ -84,8 +87,9 @@ class VerificationDecisionTree:
 
                 # Clean TM data
                 tm_clean = clean.process_tm_api_results(self.params, tm_response)
-                # uncomment below for testing
+                # # uncomment below for creation of test file for mode=partial
                 # tm_clean.to_csv(self.project_feats, index=False)
+                # uncomment below for testing
                 # tm_clean.to_csv(self.project_feats_maxar, index=False)
             else:
                 tm_clean = pd.read_csv(input_mode_file)
@@ -97,7 +101,7 @@ class VerificationDecisionTree:
 
             # pipeline pause here to get maxar metadata
             ev = compute_ev_statistics(self.params, self.rules_file_path, tm_clean, self.maxar_meta, slope_statistics)
-            # uncomment below for testing
+            # uncomment below for creation of test file for mode=score
             # ev.to_csv(self.tree_results, index=False)
 
         else:
@@ -142,4 +146,11 @@ def compute_project_results(params, ev):
 
     return poly_results, prj_results
 
+def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
+    workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
+    if parse_only:
+        return workflow
+    else:
+        workflow.run_decision_tree(None)
+        return None
 

@@ -1,3 +1,5 @@
+import shutil
+
 import requests
 import yaml
 import pandas as pd
@@ -23,8 +25,11 @@ from tqdm import tqdm
 from exactextract import exact_extract
 
 from tm_api_utils import pull_tm_api_data
+
+from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
-from decision_tree.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root, convert_to_os_path
+from decision_tree.tools import convert_to_os_path
+from shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder
 
 
 def get_ids(params):
@@ -32,8 +37,8 @@ def get_ids(params):
 
     cohort = params['outfile']['cohort']
     keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
-    url = params['tm_api']['tm_prod_url']
-    tm_auth_path = params['config']
+    url = TM_PROD_URI
+    tm_auth_path = os.path.abspath(params['config'])
 
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
@@ -64,7 +69,7 @@ def get_ids(params):
     return ids
 
 
-def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
+def get_tm_feats(params, secrets, geojson_dir, tm_outfile, project_ids):
     """
     Wrapper function around the TM API package.
 
@@ -80,11 +85,12 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
         outfile (str): Optional path to write output JSON.
         geojson_dir (str): Optional directory to save project-level GeoJSONs.
     """
-    url = params['tm_api']['tm_prod_url']
+    url = TM_STAGING_URI if params['tm_api']['tm_environment'] == 'staging' else TM_PROD_URI
     out = params['outfile']
     data_version = out['data_version']
 
-    headers = get_gfw_access_token(params)
+    access_token = secrets['gfw']['gfw_access_token']
+    auth_headers = {'Authorization': f"Bearer {access_token}"}
 
     all_results = []
 
@@ -102,7 +108,7 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
             }
 
             try:
-                results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
+                results = pull_tm_api_data(url, auth_headers, api_param_dict, normalize_column_names=False)
                 if results is None:
                     print(f"No results returned for project: {project_id}")
                     progress.update(1)
@@ -137,28 +143,13 @@ def get_tm_feats(params, geojson_dir, tm_outfile, project_ids):
 
     if tm_outfile:
         dir = os.path.dirname(tm_outfile)
-        _create_folder_if_not_exists(dir)
-        outfile_path = os.path.join(get_project_root(), tm_outfile)
+        create_folder(dir)
+        outfile_path = os.path.join(get_project_root_dir(), tm_outfile)
         with open(outfile_path, "w") as f:
             json.dump(all_results, f, indent=4)
         print(f"Results saved to {outfile_path}")
 
     return all_results
-
-
-def _create_folder_if_not_exists(folder_path):
-    """
-    Creates a folder if it does not already exist.
-
-    Args:
-        folder_path (str): The path of the folder to create.
-    """
-    try:
-        # os.makedirs with exist_ok=True will not raise an error if the folder exists
-        os.makedirs(folder_path, exist_ok=True)
-        print(f"Folder ready at: {folder_path}")
-    except OSError as e:
-        print(f"Error creating folder '{folder_path}': {e}")
 
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
@@ -190,7 +181,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     return round(percentage, 1)
 
 
-def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
+def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates
@@ -198,16 +189,9 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
     for an entire project (due to exact extract specifications) at the polygon level.
     Calculates area with high slope.
     If a polygon falls outside the DEM extent, stats default to NaN.
-
-    Parameters:
-        dem_url (str): API endpoint for DEM.
-        api_key (str): API key for authentication.
-        input_df (pd.DataFrame): DataFrame containing list of project_ids to process.
-        geojson_dir (str): Directory where per-project GeoJSON files are saved.
-        outfile (str): Output CSV file path.
     '''
     dem_url = params['opt_api']['opt_url']
-    api_key = get_opentopo_api_key(config)
+    api_key = secrets['opentopo']['opentopo_api_key']
 
     project_data_dir =  params['outfile']["project_data_folder"]
 
@@ -251,14 +235,27 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
             slope_path = slope_tmp.name
 
         try:
-            # Download the DEM
-            response = requests.get(dem_url, stream=True, params=query)
-            if response.status_code != 200:
-                raise Exception(f"Error downloading DEM for project {name}: {response.text}")
+            cached_dem_dir = convert_to_os_path(project_data_dir, "dem_cache")
+            create_folder(cached_dem_dir)
 
-            with open(dem_path, 'wb') as f:
-                for chunk in response.iter_content(8192):  # 8k generally works well for chunking of data.
-                    f.write(chunk)
+            cached_dem_file_path = os.path.join(cached_dem_dir, f"{name}_{data_version}.tif")
+            fresh_dem_exists = is_file_recent(cached_dem_file_path)
+
+            if fresh_dem_exists:
+                # read cached file
+                shutil.copyfile(cached_dem_file_path, dem_path)
+            else:
+                # Download the DEM
+                response = requests.get(dem_url, stream=True, params=query)
+                if response.status_code != 200:
+                    raise Exception(f"Error downloading DEM for project {name}: {response.text}")
+
+                with open(dem_path, 'wb') as f:
+                    for chunk in response.iter_content(8192):  # 8k generally works well for chunking of data.
+                        f.write(chunk)
+
+                # write to cache file
+                shutil.copyfile(dem_path, cached_dem_file_path)
 
             if process_in_utm_coordinates:
                 site_polygons, slope_raster = _prepare_utm_features(project_polygons, dem_path)
@@ -302,7 +299,7 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
             project_results_df = pd.concat(this_project, ignore_index=True)
 
             stats_dir = os.path.dirname(stat_path)
-            _create_folder_if_not_exists(stats_dir)
+            create_folder(stats_dir)
             project_results_df.to_csv(stat_path, index=False)
 
             slope_raster.close()

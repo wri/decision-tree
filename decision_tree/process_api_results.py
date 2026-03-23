@@ -38,6 +38,7 @@ def missing_planting_dates(df, drop=False):
     '''
     Identifies where there are missing planting dates for 
     a polygon, hindering maxar metadata retrieval
+    Option to drop rows with missing dates
     '''
 
     # Count total polygons per project before filtering
@@ -68,19 +69,29 @@ def missing_planting_dates(df, drop=False):
 
     return final_df
 
-def missing_features(df, drop=False):
+def missing_features(df, drop=False, save_missing=True):
     '''
-    Identifies rows where ttc is only NaN values (no data for any years).
+    Identifies rows where ttc is only NaN values (no data for any years)
+    but only for polygons with plantstart year between 2017 and 2024 inclusive.
     Identifies rows where practice or targetsys is NaN.
     Optionally drops these rows based on the drop argument 
     and prints a statement about the count of rows affected.
+
+    ** assumption: should have a tree cover stat for all approved polygons 
+    on TM that started planting before 2024
     '''
     starting = len(df)
     ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
     
-    null_rows = df[df[ttc_cols].isna().all(axis=1)]
+    plantstart_year = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
+
+    # Only consider missing TTC for plantstart years 2017-2024 inclusive
+    eligible_ttc_mask = plantstart_year.between(2017, 2024, inclusive='both')
+    null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
     missing_practice = df[df['practice'].isna()]
     missing_targetsys = df[df['target_sys'].isna()]
+    if save_missing and not null_rows.empty:
+        null_rows.to_csv('ttc_nans.csv', index=False)
 
     print(f"⚠️ Polygons missing 'ttc': {len(null_rows)}")
     print(f"⚠️ Polygons missing 'practice': {len(missing_practice)}")

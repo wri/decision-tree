@@ -1,16 +1,11 @@
 import math
 import os
-import shutil
 
-import yaml
-
-from shared_library.os_tools import get_project_root_dir
-
-ROOT_PATH = get_project_root_dir()
+from tests.conftest import PROJECT_ROOT
 
 
 def delete_source_geojsons_file(filename):
-    scratch_file_path1 = os.path.join(ROOT_PATH, "tests", "data", "geojsons", filename)
+    scratch_file_path1 = os.path.join(PROJECT_ROOT, "tests", "data", "geojsons", filename)
     if os.path.isfile(scratch_file_path1):
         os.remove(scratch_file_path1)
 

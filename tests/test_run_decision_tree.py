@@ -3,16 +3,9 @@ import pytest
 from shared_library.os_tools import remove_folder
 
 from decision_tree.run_decision_tree import VerificationDecisionTree
-from shared_library.os_tools import get_project_root_dir
 from run_app import main
-from tests.tools import has_expected_project_ev_values
-
-ROOT_PATH = get_project_root_dir()
-SECRETS_FILE_PATH = os.path.join(ROOT_PATH, "secrets.yaml")
-TEST_PROJECTS = os.path.join(ROOT_PATH, "tests", "data", "test_projects")
-TEST_PARAMS_DIR = os.path.join(ROOT_PATH, "tests", "param_files")
-
-TEST_01_GRI_PROJECT_ID = '1826cc5f-0d4d-4427-b5b3-fe244deba919'
+from tests.conftest import TEST_PROJECTS, TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from tests.dt_test_tools import has_expected_project_ev_values
 
 
 @pytest.mark.skip(reason="This option is very slow and expensive so not normally executed.")

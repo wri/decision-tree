@@ -1,6 +1,8 @@
 from datetime import date
 
-from shared_library.os_tools import get_project_root_dir
+from gri_shared_library.os_tools import get_project_root_dir
+
+# from gri_shared_library.os_tools import get_project_root_dir
 
 # Construct list of desired columns
 start_year = 2020

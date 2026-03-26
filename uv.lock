@@ -201,7 +201,7 @@ dependencies = [
     { name = "gdal", version = "3.11.5", source = { registry = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple" }, marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "gdal", version = "3.11.5", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "geopandas" },
-    { name = "git-shared-library" },
+    { name = "gri-shared-library" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "pytest" },
@@ -227,7 +227,7 @@ requires-dist = [
     { name = "gdal", marker = "sys_platform == 'linux'", specifier = "<=3.12", index = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple" },
     { name = "gdal", marker = "sys_platform == 'win32'", specifier = "<=3.12", index = "https://nathanjmcdougall.github.io/geospatial-wheels-index/" },
     { name = "geopandas" },
-    { name = "git-shared-library", git = "https://github.com/wri/gri-shared-library.git?rev=main" },
+    { name = "gri-shared-library", git = "https://github.com/wri/gri-shared-library.git?rev=main" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "pytest" },
@@ -358,9 +358,9 @@ wheels = [
 ]
 
 [[package]]
-name = "git-shared-library"
+name = "gri-shared-library"
 version = "0.1.0"
-source = { git = "https://github.com/wri/gri-shared-library.git?rev=main#6d2ea4be88e15673c320a5b5cec8810182cb24e9" }
+source = { git = "https://github.com/wri/gri-shared-library.git?rev=main#094e1e177ff38662636a9cdc87190251e555d88d" }
 dependencies = [
     { name = "boto3" },
     { name = "botocore" },

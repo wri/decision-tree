@@ -23,7 +23,7 @@ dependencies = [
     "tqdm",
     "utm",
     "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop",
-    "gri_shared_library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@main",
+    "gri-shared-library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@main",
 ]
 
 [build-system]

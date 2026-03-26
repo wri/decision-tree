@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-from shared_library.os_tools import get_project_root_dir
+from decision_tree.constants import PROJECT_ROOT
 
 # Block any directory that contains the remote repo checkout
 BLOCKED = {"terramatch-researcher-api", "tm-api-utils"}
@@ -21,9 +21,10 @@ def pytest_ignore_collect(path=None, config=None, collection_path=None):
     # Skip collecting tests if the repo name appears anywhere in the path
     return any(part in BLOCKED for part in p.parts)
 
-PROJECT_ROOT = get_project_root_dir()
 SECRETS_FILE_PATH = os.path.join(PROJECT_ROOT, "secrets.yaml")
-TEST_PROJECTS = os.path.join(PROJECT_ROOT, "tests", "data", "test_projects")
-TEST_PARAMS_DIR = os.path.join(PROJECT_ROOT, "tests", "param_files")
+DT_TEST_DATA_SUB_PATH = os.path.join('tests', 'data', 'decision_tree')
+DT_TEST_DATA_DIR = os.path.join(PROJECT_ROOT, DT_TEST_DATA_SUB_PATH)
+DT_TEST_PROJECTS = os.path.join(DT_TEST_DATA_DIR, "test_projects")
+DT_TEST_PARAMS_DIR = os.path.join(DT_TEST_DATA_DIR, "param_files")
 
 TEST_01_GRI_PROJECT_ID = '1826cc5f-0d4d-4427-b5b3-fe244deba919'

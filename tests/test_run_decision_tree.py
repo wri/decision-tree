@@ -2,16 +2,15 @@ import os
 import pytest
 from shared_library.os_tools import remove_folder
 
-from decision_tree.run_decision_tree import VerificationDecisionTree
-from run_app import main
-from tests.conftest import TEST_PROJECTS, TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
-from tests.dt_test_tools import has_expected_project_ev_values
+from decision_tree.run_decision_tree import VerificationDecisionTree, main
+from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from tools import has_expected_project_ev_values
 
 
 @pytest.mark.skip(reason="This option is very slow and expensive so not normally executed.")
 def test_run_decision_tree_full():
-    test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
-    params_path = os.path.join(TEST_PARAMS_DIR, "params_full.yaml")
+    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -26,8 +25,8 @@ def test_run_decision_tree_full():
 
 
 def test_run_decision_tree_id_list():
-    test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
-    params_path = os.path.join(TEST_PARAMS_DIR, "params_id_list.yaml")
+    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_id_list.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -49,8 +48,8 @@ def test_run_decision_tree_id_list():
 
 
 def test_run_decision_tree_partial():
-    test_project = os.path.join(TEST_PROJECTS, "test_01_gri")
-    params_path = os.path.join(TEST_PARAMS_DIR, "params_partial.yaml")
+    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_partial.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -71,7 +70,7 @@ def test_run_decision_tree_partial():
 
 
 def test_run_decision_tree_score():
-    params_path = os.path.join(TEST_PARAMS_DIR, "params_score.yaml")
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -89,7 +88,7 @@ def test_run_decision_tree_score():
 
 
 def test_run_decision_tree_param_parsing():
-    params_path = os.path.join(TEST_PARAMS_DIR, "params_for_parse_test.yaml")
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_for_parse_test.yaml")
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",

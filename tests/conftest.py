@@ -23,7 +23,9 @@ def pytest_ignore_collect(path=None, config=None, collection_path=None):
 
 PROJECT_ROOT = get_project_root_dir()
 SECRETS_FILE_PATH = os.path.join(PROJECT_ROOT, "secrets.yaml")
-TEST_PROJECTS = os.path.join(PROJECT_ROOT, "tests", "data", "test_projects")
-TEST_PARAMS_DIR = os.path.join(PROJECT_ROOT, "tests", "param_files")
+DT_TEST_DATA_SUB_PATH = os.path.join('tests', 'data', 'decision_tree')
+DT_TEST_DATA_DIR = os.path.join(PROJECT_ROOT, DT_TEST_DATA_SUB_PATH)
+DT_TEST_PROJECTS = os.path.join(DT_TEST_DATA_DIR, "test_projects")
+DT_TEST_PARAMS_DIR = os.path.join(DT_TEST_DATA_DIR, "param_files")
 
 TEST_01_GRI_PROJECT_ID = '1826cc5f-0d4d-4427-b5b3-fe244deba919'

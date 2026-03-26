@@ -4,8 +4,8 @@ from shared_library.os_tools import remove_folder
 
 from decision_tree.run_decision_tree import VerificationDecisionTree
 from run_app import main
-from tests.conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
-from tests.dt_test_tools import has_expected_project_ev_values
+from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from tools import has_expected_project_ev_values
 
 
 @pytest.mark.skip(reason="This option is very slow and expensive so not normally executed.")

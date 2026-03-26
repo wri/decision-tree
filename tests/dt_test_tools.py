@@ -1,7 +1,7 @@
 import math
 import os
 
-from tests.conftest import PROJECT_ROOT
+from decision_tree.constants import PROJECT_ROOT
 
 
 def delete_source_geojsons_file(filename):

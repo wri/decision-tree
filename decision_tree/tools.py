@@ -1,7 +1,7 @@
 import os
 import yaml
 
-from shared_library.os_tools import get_project_root_dir
+from gri_shared_library.os_tools import get_project_root_dir
 
 
 def convert_to_os_path(target_dir, path_str):

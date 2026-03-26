@@ -1,6 +1,6 @@
 import os
 import pytest
-from shared_library.os_tools import remove_folder
+from gri_shared_library.os_tools import remove_folder
 
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
 from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID

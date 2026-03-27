@@ -2,7 +2,7 @@ import yaml
 import pandas as pd
 import json
 
-from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats, get_ids
+from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.canopy_cover import apply_canopy_classification
@@ -35,71 +35,59 @@ class VerificationDecisionTree:
 
         # decision-tree input files for full or id_list mode
         self.portfolio = convert_to_os_path(project_data_dir, outfile["portfolio"].format(cohort=cohort, data_version=data_v))
-        self.tm_outfile = convert_to_os_path(project_data_dir, outfile['tm_response'].format(cohort=outfile['cohort'], data_version=data_v))
+        self.tm_raw = convert_to_os_path(project_data_dir, outfile['geoparquet'].format(data_version=data_v))
         self.maxar_meta = convert_to_os_path(project_data_dir, outfile["maxar_meta"].format(cohort=cohort, data_version=data_v))
 
         # decision-tree intermediate files
         self.geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
-        self.project_feats = convert_to_os_path(project_data_dir, outfile["feats"].format(cohort=cohort, data_version=data_v))
+        self.feats = convert_to_os_path(project_data_dir, outfile["feats"].format(cohort=cohort, data_version=data_v))
         self.project_feats_maxar = convert_to_os_path(project_data_dir, outfile["feats_maxar"].format(cohort=cohort, data_version=data_v))
         self.slope_stats = convert_to_os_path(project_data_dir, outfile["slope_stats"].format(cohort=cohort, data_version=data_v))
         self.tree_results = convert_to_os_path(project_data_dir, outfile["tree_results"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        
+        # output files
         self.poly_score = convert_to_os_path(project_data_dir, outfile["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
-
-        # decision-tree output files
         self.prj_score = convert_to_os_path(project_data_dir, outfile["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
-        self.rules_file_path = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
+        self.rules = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
 
     def run_decision_tree(self, project_ids):
-        if self.mode not in ["full", "id_list", "partial", "score"]:
+        if self.mode not in ["full", "partial", "score"]:
             raise ValueError("Invalid mode")
 
-        if self.mode in ("full", "id_list"):
-            print("Running in FULL mode — acquiring prj data from APIs.")
-            input_mode_file = None
-        else:
-            if self.mode == "partial":
-                print("Running in PARTIAL mode — using cached prj feats.")
-                input_mode_file = self.project_feats
-            else:
-                print("Running in SCORE mode — using cached tree results.")
-                input_mode_file = self.tree_results
-
-        if self.mode in ["full", "id_list", "partial"]:
+        if self.mode in ["full", "partial"]:
             if self.mode == "full":
-                project_ids = get_ids(self.params)
-                    # uncomment below for testing
-                    # project_ids = project_ids[:n] # if desired, specify the number of projects to test
-                pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
-
-                tm_response = get_tm_feats(self.params, self.geojson_dir, self.tm_outfile, project_ids)
-                # uncomment below for testing
-                with open(self.tm_outfile, "w") as f:
-                    json.dump(tm_response, f, indent=4)
-                # with open(self.tm_outfile, "r") as f:
+                print("Running in FULL mode — acquiring prj data from APIs.")
+                input_mode_file = None
+                tm_response = get_geoparquet(self.params, self.secrets, self.tm_raw, self.feats)
+                return None
+                # with open(self.tm_raw, "w") as f:
+                #     json.dump(tm_response, f, indent=4)
+                # # uncomment below for testing
+                # with open(self.tm_raw, "r") as f:
                 #     tm_response = json.load(f)
 
-                # Clean TM data
                 tm_clean = clean.process_tm_api_results(self.params, tm_response)
+                tm_clean.to_csv(self.project_feats, index=False)
                 # uncomment below for testing
-                # tm_clean.to_csv(self.project_feats, index=False)
                 # tm_clean.to_csv(self.project_feats_maxar, index=False)
             else:
+                print("Running in PARTIAL mode — using cached prj feats.")
+                input_mode_file = self.project_feats
                 tm_clean = pd.read_csv(input_mode_file)
 
             # compute slope statistics
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)
-            # uncomment below for testing
-            # slope_statistics.to_csv(self.slope_stats, index=False)
+            slope_statistics.to_csv(self.slope_stats, index=False)
 
             # pipeline pause here to get maxar metadata
-            ev = compute_ev_statistics(self.params, self.rules_file_path, tm_clean, self.maxar_meta, slope_statistics)
-            # uncomment below for testing
-            # ev.to_csv(self.tree_results, index=False)
+            ev = compute_branches(self.params, self.rules, tm_clean, self.maxar_meta, slope_statistics)
+            ev.to_csv(self.tree_results, index=False)
 
         else:
+            print("Running in SCORE mode — using cached tree results.")
+            input_mode_file = self.tree_results
             slope_statistics = None
             ev = pd.read_csv(input_mode_file)
 
@@ -107,12 +95,12 @@ class VerificationDecisionTree:
         scored = scoring.apply_scoring(self.params, ev)
         poly_results = price.calc_cost_to_verify(self.params, scored)
         # uncomment below for testing
-        # poly_results.to_csv(self.poly_score, index=False)
+        poly_results.to_csv(self.poly_score, index=False)
 
         # calculate final project scale decision
         prj_results = scoring.aggregate_project_score(self.params, scored)
         # uncomment below for testing
-        # prj_results.to_csv(self.prj_score, index=False)
+        prj_results.to_csv(self.prj_score, index=False)
 
         # uploads
         if self.params['asana']['upload']:
@@ -123,7 +111,7 @@ class VerificationDecisionTree:
         return slope_statistics, poly_results, prj_results
 
 
-def compute_ev_statistics(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
+def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
     branch_slope = apply_slope_classification(params, branch_canopy, slope_statistics)

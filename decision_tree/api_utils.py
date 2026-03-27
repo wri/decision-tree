@@ -11,6 +11,8 @@ import rasterio as rs
 import rasterio.mask
 import tempfile
 import math
+import boto3
+from urllib.parse import urlparse
 
 from rasterio.warp import calculate_default_transform, reproject
 from rasterio.enums import Resampling
@@ -40,6 +42,37 @@ def _create_folder_if_not_exists(folder_path):
         print(f"Folder ready at: {folder_path}")
     except OSError as e:
         print(f"Error creating folder '{folder_path}': {e}")
+
+def get_geoparquet(params, secrets, tm_raw, feats):
+    """
+    Download a geoparquet file from S3 with boto3, load it with GeoPandas,
+    and save it as a CSV.
+
+    Assumptions:
+    - params["outfile"]["tm_geoparquet_source"] stores the S3 path
+      like: s3://bucket/path/to/file.geoparquet
+    - tm_outfile is the CSV output path
+    - AWS auth through console credentials and profile
+    """
+
+    s3_url = params["s3"].get("geoparquet")
+    aws_profile = secrets.get("aws", {}).get("aws_profile")
+
+    # Parse s3:// url to get bucket/key
+    parsed = urlparse(s3_url)
+    if parsed.scheme != "s3":
+        raise ValueError(f"Expected s3:// URL, got: {s3_url}")
+
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
+
+    session = boto3.Session(profile_name=aws_profile)
+    s3_client = session.client("s3")
+    s3_client.download_file(bucket, key, tm_raw)
+    print(f"Downloaded to {tm_raw}")
+
+    return None
+
 
 def get_tm_feats(params, geojson_dir, tm_outfile):
     """
@@ -90,10 +123,6 @@ def get_tm_feats(params, geojson_dir, tm_outfile):
     except Exception as e:
         raise Exception(f"Error pulling TerraMatch project data: {e}")
 
-    # Add project_id for traceability
-    for r in all_results:
-        r['project_id'] = r.get('projectId')
-
     # Save full JSON output
     if tm_outfile:
         dir = os.path.dirname(tm_outfile)
@@ -101,9 +130,7 @@ def get_tm_feats(params, geojson_dir, tm_outfile):
         outfile_path = os.path.join(get_project_root(), tm_outfile)
         with open(outfile_path, "w") as f:
             json.dump(all_results, f, indent=4)
-        print(f"Results saved to {outfile_path}")
 
-    # Save project-scale GeoJSONs if requested
     if geojson_dir:
         os.makedirs(geojson_dir, exist_ok=True)
         print("Saving project GeoJSONs...")
@@ -112,25 +139,53 @@ def get_tm_feats(params, geojson_dir, tm_outfile):
         results_by_project = {}
         for r in all_results:
             project_id = r.get('projectId')
-            # set project id as the key
             results_by_project.setdefault(project_id, []).append(r)
 
         for project_id, results in results_by_project.items():
+            project_name = next(
+                (r.get('projectShortName') for r in results if r.get('projectShortName')), project_id)
+
+            valid_results = []
+            valid_geometries = []
+
+            for feature in results:
+                polygon_id = (feature.get("poly_id"))
+
+                try:
+                    geom = shape(feature["geometry"])
+                    valid_results.append(feature)
+                    valid_geometries.append(geom)
+
+                except Exception:
+                    print(
+                        f"Skipping invalid polygon: "
+                        f"project_name={project_name}, "
+                        f"project_id={project_id}, "
+                        f"polygon_id={polygon_id}"
+                    )
+                    continue
+
+            if len(valid_results) == 0:
+                print(
+                    f"No valid polygons found for project_name={project_name}, "
+                    f"project_id={project_id}. Skipping GeoJSON creation."
+                )
+                continue
+
             try:
                 gdf = gpd.GeoDataFrame(
-                    results,
-                    geometry=[shape(feature['geometry']) for feature in results],
-                    crs='EPSG:4326'
-                )
-                project_name = next(
-                    (r.get('projectShortName') for r in results if r.get('projectShortName')),
-                    project_id
+                    valid_results,
+                    geometry=valid_geometries,
+                    crs="EPSG:4326"
                 )
                 filename = f"{project_name}_{data_version}.geojson"
-                gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
+                gdf.to_file(os.path.join(geojson_dir, filename), driver="GeoJSON")
 
             except Exception as e:
-                print(f"Geojson creation error for {project_name}: {e}")
+                print(
+                    f"Geojson creation error for project_name={project_name}, "
+                    f"project_id={project_id}: {e}"
+                )
                 continue
 
             if params['s3']['upload']:

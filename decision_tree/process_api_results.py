@@ -2,6 +2,188 @@ import pandas as pd
 import ast
 import calendar
 from datetime import datetime
+import geopandas as gpd
+from shapely.validation import make_valid
+import os
+import json
+
+def process_tm_results(params, results, save_geojsons=False):
+    """
+    Read GeoParquet file, flatten it into a tabular dataframe,
+    run cleaning steps, and optionally save project-level GeoJSONs.
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned dataframe for downstream decision-tree analysis.
+    """
+    out = params.get("outfile", {})
+    criteria = params.get("criteria", {})
+    drop_missing = criteria.get("drop_missing", False)
+    cohort_raw = out['cohort']
+    cohort = 'terrafund' if cohort_raw == 'c1' else 'terrafund-landscapes'
+
+    gdf = _read_geoparquet(results)
+
+    if save_geojsons:
+        geojson_dir = out.get("geojsons")
+        data_version = out.get("data_version")
+        save_project_geojsons(gdf, geojson_dir, data_version)
+
+    raw_df = flatten_tm_geoparquet(gdf, cohort)
+    raw_df = raw_df[raw_df["cohort"].apply(lambda x: cohort in x)].copy()
+
+    raw_df.columns = raw_df.columns.str.lower()
+    input_ids = set(raw_df["project_id"].dropna().unique())
+    pre_clean_ids = set(raw_df["project_id"].dropna().unique())
+
+    clean_df = clean_datetime_column(raw_df, "plantstart")
+    clean_df = missing_planting_dates(clean_df, drop_missing)
+    clean_df = missing_features(clean_df, drop_missing)
+    clean_df["practice"] = clean_df["practice"].apply(normalize_practice)
+    clean_df = resolve_multipractice(clean_df)
+
+    output_ids = set(clean_df["project_id"].dropna().unique())
+
+    # Keep this assertion only if project-level row dropping is truly not allowed.
+    # Otherwise replace with a warning block.
+    assert len(input_ids) == len(pre_clean_ids) == len(output_ids), (
+        f"input: {len(input_ids)}, "
+        f"preclean: {len(pre_clean_ids)}, "
+        f"output: {len(output_ids)}"
+    )
+
+    missing_projects = input_ids - output_ids
+    if missing_projects:
+        print(f"Missing prj ids: {missing_projects}")
+
+    return clean_df
+
+
+def _read_geoparquet(results_path):
+    """
+    Read GeoParquet and standardize column names.
+    """
+    gdf = gpd.read_parquet(results_path)
+    gdf.columns = gdf.columns.str.lower()
+    return gdf
+
+
+def flatten_tm_geoparquet(results):
+    """
+    Flatten GeoParquet rows into the tabular schema expected by the pipeline.
+
+    This function:
+    - extracts key project and polygon attributes
+    - parses the cohort field from parquet bytes into a Python list
+    - optionally filters rows to a requested cohort
+    - expands the `ttc` field into year-specific tree cover columns
+    """
+    records = []
+
+    for row in results.itertuples(index=False):
+        row_dict = row._asdict()
+
+        project_id = row_dict.get("project_id")
+        poly_id = row_dict.get("poly_id")
+        site_id = row_dict.get("site_id")
+        project_name = row_dict.get("project_name")
+        plant_start = row_dict.get("plantstart")
+        practice = row_dict.get("practice")
+        targetsys = row_dict.get("target_sys")
+        dist = row_dict.get("distr")
+        project_phase = row_dict.get("project_phase")
+        area = row_dict.get("calcarea")
+        geometry = row_dict.get("geom")
+        cohort_val = row_dict.get("cohort", b"[]")
+        cohort = json.loads(cohort_val.decode("utf-8"))
+
+        tree_cover_years = extract_tree_cover_years(row_dict)
+
+        records.append({
+            "cohort": cohort,
+            "project_id": project_id,
+            "poly_id": poly_id,
+            "site_id": site_id,
+            "project_name": project_name,
+            "geometry": geometry,
+            "plantstart": plant_start,
+            "practice": practice,
+            "target_sys": targetsys,
+            "dist": dist,
+            "project_phase": project_phase,
+            "area": area,
+            **tree_cover_years,
+        })
+
+    return pd.DataFrame(records)
+
+
+def extract_tree_cover_years(row_dict):
+    """
+    Extract tree cover values from the `ttc` field and convert them into
+    flat columns like `ttc_2021`, `ttc_2022`, etc.
+    row_dict["ttc"] is a list of tuples, where first value is the year
+    and second value is the tree cover percent
+    """
+    out = {}
+    ttc_values = row_dict.get("ttc", [])
+    if not isinstance(ttc_values, list):
+        return out
+
+    for item in ttc_values:
+        year, percent_cover = item
+        year = int(year)
+        out[f"ttc_{year}"] = percent_cover
+
+    return out
+
+
+def save_project_geojsons(gdf, geojson_dir, data_version):
+    """
+    Save one GeoJSON per project, skipping invalid geometries.
+    Tests if the poly can be turned into geojson string
+    if so add to valid rows, otherwise raise exception
+    """
+    os.makedirs(geojson_dir, exist_ok=True)
+    print("Saving project GeoJSONs...")
+
+    for project_id, project_gdf in gdf.groupby("project_id", dropna=False):
+        project_names = project_gdf["project_name"].dropna().unique()
+        project_name = project_names[0]
+        valid_rows = []
+        for row in project_gdf.itertuples(index=False):
+            poly_id = getattr(row, "poly_id", None)
+            try:
+                row_dict = row._asdict()
+                test_gdf = gpd.GeoDataFrame(
+                    [row_dict],
+                    geometry="geometry",
+                    crs=gdf.crs, # might have to confirm
+                )
+                test_gdf.to_json()
+                valid_rows.append(row_dict)
+
+            except Exception as e:
+                print(
+                        f"Skipping polygon during GeoJSON creation: "
+                        f"project_name={project_name}, "
+                        f"project_id={project_id}, "
+                        f"polygon_id={poly_id}, "
+                        f"error={e}"
+                    )
+                continue
+
+        try:
+            out_gdf = gpd.GeoDataFrame(valid_rows, geometry="geometry", crs=gdf.crs or "EPSG:4326")
+            filename = f"{project_name}_{data_version}.geojson"
+            out_gdf.to_file(os.path.join(geojson_dir, filename), driver="GeoJSON")
+        except Exception as e:
+            print(
+                f"Geojson creation error for "
+                f"project_name={project_name}, project_id={project_id}: {e}"
+            )
+    return None
 
 def clean_datetime_column(df, column_name):
     """
@@ -33,7 +215,6 @@ def clean_datetime_column(df, column_name):
     )
     return df
 
-
 def missing_planting_dates(df, drop=False):
     '''
     Identifies where there are missing planting dates for 
@@ -44,6 +225,9 @@ def missing_planting_dates(df, drop=False):
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
     missing_start = df[df['plantstart'].isna()]
+    for _, row in missing_start[['project_name', 'project_id', 'poly_id']].drop_duplicates().iterrows():
+        print(f"{row['project_name']} | {row['project_id']} | {row['poly_id']}")
+
     num_projects_dropped = missing_start['project_id'].nunique()
     num_polygons_dropped = missing_start['poly_id'].nunique()
     print(f"⚠️ Projects missing 'plantstart': {num_projects_dropped}")
@@ -210,11 +394,10 @@ def normalize_practice(value):
     # Fallback for unexpected types
     return str(value).strip().lower()
 
-def process_tm_api_results(params, results):
+def OLDprocess_tm_results(params, results):
     """
-    Processes API results into a clean DataFrame for analysis.
-    results: json response
-    drop_missing: drop rows with missing information
+    Filter geoparquet into clean DataFrame for analysis.
+
     outfile: filepath to store cleaned results
     outfile2: filepath to store cleaned results for maxar metadata request
 
@@ -223,11 +406,15 @@ def process_tm_api_results(params, results):
     feature that allows us to dynamically add multiple columns 
     to the DataFrame without explicitly defining them.
     """
+    # this fails because of a geometry issue - IllegalArgumentException: 
+    # Invalid number of points in LinearRing found 2 - must be 0 or >= 3
+    gdf = gpd.read_parquet(results) 
+
     drop_missing = params['criteria']['drop_missing']
     extracted_data = []
     input_ids = {project.get('projectId') for project in results if project.get('projectId')}
 
-    # Iterate over each project to extract project details & tree cover statistics
+    # iterate over fields in the geoparquet and rename them
     for project in results:
         project_id = project.get('projectId')
         poly_id = project.get('poly_id')

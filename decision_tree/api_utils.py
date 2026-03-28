@@ -89,7 +89,7 @@ def get_tm_feats(params, secrets, geojson_dir, tm_outfile, project_ids):
     out = params['outfile']
     data_version = out['data_version']
 
-    access_token = secrets['gfw']['gfw_access_token']
+    access_token = secrets['gfw']['tm_access_token']
     auth_headers = {'Authorization': f"Bearer {access_token}"}
 
     all_results = []

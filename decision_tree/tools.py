@@ -37,14 +37,14 @@ def load_secrets(secrets_path):
         asana_pat = os.environ['ASANA_PAT'] if 'ASANA_PAT' in os.environ else 'not_defined'
         asana = {"asana_pat": asana_pat}
 
-        gfw_access_token = os.environ['GFW_ACCESS_TOKEN'] if 'GFW_ACCESS_TOKEN' in os.environ else 'not_defined'
-        gfw = {"gfw_access_token": gfw_access_token}
+        tm_access_token = os.environ['TM_ACCESS_TOKEN'] if 'TM_ACCESS_TOKEN' in os.environ else 'not_defined'
+        tm_token = {"tm_access_token": tm_access_token}
 
         secrets_json = {
             "opentopo" : open_topo,
             "aws" : aws,
             "asana" : asana,
-            "gfw" : gfw
+            "gfw" : tm_token
         }
 
     return secrets_json

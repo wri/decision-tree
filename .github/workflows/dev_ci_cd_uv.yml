@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      GFW_ACCESS_TOKEN: ${{ secrets.GFW_ACCESS_TOKEN }}
+      TM_ACCESS_TOKEN: ${{ secrets.TM_ACCESS_TOKEN }}
       OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
       KENNC_REPO_PAT: ${{ secrets.KENNC_REPO_PAT }}
     defaults:

@@ -42,7 +42,7 @@ def get_ids(params):
 
     with open(tm_auth_path) as auth_file:
         auth = yaml.safe_load(auth_file)
-    access_token = auth['gfw_api']['access_token']
+    access_token = auth['tm_api']['tm_access_token']
     headers = {'Authorization': f"Bearer {access_token}"}
     api_param_dict = {'projectCohort[]': keyword,
                       'polygonStatus[]': 'approved',
@@ -89,7 +89,7 @@ def get_tm_feats(params, secrets, geojson_dir, tm_outfile, project_ids):
     out = params['outfile']
     data_version = out['data_version']
 
-    access_token = secrets['gfw']['tm_access_token']
+    access_token = secrets['tm_api']['tm_access_token']
     auth_headers = {'Authorization': f"Bearer {access_token}"}
 
     all_results = []

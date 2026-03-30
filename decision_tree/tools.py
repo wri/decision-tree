@@ -44,7 +44,7 @@ def load_secrets(secrets_path):
             "opentopo" : open_topo,
             "aws" : aws,
             "asana" : asana,
-            "gfw" : tm_token
+            "tm_api" : tm_token
         }
 
     return secrets_json

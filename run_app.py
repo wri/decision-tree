@@ -1,4 +1,3 @@
-from decision_tree.api_utils import get_ids
 from decision_tree.run_decision_tree import VerificationDecisionTree
 
 
@@ -7,7 +6,7 @@ def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool 
     if parse_only:
         return workflow
     else:
-        workflow.run_decision_tree(None)
+        workflow.run_decision_tree()
         return None
 
 

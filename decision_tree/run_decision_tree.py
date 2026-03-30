@@ -52,26 +52,26 @@ class VerificationDecisionTree:
         # rules
         self.rules = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
 
-    def run_decision_tree(self, project_ids):
+    def run_decision_tree(self):
         if self.mode not in ["full", "partial", "score"]:
             raise ValueError("Invalid mode")
 
         if self.mode in ["full", "partial"]:
             if self.mode == "full":
-                print("Running in FULL mode — acquiring prj data from APIs.")
+                print("Running in FULL mode — acquiring prj data.")
                 input_mode_file = None
-                tm_response = get_geoparquet(self.params, self.secrets, self.tm_raw, self.feats)
-                return None
+                get_geoparquet(self.params, self.secrets, self.tm_raw, self.feats)
                 # with open(self.tm_raw, "w") as f:
                 #     json.dump(tm_response, f, indent=4)
                 # # uncomment below for testing
                 # with open(self.tm_raw, "r") as f:
                 #     tm_response = json.load(f)
 
-                tm_clean = clean.process_tm_api_results(self.params, tm_response)
-                tm_clean.to_csv(self.project_feats, index=False)
+                tm_clean = clean.process_tm_results(self.params, self.tm_raw, self.geojson_dir)
+                tm_clean.to_csv(self.feats, index=False)
                 # uncomment below for testing
                 # tm_clean.to_csv(self.project_feats_maxar, index=False)
+                return None
             else:
                 print("Running in PARTIAL mode — using cached prj feats.")
                 input_mode_file = self.project_feats

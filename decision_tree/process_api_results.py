@@ -6,16 +6,14 @@ import geopandas as gpd
 from shapely.validation import make_valid
 import os
 import json
+from shapely import wkb
 
-def process_tm_results(params, results, save_geojsons=False):
+def process_tm_results(params, results, geojson_dir, save_geojsons=True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
 
-    Returns
-    -------
-    pd.DataFrame
-        Cleaned dataframe for downstream decision-tree analysis.
+    Returns: Cleaned dataframe for downstream decision-tree analysis.
     """
     out = params.get("outfile", {})
     criteria = params.get("criteria", {})
@@ -23,15 +21,9 @@ def process_tm_results(params, results, save_geojsons=False):
     cohort_raw = out['cohort']
     cohort = 'terrafund' if cohort_raw == 'c1' else 'terrafund-landscapes'
 
-    gdf = _read_geoparquet(results)
-
-    if save_geojsons:
-        geojson_dir = out.get("geojsons")
-        data_version = out.get("data_version")
-        save_project_geojsons(gdf, geojson_dir, data_version)
-
-    raw_df = flatten_tm_geoparquet(gdf, cohort)
-    raw_df = raw_df[raw_df["cohort"].apply(lambda x: cohort in x)].copy()
+    df = _read_geoparquet(results)
+    raw_df = flatten_tm_geoparquet(df)
+    raw_df = raw_df[(raw_df.cohort == cohort)]
 
     raw_df.columns = raw_df.columns.str.lower()
     input_ids = set(raw_df["project_id"].dropna().unique())
@@ -42,31 +34,32 @@ def process_tm_results(params, results, save_geojsons=False):
     clean_df = missing_features(clean_df, drop_missing)
     clean_df["practice"] = clean_df["practice"].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
+    if save_geojsons:
+        data_version = out.get("data_version")
+        save_project_geojsons(clean_df, geojson_dir, data_version)
 
     output_ids = set(clean_df["project_id"].dropna().unique())
 
-    # Keep this assertion only if project-level row dropping is truly not allowed.
-    # Otherwise replace with a warning block.
     assert len(input_ids) == len(pre_clean_ids) == len(output_ids), (
         f"input: {len(input_ids)}, "
         f"preclean: {len(pre_clean_ids)}, "
         f"output: {len(output_ids)}"
     )
-
     missing_projects = input_ids - output_ids
     if missing_projects:
         print(f"Missing prj ids: {missing_projects}")
 
+    print(f"Running forecast for {len(output_ids)} projects in {cohort} cohort.")
     return clean_df
 
 
 def _read_geoparquet(results_path):
     """
-    Read GeoParquet and standardize column names.
+    Read parquet with pandas and standardize column names.
     """
-    gdf = gpd.read_parquet(results_path)
-    gdf.columns = gdf.columns.str.lower()
-    return gdf
+    df = pd.read_parquet(results_path)
+    df.columns = df.columns.str.lower()
+    return df
 
 
 def flatten_tm_geoparquet(results):
@@ -83,36 +76,32 @@ def flatten_tm_geoparquet(results):
 
     for row in results.itertuples(index=False):
         row_dict = row._asdict()
+        
+        # parse geometry
+        geom_bytes = row_dict.get("geom")
+        try:
+            geometry = wkb.loads(geom_bytes) if geom_bytes is not None else None
+        except Exception:
+            geometry = None
 
-        project_id = row_dict.get("project_id")
-        poly_id = row_dict.get("poly_id")
-        site_id = row_dict.get("site_id")
-        project_name = row_dict.get("project_name")
-        plant_start = row_dict.get("plantstart")
-        practice = row_dict.get("practice")
-        targetsys = row_dict.get("target_sys")
-        dist = row_dict.get("distr")
-        project_phase = row_dict.get("project_phase")
-        area = row_dict.get("calcarea")
-        geometry = row_dict.get("geom")
-        cohort_val = row_dict.get("cohort", b"[]")
-        cohort = json.loads(cohort_val.decode("utf-8"))
+        cohort_val = row_dict.get("cohort")
+        cohort = cohort_val.decode("utf-8").strip('[]').strip('"') if cohort_val else None
 
         tree_cover_years = extract_tree_cover_years(row_dict)
 
         records.append({
             "cohort": cohort,
-            "project_id": project_id,
-            "poly_id": poly_id,
-            "site_id": site_id,
-            "project_name": project_name,
+            "project_id": row_dict.get("project_id"),
+            "poly_id": row_dict.get("poly_id"),
+            "site_id": row_dict.get("site_id"),
+            "project_name": row_dict.get("project_name"),
             "geometry": geometry,
-            "plantstart": plant_start,
-            "practice": practice,
-            "target_sys": targetsys,
-            "dist": dist,
-            "project_phase": project_phase,
-            "area": area,
+            "plantstart": row_dict.get("plantstart"),
+            "practice": row_dict.get("practice"),
+            "target_sys": row_dict.get("target_sys"),
+            "dist": row_dict.get("distr"),
+            "project_phase": row_dict.get("project_phase"),
+            "area": row_dict.get("calcarea"),
             **tree_cover_years,
         })
 
@@ -138,51 +127,56 @@ def extract_tree_cover_years(row_dict):
 
     return out
 
-
-def save_project_geojsons(gdf, geojson_dir, data_version):
+def save_project_geojsons(df, geojson_dir, data_version):
     """
-    Save one GeoJSON per project, skipping invalid geometries.
-    Tests if the poly can be turned into geojson string
-    if so add to valid rows, otherwise raise exception
+    Save one GeoJSON per project.
+
+    Assumes upstream cleaning has already handled dates, missing values,
+    and practice normalization. This function only checks whether each
+    row's geometry is usable for GeoJSON output.
     """
     os.makedirs(geojson_dir, exist_ok=True)
     print("Saving project GeoJSONs...")
 
-    for project_id, project_gdf in gdf.groupby("project_id", dropna=False):
-        project_names = project_gdf["project_name"].dropna().unique()
-        project_name = project_names[0]
-        valid_rows = []
-        for row in project_gdf.itertuples(index=False):
-            poly_id = getattr(row, "poly_id", None)
-            try:
-                row_dict = row._asdict()
-                test_gdf = gpd.GeoDataFrame(
-                    [row_dict],
-                    geometry="geometry",
-                    crs=gdf.crs, # might have to confirm
-                )
-                test_gdf.to_json()
-                valid_rows.append(row_dict)
+    for project_id, project_df in df.groupby("project_id", dropna=False):
+        project_names = project_df["project_name"].dropna().unique()
+        project_name = project_names[0] if len(project_names) > 0 else str(project_id)
 
+        valid_rows = []
+
+        for row in project_df.itertuples(index=False):
+            poly_id = getattr(row, "poly_id", None)
+            row_dict = row._asdict()
+            try:
+                geometry = row_dict.get("geometry")
+                row_dict["geometry"] = geometry
+                valid_rows.append(row_dict)
             except Exception as e:
                 print(
-                        f"Skipping polygon during GeoJSON creation: "
-                        f"project_name={project_name}, "
-                        f"project_id={project_id}, "
-                        f"polygon_id={poly_id}, "
-                        f"error={e}"
-                    )
+                    f"Skipping polygon during GeoJSON creation: "
+                    f"project_name={project_name}, "
+                    f"project_id={project_id}, "
+                    f"polygon_id={poly_id}, "
+                    f"error={e}"
+                )
                 continue
 
-        try:
-            out_gdf = gpd.GeoDataFrame(valid_rows, geometry="geometry", crs=gdf.crs or "EPSG:4326")
-            filename = f"{project_name}_{data_version}.geojson"
-            out_gdf.to_file(os.path.join(geojson_dir, filename), driver="GeoJSON")
-        except Exception as e:
-            print(
-                f"Geojson creation error for "
-                f"project_name={project_name}, project_id={project_id}: {e}"
+        out_gdf = gpd.GeoDataFrame(
+                valid_rows,
+                geometry="geometry",
+                crs="EPSG:4326",
             )
+
+        # GeoJSON writing can fail on pandas Timestamp fields, so cast datetimes to string
+        for col in out_gdf.columns:
+            if pd.api.types.is_datetime64_any_dtype(out_gdf[col]):
+                out_gdf[col] = out_gdf[col].astype(str)
+
+        filename = f"{project_id}_{data_version}.geojson"
+        outpath = os.path.join(geojson_dir, filename)
+        out_gdf.to_file(outpath, driver="GeoJSON")
+        print(f"Saved to {outpath}")
+
     return None
 
 def clean_datetime_column(df, column_name):
@@ -269,12 +263,13 @@ def missing_features(df, drop=False, save_missing=True):
     
     plantstart_year = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
 
-    # Only consider missing TTC for plantstart years 2017-2024 inclusive
-    eligible_ttc_mask = plantstart_year.between(2017, 2024, inclusive='both')
+    # Only consider missing TTC for plantstart years 2017-2025 inclusive
+    eligible_ttc_mask = plantstart_year.between(2017, 2025, inclusive='both')
     null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
     missing_practice = df[df['practice'].isna()]
     missing_targetsys = df[df['target_sys'].isna()]
     if save_missing and not null_rows.empty:
+        print("TTC NaNs saved to file.")
         null_rows.to_csv('ttc_nans.csv', index=False)
 
     print(f"⚠️ Polygons missing 'ttc': {len(null_rows)}")

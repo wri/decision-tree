@@ -43,7 +43,7 @@ def _create_folder_if_not_exists(folder_path):
     except OSError as e:
         print(f"Error creating folder '{folder_path}': {e}")
 
-def get_geoparquet(params, secrets, tm_raw, feats):
+def get_geoparquet(params, secrets, tm_raw):
     """
     Download a geoparquet file from S3 with boto3, load it with GeoPandas,
     and save it as a CSV.
@@ -71,7 +71,7 @@ def get_geoparquet(params, secrets, tm_raw, feats):
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 
-    return None
+    return tm_raw
 
 
 def get_tm_feats(params, geojson_dir, tm_outfile):

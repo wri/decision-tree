@@ -21,7 +21,7 @@ s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
-  geoparquet: s3://wri-restoration-development/geo/tm.geoparquet
+  geoparquet: s3://wri-restoration-geodata/terramatch/tm.geoparquet
 
 asana:
   upload: false
@@ -52,8 +52,8 @@ cost:
   remote: 20.0
 
 outfile: # file paths are relative to the project root
-  data_version: 03-12-2026 #DD-MM-YYYY
-  experiment_id: exp3
+  data_version: 03-30-2026 #DD-MM-YYYY
+  experiment_id: exp1
   cohort: c2
   project_data_folder: 'data'
   # file paths are relative to the project_data_folder under the project root

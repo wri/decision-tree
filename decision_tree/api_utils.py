@@ -26,8 +26,6 @@ from shapely.geometry import box, shape
 from tqdm import tqdm
 from exactextract import exact_extract
 
-from tm_api_utils import pull_tm_api_data
-
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
@@ -125,8 +123,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     slope_thresh = params['criteria']['slope_thresh']
 
     project_names = feats_df['project_name'].unique()
-    project_names = [i for i in project_names if
-                     i != 'MLI_22_ASIC']  # still has an erroneous polygon that breaks the pipeline
+    project_names = [i for i in project_names]  
     dfs_to_concat = []
     for name in project_names:
         this_project = []
@@ -135,7 +132,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
         stat_path = convert_to_os_path(project_data_dir, params['outfile']['project_stats'].format(name=name))
         if os.path.exists(stat_path):
             dfs_to_concat.append(pd.read_csv(stat_path))
-            print(f"{name} already processed, skipping.") #Data available in {stat_path}")
+            print(f"{name} already processed, skipping.") # Data available in {stat_path}")
             continue
         else:
             print(f"Processing {name}")

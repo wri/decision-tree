@@ -91,7 +91,7 @@ def flatten_tm_geoparquet(results):
         records.append({
             "cohort": cohort,
             "project_id": row_dict.get("project_id"),
-            "poly_id": row_dict.get("poly_id"),
+            "poly_id": row_dict.get("poly_uuid"),
             "site_id": row_dict.get("site_id"),
             "project_name": row_dict.get("short_name"),
             "geometry": geometry,

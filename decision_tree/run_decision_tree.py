@@ -1,12 +1,14 @@
 import yaml
 import pandas as pd
 import json
+from pathlib import Path
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.slope import apply_slope_classification
+from decision_tree.s3_utils import upload_to_s3
 import decision_tree.decision_trees as tree
 import decision_tree.cost_calculator as price
 # from src import decision_tree as scoring, decision_tree as asana
@@ -14,13 +16,45 @@ import decision_tree.weighted_scoring as scoring
 import decision_tree.update_asana as update_asana
 from decision_tree.tools import convert_to_os_path
 
+class Checkpointer:
+    """
+    Controls optional persistence of intermediate files.
+
+    When enabled, save() writes a keyed DataFrame to its resolved path and
+    load() reads it back. When disabled, save() is a no-op and the pipeline
+    runs end-to-end in memory.
+
+    Keys map to the intermediate paths defined in VerificationDecisionTree._checkpoint_paths().
+    """
+
+    def __init__(self, enabled: bool, paths: dict):
+        self.enabled = enabled
+        self.paths = paths
+
+    def save(self, key: str, df: pd.DataFrame, always: bool = False):
+        if self.enabled or always:
+            path = self.paths[key]
+            df.to_csv(path, index=False)
+            print(f"[checkpoint] {key} → {path}")
+
+    def load(self, key: str) -> pd.DataFrame:
+        path = self.paths[key]
+        if not Path(path).exists():
+            raise FileNotFoundError(f"[checkpoint] No file found for '{key}' at {path}")
+        print(f"[checkpoint] loading {key} from {path}")
+        return pd.read_csv(path)
+
+    def exists(self, key: str) -> bool:
+        return key in self.paths and Path(self.paths[key]).exists()
+
 
 class VerificationDecisionTree:
-    def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
+    def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml", checkpoint=False):
         self.params = self._load_yaml(params_path)
         self.secrets = self._load_yaml(secrets_path)
         self.mode = self.params.get("mode", "full")
         self._resolve_paths()
+        self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
 
     def _load_yaml(self, path):
         with open(path, "r") as f:
@@ -52,81 +86,71 @@ class VerificationDecisionTree:
         # rules
         self.rules = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
 
+    def _checkpoint_paths(self) -> dict:
+        """
+        Maps checkpoint keys to their resolved file paths.
+        Intermediates (feats, slope_stats, tree_results) are written only when checkpoint=True.
+        Final outputs (poly_score, prj_score) are always written via always=True in save().
+        """
+        return {
+            # intermediates
+            "feats":        self.feats,
+            "slope_stats":  self.slope_stats,
+            "tree_results": self.tree_results,
+            # final outputs
+            "poly_score":   self.poly_score,
+            "prj_score":    self.prj_score,
+        }
+
     def run_decision_tree(self):
-        if self.mode not in ["full", "partial", "score"]:
+        if self.mode not in ["full", "score"]:
             raise ValueError("Invalid mode")
 
-        if self.mode in ["full", "partial"]:
-            if self.mode == "full":
-                print("Running in FULL mode — acquiring prj data.")
-                input_mode_file = None
-                get_geoparquet(self.params, self.secrets, self.tm_raw, self.feats)
-                # with open(self.tm_raw, "w") as f:
-                #     json.dump(tm_response, f, indent=4)
-                # # uncomment below for testing
-                # with open(self.tm_raw, "r") as f:
-                #     tm_response = json.load(f)
+        if self.mode == "full":
+            print("Running in FULL mode — acquiring prj data.")
+            tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
+            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir)
+            self.checkpoint.save("feats", tm_clean)
 
-                tm_clean = clean.process_tm_results(self.params, self.tm_raw, self.geojson_dir)
-                tm_clean.to_csv(self.feats, index=False)
-                # uncomment below for testing
-                # tm_clean.to_csv(self.project_feats_maxar, index=False)
-                return None
-            else:
-                print("Running in PARTIAL mode — using cached prj feats.")
-                input_mode_file = self.project_feats
-                tm_clean = pd.read_csv(input_mode_file)
-
-            # compute slope statistics
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)
-            slope_statistics.to_csv(self.slope_stats, index=False)
+            self.checkpoint.save("slope_stats", slope_statistics)
 
             # pipeline pause here to get maxar metadata
             ev = compute_branches(self.params, self.rules, tm_clean, self.maxar_meta, slope_statistics)
-            ev.to_csv(self.tree_results, index=False)
+            self.checkpoint.save("tree_results", ev)
 
-        else:
-            print("Running in SCORE mode — using cached tree results.")
-            input_mode_file = self.tree_results
-            slope_statistics = None
-            ev = pd.read_csv(input_mode_file)
+        elif self.mode == "score":
+            print("Running in SCORE mode — using cached prj data.")
+            ev = pd.read_csv(self.tree_results)
 
         # Get results
-        scored = scoring.apply_scoring(self.params, ev)
-        poly_results = price.calc_cost_to_verify(self.params, scored)
-        # uncomment below for testing
-        poly_results.to_csv(self.poly_score, index=False)
-
-        # calculate final project scale decision
-        prj_results = scoring.aggregate_project_score(self.params, scored)
-        # uncomment below for testing
-        prj_results.to_csv(self.prj_score, index=False)
+        poly_results, prj_results = compute_project_results(self.params, ev)
+        self.checkpoint.save("poly_score", poly_results, always=True)
+        self.checkpoint.save("prj_score", prj_results, always=True)
 
         # uploads
         if self.params['asana']['upload']:
             update_asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
-        # if self.params['s3']['upload']:
-        #     upload_to_s3(self.final_outfile, self.params, self.secrets)  # TODO Jessica - where is this method signature defined in the codebase?
+        if self.params['s3']['upload']:
+            upload_to_s3(self.prj_score, self.params, self.secrets) 
 
-        return slope_statistics, poly_results, prj_results
+        return poly_results, prj_results
 
 
 def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
+    """Run decision tree branch logic. Returns ev DataFrame — caller decides whether to persist."""
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
     branch_slope = apply_slope_classification(params, branch_canopy, slope_statistics)
     baseline = tree.apply_rules_baseline(rules_file_path, branch_slope)
     ev = tree.apply_rules_ev(params, rules_file_path, baseline)
-
     return ev
 
 def compute_project_results(params, ev):
+    """Run decision scoring. Returns poly/prj DataFrame — caller decides whether to persist."""
     scored = scoring.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(params, scored)
-
-    # calculate final project scale decision
     prj_results = scoring.aggregate_project_score(params, scored)
-
     return poly_results, prj_results
 
 

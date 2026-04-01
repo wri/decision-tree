@@ -3,7 +3,6 @@ import ast
 import calendar
 from datetime import datetime
 import geopandas as gpd
-from shapely.validation import make_valid
 import os
 import json
 from shapely import wkb
@@ -94,7 +93,7 @@ def flatten_tm_geoparquet(results):
             "project_id": row_dict.get("project_id"),
             "poly_id": row_dict.get("poly_id"),
             "site_id": row_dict.get("site_id"),
-            "project_name": row_dict.get("project_name"),
+            "project_name": row_dict.get("short_name"),
             "geometry": geometry,
             "plantstart": row_dict.get("plantstart"),
             "practice": row_dict.get("practice"),
@@ -175,7 +174,6 @@ def save_project_geojsons(df, geojson_dir, data_version):
         filename = f"{project_id}_{data_version}.geojson"
         outpath = os.path.join(geojson_dir, filename)
         out_gdf.to_file(outpath, driver="GeoJSON")
-        print(f"Saved to {outpath}")
 
     return None
 

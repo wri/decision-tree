@@ -3,13 +3,13 @@ name = "decision-tree"
 version = "0.1.0"
 description = "Cleaning and analysis scripts for TerraFund portfolio data"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12.0,<3.13"
 dependencies = [
     "asana",
     "boto3",
     "exactextract",
     "fiona",
-    "gdal==3.10.3; sys_platform == 'linux'",
+    "gdal<=3.12",
     "matplotlib",
     "geopandas",
     "pandas",
@@ -18,14 +18,13 @@ dependencies = [
     "pyyaml",
     "rasterio",
     "requests",
-    "pyproj[data]>=3.6.1",  # Includes PROJ database for proj.db
     "seaborn",
     "shapely",
     "tqdm",
     "utm",
-    "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop"
+    "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop",
+    "gri-shared-library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@main",
 ]
-
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -33,13 +32,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["decision_tree*"]
-exclude = ["notebooks*", "tests*", "docs*"]
-
+exclude = ["notebooks*", "docs*", "tests*"]
 
 [tool.uv.sources]
 gdal = [
- { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
- { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
+  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
+  { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
+  { index = "gdal-wheels", marker = "sys_platform == 'darwin'" },
 ]
 
 [[tool.uv.index]]
@@ -53,11 +52,29 @@ url = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple"
 explicit = true
 
 [tool.poetry.dependencies]
-pyproj = { version = "^3.6.1", extras = ["data"] }  # Includes proj.db file
+pyproj = { version = "^3.7.2", extras = ["data"] }  # Includes proj.db file
 
 [tool.env]
 # Set PROJ_LIB to the directory where pyproj installs its data files
 PROJ_DATA = "${VIRTUAL_ENV}/share/proj"
 PROJ_LIB  = "${VIRTUAL_ENV}/share/proj"
 
-
+#[tool.uv]
+## Environment markers with Python *range* semantics:
+## - macOS (Intel):    3.12.x only
+## - macOS (ARM):      3.12.x only
+## - Linux (x86_64):   3.12.x only
+##
+## Using `>= '3.12' and < '3.13'` ensures all 3.12.* patch releases match,
+## while excluding 3.11 and 3.13+.
+#
+#environments = [
+#  # Linux x86_64, Python 3.12.x
+#  "sys_platform == 'linux' and platform_machine == 'x86_64' and python_version >= '3.12' and python_version < '3.13'",
+#
+#  # macOS Intel x86_64, Python 3.12.x
+#  "sys_platform == 'darwin' and platform_machine == 'x86_64' and python_version >= '3.12' and python_version < '3.13'",
+#
+#  # macOS Apple Silicon arm64, Python 3.12.x
+#  "sys_platform == 'darwin' and platform_machine == 'arm64' and python_version >= '3.12' and python_version < '3.13'"
+#]

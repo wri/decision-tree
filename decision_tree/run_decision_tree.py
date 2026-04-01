@@ -1,3 +1,5 @@
+import os
+
 import yaml
 import pandas as pd
 import json
@@ -14,7 +16,7 @@ import decision_tree.cost_calculator as price
 # from src import decision_tree as scoring, decision_tree as asana
 import decision_tree.weighted_scoring as scoring
 import decision_tree.update_asana as update_asana
-from decision_tree.tools import convert_to_os_path
+from decision_tree.tools import convert_to_os_path, load_secrets
 
 class Checkpointer:
     """
@@ -51,7 +53,7 @@ class Checkpointer:
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml", checkpoint=False):
         self.params = self._load_yaml(params_path)
-        self.secrets = self._load_yaml(secrets_path)
+        self.secrets = load_secrets(secrets_path)
         self.mode = self.params.get("mode", "full")
         self._resolve_paths()
         self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
@@ -153,4 +155,11 @@ def compute_project_results(params, ev):
     prj_results = scoring.aggregate_project_score(params, scored)
     return poly_results, prj_results
 
+def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
+    workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
+    if parse_only:
+        return workflow
+    else:
+        workflow.run_decision_tree(None)
+        return None
 

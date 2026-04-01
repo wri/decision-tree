@@ -1,5 +1,9 @@
 from datetime import date
 
+from gri_shared_library.os_tools import get_project_root_dir
+
+# from gri_shared_library.os_tools import get_project_root_dir
+
 # Construct list of desired columns
 start_year = 2020
 current_year = date.today().year
@@ -17,3 +21,7 @@ fixed_cols = [
 ]
 
 DESIRED_COLS = fixed_cols + ttc_years
+
+TM_STAGING_URI = 'https://api-staging.terramatch.org/research/v3/sitePolygons?' # not currently used
+TM_PROD_URI = 'https://api.terramatch.org/research/v3/sitePolygons?'
+PROJECT_ROOT = get_project_root_dir()

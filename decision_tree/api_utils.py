@@ -1,3 +1,5 @@
+import shutil
+
 import requests
 import yaml
 import pandas as pd
@@ -25,8 +27,11 @@ from tqdm import tqdm
 from exactextract import exact_extract
 
 from tm_api_utils import pull_tm_api_data
+
+from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
-from decision_tree.tools import get_gfw_access_token, get_opentopo_api_key, get_project_root, convert_to_os_path
+from decision_tree.tools import convert_to_os_path
+from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder
 
 
 def _create_folder_if_not_exists(folder_path):
@@ -102,7 +107,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     return round(percentage, 1)
 
 
-def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
+def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates
@@ -110,16 +115,9 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
     for an entire project (due to exact extract specifications) at the polygon level.
     Calculates area with high slope.
     If a polygon falls outside the DEM extent, stats default to NaN.
-
-    Parameters:
-        dem_url (str): API endpoint for DEM.
-        api_key (str): API key for authentication.
-        input_df (pd.DataFrame): DataFrame containing list of project_ids to process.
-        geojson_dir (str): Directory where per-project GeoJSON files are saved.
-        outfile (str): Output CSV file path.
     '''
     dem_url = params['opt_api']['opt_url']
-    api_key = get_opentopo_api_key(config)
+    api_key = secrets['opentopo']['opentopo_api_key']
 
     project_data_dir =  params['outfile']["project_data_folder"]
 
@@ -163,14 +161,27 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
             slope_path = slope_tmp.name
 
         try:
-            # Download the DEM
-            response = requests.get(dem_url, stream=True, params=query)
-            if response.status_code != 200:
-                raise Exception(f"Error downloading DEM for project {name}: {response.text}")
+            cached_dem_dir = convert_to_os_path(project_data_dir, "dem_cache")
+            create_folder(cached_dem_dir)
 
-            with open(dem_path, 'wb') as f:
-                for chunk in response.iter_content(8192):  # 8k generally works well for chunking of data.
-                    f.write(chunk)
+            cached_dem_file_path = os.path.join(cached_dem_dir, f"{name}_{data_version}.tif")
+            fresh_dem_exists = is_file_recent(cached_dem_file_path)
+
+            if fresh_dem_exists:
+                # read cached file
+                shutil.copyfile(cached_dem_file_path, dem_path)
+            else:
+                # Download the DEM
+                response = requests.get(dem_url, stream=True, params=query)
+                if response.status_code != 200:
+                    raise Exception(f"Error downloading DEM for project {name}: {response.text}")
+
+                with open(dem_path, 'wb') as f:
+                    for chunk in response.iter_content(8192):  # 8k generally works well for chunking of data.
+                        f.write(chunk)
+
+                # write to cache file
+                shutil.copyfile(dem_path, cached_dem_file_path)
 
             if process_in_utm_coordinates:
                 site_polygons, slope_raster = _prepare_utm_features(project_polygons, dem_path)
@@ -214,7 +225,7 @@ def opentopo_pull_wrapper(params, config, geojson_dir, feats_df, process_in_utm_
             project_results_df = pd.concat(this_project, ignore_index=True)
 
             stats_dir = os.path.dirname(stat_path)
-            _create_folder_if_not_exists(stats_dir)
+            create_folder(stats_dir)
             project_results_df.to_csv(stat_path, index=False)
 
             slope_raster.close()

@@ -33,8 +33,7 @@ opt_api:
   opt_url: https://portal.opentopography.org/API/globaldem
 
 tm_api:
-  tm_staging_url: https://api-staging.terramatch.org/research/v3/sitePolygons?  
-  tm_prod_url: https://api.terramatch.org/research/v3/sitePolygons?
+  tm_environment: prod # prod or staging
 
 criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects

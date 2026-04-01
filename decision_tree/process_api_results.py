@@ -48,7 +48,7 @@ def process_tm_results(params, results, geojson_dir, save_geojsons=True):
     if missing_projects:
         print(f"Missing prj ids: {missing_projects}")
 
-    print(f"Running forecast for {len(output_ids)} projects in {cohort} cohort.")
+    print(f"\n Running forecast for {len(output_ids)} projects in {cohort} cohort.")
     return clean_df
 
 
@@ -129,52 +129,87 @@ def extract_tree_cover_years(row_dict):
 def save_project_geojsons(df, geojson_dir, data_version):
     """
     Save one GeoJSON per project.
-
+ 
     Assumes upstream cleaning has already handled dates, missing values,
-    and practice normalization. This function only checks whether each
-    row's geometry is usable for GeoJSON output.
+    and practice normalization. This function also:
+    - Flags and skips null or empty geometries
+    - Attempts to repair invalid geometries with buffer(0); skips if unrecoverable
+    - Serializes list-type fields (e.g. dist) that are unsupported by OGR (type 5 = RealList)
     """
     os.makedirs(geojson_dir, exist_ok=True)
     print("Saving project GeoJSONs...")
-
+ 
     for project_id, project_df in df.groupby("project_id", dropna=False):
         project_names = project_df["project_name"].dropna().unique()
-        project_name = project_names[0] if len(project_names) > 0 else str(project_id)
-
+        if len(project_names) == 0:
+            print(f"{project_id} has no project_name")
+            continue
+        project_name = project_names[0]
         valid_rows = []
-
+        skipped = []
+ 
         for row in project_df.itertuples(index=False):
             poly_id = getattr(row, "poly_id", None)
-            row_dict = row._asdict()
-            try:
-                geometry = row_dict.get("geometry")
-                row_dict["geometry"] = geometry
-                valid_rows.append(row_dict)
-            except Exception as e:
-                print(
-                    f"Skipping polygon during GeoJSON creation: "
-                    f"project_name={project_name}, "
-                    f"project_id={project_id}, "
-                    f"polygon_id={poly_id}, "
-                    f"error={e}"
-                )
+            row_dict = dict(row._asdict())
+            geometry = row_dict.get("geometry")
+ 
+            # --- Geometry checks ---
+            if geometry is None:
+                skipped.append((poly_id, "null geometry"))
                 continue
-
+ 
+            if geometry.is_empty:
+                skipped.append((poly_id, "empty geometry"))
+                continue
+ 
+            if not geometry.is_valid:
+                fixed = geometry.buffer(0)
+                if fixed.is_valid and not fixed.is_empty:
+                    print(
+                        f"⚠️ Repaired invalid geometry: "
+                        f"project={project_name}, poly_id={poly_id}"
+                    )
+                    row_dict["geometry"] = fixed
+                else:
+                    skipped.append((poly_id, "invalid geometry (unrecoverable)"))
+                    continue
+ 
+            # --- Serialize list-type fields unsupported by OGR (type 5 = RealList) ---
+            # Affects fields like 'dist' which may be stored as float lists in the parquet
+            for field, val in row_dict.items():
+                if field == "geometry":
+                    continue
+                if isinstance(val, (list, tuple)):
+                    row_dict[field] = ",".join(str(v) for v in val)
+ 
+            valid_rows.append(row_dict)
+ 
+        if skipped:
+            for poly_id, reason in skipped:
+                print(
+                    f"⚠️ Skipping polygon: project={project_name}, "
+                    f"project_id={project_id}, poly_id={poly_id}, reason={reason}"
+                )
+ 
+        if not valid_rows:
+            print(f"⚠️ No valid polygons for {project_name} ({project_id}); skipping GeoJSON.")
+            continue
+ 
         out_gdf = gpd.GeoDataFrame(
-                valid_rows,
-                geometry="geometry",
-                crs="EPSG:4326",
-            )
-
+            valid_rows,
+            geometry="geometry",
+            crs="EPSG:4326",
+        )
+ 
         # GeoJSON writing can fail on pandas Timestamp fields, so cast datetimes to string
         for col in out_gdf.columns:
             if pd.api.types.is_datetime64_any_dtype(out_gdf[col]):
                 out_gdf[col] = out_gdf[col].astype(str)
-
-        filename = f"{project_id}_{data_version}.geojson"
+ 
+        filename = f"{project_name}_{data_version}.geojson"
         outpath = os.path.join(geojson_dir, filename)
         out_gdf.to_file(outpath, driver="GeoJSON")
-
+ 
     return None
 
 def clean_datetime_column(df, column_name):

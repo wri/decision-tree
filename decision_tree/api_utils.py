@@ -76,7 +76,7 @@ def get_geoparquet(params, secrets, tm_raw):
     create_folder(target_folder)
 
     # Retrieve parquet file from S3
-    if aws_profile_exists(aws_profile):
+    if aws_profile is not None and aws_profile_exists(aws_profile):
         session = boto3.Session(profile_name=aws_profile)
         s3_client = session.client("s3")
     else:

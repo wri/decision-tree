@@ -5,6 +5,8 @@ import pandas as pd
 import json
 from pathlib import Path
 
+from gri_shared_library.os_tools import create_folder, remove_folder
+
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
 from decision_tree.image_availability import analyze_image_availability
@@ -36,6 +38,12 @@ class Checkpointer:
     def save(self, key: str, df: pd.DataFrame, always: bool = False):
         if self.enabled or always:
             path = self.paths[key]
+
+            # Create target folder
+            target_folder = os.path.dirname(path)
+            remove_folder(target_folder)
+            create_folder(target_folder)
+
             df.to_csv(path, index=False)
             print(f"[checkpoint] {key} → {path}")
 
@@ -69,7 +77,7 @@ class VerificationDecisionTree:
         experiment_id = outfile["experiment_id"]
         project_data_dir = outfile["project_data_folder"]
 
-        # decision-tree input files for full or id_list mode
+        # decision-tree input files for full or projectids mode
         self.portfolio = convert_to_os_path(project_data_dir, outfile["portfolio"].format(cohort=cohort, data_version=data_v))
         self.tm_raw = convert_to_os_path(project_data_dir, outfile['geoparquet'].format(data_version=data_v))
         self.maxar_meta = convert_to_os_path(project_data_dir, outfile["maxar_meta"].format(cohort=cohort, data_version=data_v))
@@ -104,14 +112,18 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self):
-        if self.mode not in ["full", "score"]:
+    def run_decision_tree(self, project_ids):
+        if self.mode not in ["full", "score", "projectids"]:
             raise ValueError("Invalid mode")
 
-        if self.mode == "full":
-            print("Running in FULL mode — acquiring prj data.")
+        slope_statistics = None
+        if self.mode in ("full", "projectids"):
+            print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
+
             tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir)
+            if self.mode.lower() == "projectids":
+                tm_clean = tm_clean[tm_clean['project_id'].isin(project_ids)].reset_index(drop=True)
             self.checkpoint.save("feats", tm_clean)
 
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)
@@ -136,7 +148,7 @@ class VerificationDecisionTree:
         if self.params['s3']['upload']:
             upload_to_s3(self.prj_score, self.params, self.secrets) 
 
-        return poly_results, prj_results
+        return slope_statistics, poly_results, prj_results
 
 
 def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):

@@ -29,7 +29,7 @@ from exactextract import exact_extract
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
-from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder
+from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder, remove_folder
 
 
 def _create_folder_if_not_exists(folder_path):
@@ -69,6 +69,12 @@ def get_geoparquet(params, secrets, tm_raw):
     bucket = parsed.netloc
     key = parsed.path.lstrip("/")
 
+    # Create target folder
+    target_folder = os.path.dirname(tm_raw)
+    remove_folder(target_folder)
+    create_folder(target_folder)
+
+    # Retrieve parquet file from S3
     session = boto3.Session(profile_name=aws_profile)
     s3_client = session.client("s3")
     s3_client.download_file(bucket, key, tm_raw)

@@ -24,13 +24,14 @@ def test_run_decision_tree_full():
     remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
-def test_run_decision_tree_id_list():
+def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
-    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_id_list.yaml")
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     project_ids = [TEST_01_GRI_PROJECT_ID] # TEST_01_GRI
+    # project_ids = ['d1f355a2-3e0f-4ffd-bb2f-eec104bf8442'] # Only use for examination of an actual project
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids)
 
     expected_project_count = 1
@@ -45,28 +46,6 @@ def test_run_decision_tree_id_list():
     # Clean up temporary folders
     remove_folder(os.path.join(test_project, "slope"))
     remove_folder(os.path.join(test_project, "tm_api_response"))
-
-
-def test_run_decision_tree_partial():
-    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
-    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_partial.yaml")
-
-    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-
-    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
-
-    # verify that two projects were returned
-    expected_project_count = 1
-    expected_polygon_count= 3
-    expected_project_label = 'review required'
-    expected_median_slope = 34.4
-    expected_baseline_total = 0 # TODO Determine how to modify the data to get more variation
-    expected_ev_total = 0 # TODO Determine how to modify the data to get more variation
-    has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
-                                   expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
-
-    # Clean up scratch folders
-    remove_folder(os.path.join(test_project, "slope"))
 
 
 def test_run_decision_tree_score():
@@ -91,8 +70,8 @@ def test_run_decision_tree_param_parsing():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_for_parse_test.yaml")
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
-    expected_atts = {"params", "portfolio", "tm_outfile", "slope_stats", "project_feats", "project_feats_maxar",
-                     "maxar_meta", "tree_results", "poly_score", "prj_score"}
+    expected_atts = {"params", "checkpoint", "feats", "geojson_dir", "maxar_meta", "mode",  "poly_score", "portfolio",
+                     "prj_score", "project_feats_maxar", "rules", "secrets", "slope_stats", "tm_raw", "tree_results"}
 
     assert isinstance(workflow, VerificationDecisionTree)
     assert _has_expected_attributes(workflow, expected_atts)

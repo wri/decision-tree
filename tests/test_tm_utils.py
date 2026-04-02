@@ -1,5 +1,6 @@
 import os
 import yaml
+from gri_shared_library.os_tools import remove_folder, create_folder
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet
@@ -16,13 +17,17 @@ SECRETS = load_secrets(SECRETS_FILE_PATH)
 
 def test_tm_features():
     project_ids = ['468bee12-bfbc-4387-a00a-d7e915576427']
-    _, features = _get_project_tm_features(project_ids)
+    parquet_outfile, features = _get_project_tm_features(project_ids)
 
     # cleanup
     delete_source_geojsons_file('468bee12-bfbc-4387-a00a-d7e915576427_07-14-2025.geojson')
 
     # Confirm that the file contains at least one polygon
     assert len(features) >= 1
+
+    # cleanup
+    tm_raw_dir = os.path.dirname(parquet_outfile)
+    remove_folder(tm_raw_dir)
 
 
 def test_clean_tm_features():
@@ -47,6 +52,10 @@ def test_clean_tm_features():
     expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
+
+    # cleanup
+    tm_raw_dir = os.path.dirname(parquet_outfile)
+    remove_folder(tm_raw_dir)
 
 
 def test_slope_statistics(tmp_path):
@@ -82,12 +91,21 @@ def test_slope_statistics(tmp_path):
     expected_attribute_count = 19
     assert actual_attribute_count == expected_attribute_count
 
+    # cleanup
+    tm_raw_dir = os.path.dirname(parquet_outfile)
+    remove_folder(tm_raw_dir)
+
 
 def _get_project_tm_features(project_ids):
     outfile = PARAMS['outfile']
     data_v = outfile["data_version"]
     project_data_dir = outfile["project_data_folder"]
     parquet_outfile = convert_to_os_path(project_data_dir, outfile['geoparquet'].format(cohort=outfile['cohort'], data_version=data_v))
+
+    # cleanup target
+    tm_raw_dir = os.path.dirname(parquet_outfile)
+    remove_folder(tm_raw_dir)
+    create_folder(tm_raw_dir)
 
     features = get_geoparquet(PARAMS, SECRETS, parquet_outfile)
     df = _read_geoparquet(features)

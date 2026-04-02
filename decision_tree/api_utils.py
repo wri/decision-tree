@@ -26,6 +26,7 @@ from shapely.geometry import box, shape
 from tqdm import tqdm
 from exactextract import exact_extract
 
+from decision_tree import S3_CLIENT
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
@@ -75,8 +76,11 @@ def get_geoparquet(params, secrets, tm_raw):
     create_folder(target_folder)
 
     # Retrieve parquet file from S3
-    session = boto3.Session(profile_name=aws_profile)
-    s3_client = session.client("s3")
+    if aws_profile_exists(aws_profile):
+        session = boto3.Session(profile_name=aws_profile)
+        s3_client = session.client("s3")
+    else:
+        s3_client = S3_CLIENT
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 
@@ -495,3 +499,42 @@ def _reproject_raster_in_memory(input_memfile, dst_crs):
 
     # IMPORTANT: return the MemoryFile itself — not the open dataset
     return output_memfile
+
+
+def aws_profile_exists(profile_name: str) -> bool:
+    """
+    Check if an AWS CLI profile exists in ~/.aws/config or ~/.aws/credentials.
+
+    Args:
+        profile_name (str): The AWS profile name to check.
+
+    Returns:
+        bool: True if the profile exists, False otherwise.
+    """
+    import configparser
+
+    if not profile_name or not isinstance(profile_name, str):
+        raise ValueError("Profile name must be a non-empty string.")
+
+    # AWS config and credentials file paths
+    aws_dir = os.path.expanduser("~/.aws")
+    config_path = os.path.join(aws_dir, "config")
+    credentials_path = os.path.join(aws_dir, "credentials")
+
+    parser = configparser.ConfigParser()
+
+    # Check credentials file
+    if os.path.exists(credentials_path):
+        parser.read(credentials_path)
+        if profile_name in parser.sections():
+            return True
+
+    # Check config file (profiles are prefixed with 'profile ' except 'default')
+    if os.path.exists(config_path):
+        parser.read(config_path)
+        if profile_name == "default" and "default" in parser.sections():
+            return True
+        if f"profile {profile_name}" in parser.sections():
+            return True
+
+    return False

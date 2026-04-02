@@ -112,9 +112,15 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self, project_ids):
+    def run_decision_tree(self, project_ids: list[str] = None):
         if self.mode not in ["full", "score", "projectids"]:
             raise ValueError("Invalid mode")
+
+        if self.mode in ["full", "score"] and project_ids is not None:
+            raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
+
+        if self.mode == "projectids" and project_ids is None:
+            raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
         slope_statistics = None
         if self.mode in ("full", "projectids"):

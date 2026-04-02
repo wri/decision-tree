@@ -1,0 +1,2 @@
+1. Values in this csv are contrived for the test project based on the image availability file stored in S3.
+2. origin of the file: according to Jessica: "...had to generate that file in a different repository (vantor tools), then copy it over to decision tree to restart the pipeline"

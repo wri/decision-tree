@@ -24,6 +24,7 @@ def test_run_decision_tree_full():
     remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
+@pytest.mark.skip(reason="The TEST_01_GRI project is not yet available in the geoparquet files, so skipping test.")
 def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")

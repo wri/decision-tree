@@ -26,7 +26,6 @@ from shapely.geometry import box, shape
 from tqdm import tqdm
 from exactextract import exact_extract
 
-from decision_tree import S3_CLIENT
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
@@ -76,11 +75,8 @@ def get_geoparquet(params, secrets, tm_raw):
     create_folder(target_folder)
 
     # Retrieve parquet file from S3
-    if aws_profile is not None and aws_profile_exists(aws_profile):
-        session = boto3.Session(profile_name=aws_profile)
-        s3_client = session.client("s3")
-    else:
-        s3_client = S3_CLIENT
+    session = boto3.Session(profile_name=aws_profile)
+    s3_client = session.client("s3")
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 

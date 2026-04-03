@@ -3,12 +3,16 @@ import os
 import yaml
 import pandas as pd
 import json
+from pathlib import Path
 
-from decision_tree.api_utils import opentopo_pull_wrapper, get_tm_feats, get_ids
+from gri_shared_library.os_tools import create_folder, remove_folder
+
+from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.slope import apply_slope_classification
+from decision_tree.s3_utils import upload_to_s3
 import decision_tree.decision_trees as tree
 import decision_tree.cost_calculator as price
 # from src import decision_tree as scoring, decision_tree as asana
@@ -16,13 +20,51 @@ import decision_tree.weighted_scoring as scoring
 import decision_tree.update_asana as update_asana
 from decision_tree.tools import convert_to_os_path, load_secrets
 
+class Checkpointer:
+    """
+    Controls optional persistence of intermediate files.
+
+    When enabled, save() writes a keyed DataFrame to its resolved path and
+    load() reads it back. When disabled, save() is a no-op and the pipeline
+    runs end-to-end in memory.
+
+    Keys map to the intermediate paths defined in VerificationDecisionTree._checkpoint_paths().
+    """
+
+    def __init__(self, enabled: bool, paths: dict):
+        self.enabled = enabled
+        self.paths = paths
+
+    def save(self, key: str, df: pd.DataFrame, always: bool = False):
+        if self.enabled or always:
+            path = self.paths[key]
+
+            # Create target folder
+            target_folder = os.path.dirname(path)
+            remove_folder(target_folder)
+            create_folder(target_folder)
+
+            df.to_csv(path, index=False)
+            print(f"[checkpoint] {key} → {path}")
+
+    def load(self, key: str) -> pd.DataFrame:
+        path = self.paths[key]
+        if not Path(path).exists():
+            raise FileNotFoundError(f"[checkpoint] No file found for '{key}' at {path}")
+        print(f"[checkpoint] loading {key} from {path}")
+        return pd.read_csv(path)
+
+    def exists(self, key: str) -> bool:
+        return key in self.paths and Path(self.paths[key]).exists()
+
 
 class VerificationDecisionTree:
-    def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml"):
+    def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml", checkpoint=False):
         self.params = self._load_yaml(params_path)
         self.secrets = load_secrets(secrets_path)
         self.mode = self.params.get("mode", "full")
         self._resolve_paths()
+        self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
 
     def _load_yaml(self, path):
         with open(path, "r") as f:
@@ -35,115 +77,100 @@ class VerificationDecisionTree:
         experiment_id = outfile["experiment_id"]
         project_data_dir = outfile["project_data_folder"]
 
-        # decision-tree input files for full or id_list mode
+        # decision-tree input files for full or projectids mode
         self.portfolio = convert_to_os_path(project_data_dir, outfile["portfolio"].format(cohort=cohort, data_version=data_v))
-        self.tm_outfile = convert_to_os_path(project_data_dir, outfile['tm_response'].format(cohort=outfile['cohort'], data_version=data_v))
+        self.tm_raw = convert_to_os_path(project_data_dir, outfile['geoparquet'].format(data_version=data_v))
         self.maxar_meta = convert_to_os_path(project_data_dir, outfile["maxar_meta"].format(cohort=cohort, data_version=data_v))
 
         # decision-tree intermediate files
         self.geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
-        self.project_feats = convert_to_os_path(project_data_dir, outfile["feats"].format(cohort=cohort, data_version=data_v))
+        self.feats = convert_to_os_path(project_data_dir, outfile["feats"].format(cohort=cohort, data_version=data_v))
         self.project_feats_maxar = convert_to_os_path(project_data_dir, outfile["feats_maxar"].format(cohort=cohort, data_version=data_v))
         self.slope_stats = convert_to_os_path(project_data_dir, outfile["slope_stats"].format(cohort=cohort, data_version=data_v))
         self.tree_results = convert_to_os_path(project_data_dir, outfile["tree_results"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        
+        # output files
         self.poly_score = convert_to_os_path(project_data_dir, outfile["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
-
-        # decision-tree output files
         self.prj_score = convert_to_os_path(project_data_dir, outfile["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
-        self.rules_file_path = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
+        self.rules = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
 
-    def run_decision_tree(self, project_ids):
-        if self.mode not in ["full", "id_list", "partial", "score"]:
+    def _checkpoint_paths(self) -> dict:
+        """
+        Maps checkpoint keys to their resolved file paths.
+        Intermediates (feats, slope_stats, tree_results) are written only when checkpoint=True.
+        Final outputs (poly_score, prj_score) are always written via always=True in save().
+        """
+        return {
+            # intermediates
+            "feats":        self.feats,
+            "slope_stats":  self.slope_stats,
+            "tree_results": self.tree_results,
+            # final outputs
+            "poly_score":   self.poly_score,
+            "prj_score":    self.prj_score,
+        }
+
+    def run_decision_tree(self, project_ids: list[str] = None):
+        if self.mode not in ["full", "score", "projectids"]:
             raise ValueError("Invalid mode")
 
-        if self.mode in ("full", "id_list"):
-            print("Running in FULL mode — acquiring prj data from APIs.")
-            input_mode_file = None
-        else:
-            if self.mode == "partial":
-                print("Running in PARTIAL mode — using cached prj feats.")
-                input_mode_file = self.project_feats
-            else:
-                print("Running in SCORE mode — using cached tree results.")
-                input_mode_file = self.tree_results
+        if self.mode in ["full", "score"] and project_ids is not None:
+            raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
 
-        if self.mode in ["full", "id_list", "partial"]:
-            if self.mode in ("full", "id_list"):
-                if self.mode == "full":
-                    # project_ids = get_ids(self.params)
-                    # uncomment below for testing
-                    # project_ids = ['<project_id>']
-                    project_ids = ['1826cc5f-0d4d-4427-b5b3-fe244deba919']
-                    # pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
+        if self.mode == "projectids" and project_ids is None:
+            raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
-                tm_response = get_tm_feats(self.params, self.secrets, self.geojson_dir, self.tm_outfile, project_ids)
-                # uncomment below for testing
-                # with open(self.tm_outfile, "w") as f:
-                #     json.dump(tm_response, f, indent=4)
-                # with open(self.tm_outfile, "r") as f:
-                #     tm_response = json.load(f)
+        slope_statistics = None
+        if self.mode in ("full", "projectids"):
+            print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
+            tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
 
-                # Clean TM data
-                tm_clean = clean.process_tm_api_results(self.params, tm_response)
-                # # uncomment below for creation of test file for mode=partial
-                # tm_clean.to_csv(self.project_feats, index=False)
-                # uncomment below for testing
-                # tm_clean.to_csv(self.project_feats_maxar, index=False)
-            else:
-                tm_clean = pd.read_csv(input_mode_file)
+            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir)
+            if self.mode.lower() == "projectids":
+                tm_clean = tm_clean[tm_clean['project_id'].isin(project_ids)].reset_index(drop=True)
+            self.checkpoint.save("feats", tm_clean)
 
-            # compute slope statistics
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)
-            # uncomment below for testing
-            # slope_statistics.to_csv(self.slope_stats, index=False)
+            self.checkpoint.save("slope_stats", slope_statistics)
 
             # pipeline pause here to get maxar metadata
-            ev = compute_ev_statistics(self.params, self.rules_file_path, tm_clean, self.maxar_meta, slope_statistics)
-            # uncomment below for creation of test file for mode=score
-            # ev.to_csv(self.tree_results, index=False)
+            ev = compute_branches(self.params, self.rules, tm_clean, self.maxar_meta, slope_statistics)
+            self.checkpoint.save("tree_results", ev)
 
-        else:
-            slope_statistics = None
-            ev = pd.read_csv(input_mode_file)
+        elif self.mode == "score":
+            print("Running in SCORE mode — using cached prj data.")
+            ev = pd.read_csv(self.tree_results)
 
         # Get results
-        scored = scoring.apply_scoring(self.params, ev)
-        poly_results = price.calc_cost_to_verify(self.params, scored)
-        # uncomment below for testing
-        # poly_results.to_csv(self.poly_score, index=False)
-
-        # calculate final project scale decision
-        prj_results = scoring.aggregate_project_score(self.params, scored)
-        # uncomment below for testing
-        # prj_results.to_csv(self.prj_score, index=False)
+        poly_results, prj_results = compute_project_results(self.params, ev)
+        self.checkpoint.save("poly_score", poly_results, always=True)
+        self.checkpoint.save("prj_score", prj_results, always=True)
 
         # uploads
         if self.params['asana']['upload']:
             update_asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
-        # if self.params['s3']['upload']:
-        #     upload_to_s3(self.final_outfile, self.params, self.secrets)  # TODO Jessica - where is this method signature defined in the codebase?
+        if self.params['s3']['upload']:
+            upload_to_s3(self.prj_score, self.params, self.secrets) 
 
         return slope_statistics, poly_results, prj_results
 
 
-def compute_ev_statistics(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
+def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
+    """Run decision tree branch logic. Returns ev DataFrame — caller decides whether to persist."""
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
     branch_slope = apply_slope_classification(params, branch_canopy, slope_statistics)
     baseline = tree.apply_rules_baseline(rules_file_path, branch_slope)
     ev = tree.apply_rules_ev(params, rules_file_path, baseline)
-
     return ev
 
 def compute_project_results(params, ev):
+    """Run decision scoring. Returns poly/prj DataFrame — caller decides whether to persist."""
     scored = scoring.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(params, scored)
-
-    # calculate final project scale decision
     prj_results = scoring.aggregate_project_score(params, scored)
-
     return poly_results, prj_results
 
 def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):

@@ -13,6 +13,8 @@ import rasterio as rs
 import rasterio.mask
 import tempfile
 import math
+import boto3
+from urllib.parse import urlparse
 
 from rasterio.warp import calculate_default_transform, reproject
 from rasterio.enums import Resampling
@@ -24,133 +26,61 @@ from shapely.geometry import box, shape
 from tqdm import tqdm
 from exactextract import exact_extract
 
-from tm_api_utils import pull_tm_api_data
-
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
-from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder
+from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder, remove_folder
 
 
-def get_ids(params):
-    print("Requesting project IDs from TerraMatch...")
+def _create_folder_if_not_exists(folder_path):
+    """
+    Creates a folder if it does not already exist.
 
-    cohort = params['outfile']['cohort']
-    keyword = 'terrafund' if cohort == 'c1' else 'terrafund-landscapes'
-    url = TM_PROD_URI
-    tm_auth_path = os.path.abspath(params['config'])
-
-    with open(tm_auth_path) as auth_file:
-        auth = yaml.safe_load(auth_file)
-    access_token = auth['tm_api']['tm_access_token']
-    headers = {'Authorization': f"Bearer {access_token}"}
-    api_param_dict = {'projectCohort[]': keyword,
-                      'polygonStatus[]': 'approved',
-                      'includeTestProjects': 'false',
-                      'page[size]': '100'
-                      }
+    Args:
+        folder_path (str): The path of the folder to create.
+    """
     try:
-        results = pull_tm_api_data(url, headers, api_param_dict, normalize_column_names=False)
+        # os.makedirs with exist_ok=True will not raise an error if the folder exists
+        os.makedirs(folder_path, exist_ok=True)
+        print(f"Folder ready at: {folder_path}")
+    except OSError as e:
+        print(f"Error creating folder '{folder_path}': {e}")
 
-        ids = list({
-            str(r["projectId"])
-            for r in results
-            if "projectId" in r and r["projectId"] is not None
-        })
-        if len(ids) < 1:
-            print(f"Error: only found {len(ids)} project IDs. Exiting.")
-            sys.exit(1)
-        else:
-            print(f"Found {len(ids)} project IDs for {cohort}.")
-
-    except Exception as e:
-        raise Exception(f"Error pulling project ids: {e}")
-
-    return ids
-
-
-def get_tm_feats(params, secrets, geojson_dir, tm_outfile, project_ids):
+def get_geoparquet(params, secrets, tm_raw):
     """
-    Wrapper function around the TM API package.
+    Download a geoparquet file from S3 with boto3, load it with GeoPandas,
+    and save it as a CSV.
 
-    Iterates over a list of project IDs and aggregates results.
-    Saves GeoJSON locally only if geojson_dir is provided.
-    Uploads GeoJSON to S3 only if geojson_s3_bucket is set.
-    Skips local file creation entirely if only S3 is used
-
-    Parameters:
-        url (str): TerraMatch API endpoint.
-        headers (dict): Auth headers.
-        project_ids (list): List of project UUIDs.
-        outfile (str): Optional path to write output JSON.
-        geojson_dir (str): Optional directory to save project-level GeoJSONs.
+    Assumptions:
+    - params["outfile"]["tm_geoparquet_source"] stores the S3 path
+      like: s3://bucket/path/to/file.geoparquet
+    - tm_outfile is the CSV output path
+    - AWS auth through console credentials and profile
     """
-    url = TM_STAGING_URI if params['tm_api']['tm_environment'] == 'staging' else TM_PROD_URI
-    out = params['outfile']
-    data_version = out['data_version']
 
-    access_token = secrets['tm_api']['tm_access_token']
-    auth_headers = {'Authorization': f"Bearer {access_token}"}
+    s3_url = params["s3"].get("geoparquet")
+    aws_profile = secrets.get("aws", {}).get("aws_profile")
 
-    all_results = []
+    # Parse s3:// url to get bucket/key
+    parsed = urlparse(s3_url)
+    if parsed.scheme != "s3":
+        raise ValueError(f"Expected s3:// URL, got: {s3_url}")
 
-    if geojson_dir:
-        os.makedirs(geojson_dir, exist_ok=True)
+    bucket = parsed.netloc
+    key = parsed.path.lstrip("/")
 
-    with tqdm(total=len(project_ids), desc="Pulling Projects", unit="project") as progress:
-        for project_id in project_ids:
+    # Create target folder
+    target_folder = os.path.dirname(tm_raw)
+    remove_folder(target_folder)
+    create_folder(target_folder)
 
-            api_param_dict = {
-                'projectId[]': project_id,
-                'polygonStatus[]': 'approved',
-                'includeTestProjects': 'false',
-                'page[size]': '100'
-            }
+    # Retrieve parquet file from S3
+    session = boto3.Session(profile_name=aws_profile)
+    s3_client = session.client("s3")
+    s3_client.download_file(bucket, key, tm_raw)
+    print(f"Downloaded to {tm_raw}")
 
-            try:
-                results = pull_tm_api_data(url, auth_headers, api_param_dict, normalize_column_names=False)
-                if results is None:
-                    print(f"No results returned for project: {project_id}")
-                    progress.update(1)
-                    continue
-
-                # Add project_id for traceability
-                for r in results:
-                    r['project_id'] = project_id
-
-                all_results.extend(results)
-
-            except Exception as e:
-                print(f"Error pulling project {project_id}: {e}")
-
-            try:
-                gdf = gpd.GeoDataFrame(
-                    results,
-                    geometry=[shape(feature['geometry']) for feature in results],
-                    crs='EPSG:4326'
-                )
-                project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')),
-                                    project_id)
-                filename = f"{project_name}_{data_version}.geojson"
-                gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
-            except Exception as e:
-                print(f"Geojson creation error for {project_name}: {e}")
-
-            if params['s3']['upload']:
-                upload_to_s3(params, params["config"], project_name, data_version)
-
-            progress.update(1)
-
-    if tm_outfile:
-        dir = os.path.dirname(tm_outfile)
-        create_folder(dir)
-        outfile_path = os.path.join(get_project_root_dir(), tm_outfile)
-        with open(outfile_path, "w") as f:
-            json.dump(all_results, f, indent=4)
-        print(f"Results saved to {outfile_path}")
-
-    return all_results
-
+    return tm_raw
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     '''
@@ -199,8 +129,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     slope_thresh = params['criteria']['slope_thresh']
 
     project_names = feats_df['project_name'].unique()
-    project_names = [i for i in project_names if
-                     i != 'MLI_22_ASIC']  # still has an erroneous polygon that breaks the pipeline
+    project_names = [i for i in project_names]  
     dfs_to_concat = []
     for name in project_names:
         this_project = []
@@ -209,7 +138,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
         stat_path = convert_to_os_path(project_data_dir, params['outfile']['project_stats'].format(name=name))
         if os.path.exists(stat_path):
             dfs_to_concat.append(pd.read_csv(stat_path))
-            print(f"{name} already processed, skipping. Data available in {stat_path}")
+            print(f"{name} already processed, skipping.") # Data available in {stat_path}")
             continue
         else:
             print(f"Processing {name}")
@@ -566,3 +495,42 @@ def _reproject_raster_in_memory(input_memfile, dst_crs):
 
     # IMPORTANT: return the MemoryFile itself — not the open dataset
     return output_memfile
+
+
+def aws_profile_exists(profile_name: str) -> bool:
+    """
+    Check if an AWS CLI profile exists in ~/.aws/config or ~/.aws/credentials.
+
+    Args:
+        profile_name (str): The AWS profile name to check.
+
+    Returns:
+        bool: True if the profile exists, False otherwise.
+    """
+    import configparser
+
+    if not profile_name or not isinstance(profile_name, str):
+        raise ValueError("Profile name must be a non-empty string.")
+
+    # AWS config and credentials file paths
+    aws_dir = os.path.expanduser("~/.aws")
+    config_path = os.path.join(aws_dir, "config")
+    credentials_path = os.path.join(aws_dir, "credentials")
+
+    parser = configparser.ConfigParser()
+
+    # Check credentials file
+    if os.path.exists(credentials_path):
+        parser.read(credentials_path)
+        if profile_name in parser.sections():
+            return True
+
+    # Check config file (profiles are prefixed with 'profile ' except 'default')
+    if os.path.exists(config_path):
+        parser.read(config_path)
+        if profile_name == "default" and "default" in parser.sections():
+            return True
+        if f"profile {profile_name}" in parser.sections():
+            return True
+
+    return False

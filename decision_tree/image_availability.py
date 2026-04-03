@@ -25,18 +25,27 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     sun = criteria.get('sun_elevation')
     
     proj_df.columns = proj_df.columns.str.lower()
-    img_df = pd.read_csv(maxar_fp)
-    img_df = img_df[['project_id', 'poly_id', 'site_id', 
-                     'datetime', 'eo:cloud_cover', 
-                     'view:sun_elevation', 'view:off_nadir']].copy()
-   
+    img_df = pd.read_csv(maxar_fp, dtype={"datetime": "string"})
+    img_df = img_df[[
+            'project_id', 'poly_id', 'site_id',
+            'datetime',
+            'area:cloud_cover_percentage',
+            'view:sun_elevation',
+            'area:avg_off_nadir_angle'
+            ]].copy()
+
+    img_df["img_date"] = pd.to_datetime(
+        img_df["datetime"].str.strip(), 
+        format="%m/%d/%y",
+        errors="coerce"
+        )
+
     # Ensure correct datatypes
-    img_df['img_date'] = pd.to_datetime(img_df['datetime'], errors='coerce').dt.tz_localize(None)
-    num_cols = ['eo:cloud_cover', 'view:sun_elevation', 'view:off_nadir']
+    num_cols = ['area:cloud_cover_percentage', 'view:sun_elevation', 'area:avg_off_nadir_angle']
     img_df[num_cols] = img_df[num_cols].apply(pd.to_numeric, errors='coerce')
     proj_df['plantstart'] = pd.to_datetime(proj_df['plantstart'], errors='coerce')
-    if 'plantend' in proj_df.columns:
-        proj_df['plantend'] = pd.to_datetime(proj_df['plantend'], errors='coerce')
+
+    # merge img df and feats
     merged = img_df.merge(proj_df, on=['project_id', 'poly_id'], how='left')
 
     # Compute image availability window
@@ -45,9 +54,9 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     baseline = merged[
         (merged['date_diff'] >= baseline_range[0]) &
         (merged['date_diff'] <= baseline_range[1]) &
-        (merged['eo:cloud_cover'] < cloud_thresh) &
+        (merged['area:cloud_cover_percentage'] < cloud_thresh) &
         (merged['view:sun_elevation'] >= sun) &
-        (merged['view:off_nadir'] <= off_nadir)
+        (merged['area:avg_off_nadir_angle'] <= off_nadir)
     ]
     baseline_summary = (
         baseline.groupby(['project_id', 'poly_id'])
@@ -57,9 +66,9 @@ def analyze_image_availability(params, proj_df, maxar_fp):
     ev = merged[
         (merged['date_diff'] >= ev_range[0]) &
         (merged['date_diff'] <= ev_range[1]) &
-        (merged['eo:cloud_cover'] < cloud_thresh) &
+        (merged['area:cloud_cover_percentage'] < cloud_thresh) &
         (merged['view:sun_elevation'] >= sun) &
-        (merged['view:off_nadir'] <= off_nadir)
+        (merged['area:avg_off_nadir_angle'] <= off_nadir)
     ]
     ev_summary = (
         ev.groupby(['project_id', 'poly_id'])

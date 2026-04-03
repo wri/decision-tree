@@ -122,7 +122,6 @@ stack-data==0.6.3
 statsmodels @ file:///Users/runner/miniforge3/conda-bld/statsmodels_1727986709373/work
 terminado==0.18.1
 tinycss2==1.3.0
-tm_api_utils @ git+https://github.com/wri/terramatch-researcher-api@94930a4180a9531232577175520370ffcb6056a4
 tornado==6.4.1
 tqdm==4.67.1
 traitlets==5.14.3

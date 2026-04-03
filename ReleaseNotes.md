@@ -1,5 +1,9 @@
 # Release notes for decision-tree
 
+## 2026/04/02
+1. Replaced TerraMatch API-based data ingestion with a GeoParquet-based approach.
+2. Refactors the pipeline inputs / outputs by adding optional checkpoints to separate between research/production mode.
+
 ## 2026/03/26
 1. Switched to using gri-shared-library repo
 

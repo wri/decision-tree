@@ -15,12 +15,13 @@
 # =============================================================================
 
 config: secrets.yaml
-mode: partial  # options: full, partial, score
+mode: full  # options: full, partial, score
 
 s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
+  geoparquet: s3://wri-restoration-geodata/terramatch/tm.geoparquet
 
 asana:
   upload: false
@@ -38,7 +39,7 @@ criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50                                             # threshold for identifying image quality
   off_nadir: 30                                                # number of degrees that the sensor varies from vertical
-  sun_elevation: 30
+  sun_elevation: 20
   img_count: 1                                                 # threshold for identifying image availability
   baseline_range: [-365, 0]                                    # baseline window (1 year before plant start date)
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
@@ -51,26 +52,27 @@ cost:
   remote: 20.0
 
 outfile: # file paths are relative to the project root
-  data_version: 07-14-2025
-  experiment_id: exp2
-  cohort: c1
+  data_version: 03-30-2026 #DD-MM-YYYY
+  experiment_id: exp1
+  cohort: c2
   project_data_folder: 'data'
   # file paths are relative to the project_data_folder under the project root
   portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: geojsons/
-  tm_response: tm_api_response/{cohort}_{data_version}.json
+  geoparquet: tm_raw/tm_{data_version}.geoparquet
   slope_stats: slope/slope_statistics_{cohort}_{data_version}.csv
   project_stats: slope/project_statistics/{name}_slope_stats.csv
-  feats: feats/tm_api_{cohort}_{data_version}.csv
-  feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv
+  feats: feats/tm_feats_{cohort}_{data_version}.csv
+  feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv # confirm this
   maxar_meta: imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
   tree_results: tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
   poly_decision: decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
   prj_decision: decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
+
 suitability:
   area_col: area
-  min_coverage: 0.6                        # require at least 60% of project area to have a valid polygon score
+  min_coverage: 0.6                        # require at least 60% of available area to have a valid polygon score
   thresholds:
     weak_field: 30
     weak_remote: 55

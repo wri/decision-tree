@@ -127,9 +127,7 @@ class VerificationDecisionTree:
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
 
-            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir)
-            if self.mode.lower() == "projectids":
-                tm_clean = tm_clean[tm_clean['project_id'].isin(project_ids)].reset_index(drop=True)
+            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir, project_ids)
             self.checkpoint.save("feats", tm_clean)
 
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)

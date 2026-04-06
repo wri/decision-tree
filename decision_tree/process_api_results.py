@@ -7,7 +7,7 @@ import os
 import json
 from shapely import wkb
 
-def process_tm_results(params, results, geojson_dir, save_geojsons=True):
+def process_tm_results(params, results, geojson_dir, project_ids=None, save_geojsons=True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
@@ -20,8 +20,17 @@ def process_tm_results(params, results, geojson_dir, save_geojsons=True):
     cohort_raw = out['cohort']
     cohort = 'terrafund' if cohort_raw == 'c1' else 'terrafund-landscapes'
 
+    # Ingest polygon data
     df = _read_geoparquet(results)
+
+    # Filter and rename for standard columns
     raw_df = flatten_tm_geoparquet(df)
+
+    # Filter to specified projects for projectid mode
+    if project_ids is not None:
+        raw_df = raw_df[raw_df['project_id'].isin(project_ids)].reset_index(drop=True)
+
+    # Filter to specified cohort
     raw_df = raw_df[(raw_df.cohort == cohort)]
 
     raw_df.columns = raw_df.columns.str.lower()

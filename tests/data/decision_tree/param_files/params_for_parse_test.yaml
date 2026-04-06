@@ -5,7 +5,7 @@ s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
-  geoparquet: s3://wri-restoration-geodata/terramatch/tm.geoparquet
+  geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/tm_2026-03-30_updated_cohort_name.geoparquet
 
 asana:
   upload: False
@@ -36,7 +36,7 @@ cost:
   remote: 20.0
 
 outfile:
-  data_version: 07-14-2025 # 06-30-2025
+  data_version: 03-30-2026 # 03-05-2026
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'tests/data/decision_tree/test_projects/test_01_gri'

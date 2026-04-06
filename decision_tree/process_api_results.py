@@ -18,7 +18,7 @@ def process_tm_results(params, results, geojson_dir, project_ids=None, save_geoj
     criteria = params.get("criteria", {})
     drop_missing = criteria.get("drop_missing", False)
     cohort_raw = out['cohort']
-    cohort = 'terrafund' if cohort_raw == 'c1' else 'terrafund-landscapes'
+    cohort = 'terrafund-cohort-1' if cohort_raw == 'c1' else 'terrafund-cohort-2'
 
     # Ingest polygon data
     df = _read_geoparquet(results)

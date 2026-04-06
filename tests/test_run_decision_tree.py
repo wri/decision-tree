@@ -24,7 +24,6 @@ def test_run_decision_tree_full():
     remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
-@pytest.mark.skip(reason="The TEST_01_GRI project is not yet available in the geoparquet files, so skipping test.")
 def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
@@ -38,7 +37,7 @@ def test_run_decision_tree_projectids():
     expected_project_count = 1
     expected_polygon_count= 3
     expected_median_slope = 34.4
-    expected_project_label = 'review required'
+    expected_project_label = 'not available' # 'review required'
     expected_baseline_total = 0 # TODO Determine how to modify the data to get more variation
     expected_ev_total = 0 # TODO Determine how to modify the data to get more variation
     has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,

@@ -52,7 +52,7 @@ jobs:
      - name: Configure AWS Credentials
        uses: aws-actions/configure-aws-credentials@v5.1.0
        with:
-         role-to-assume: arn:aws:iam::838255262149:role/restoration-gitub-actions
+         role-to-assume: arn:aws:iam::838255262149:role/restoration_s3_readonly
          aws-region: us-east-1
 
      - name: Run Tests

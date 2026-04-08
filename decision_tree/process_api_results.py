@@ -7,7 +7,7 @@ import os
 import json
 from shapely import wkb
 
-def process_tm_results(params, results, geojson_dir, project_ids=None, save_geojsons=True):
+def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_test_projects: bool = False, save_geojsons: bool = True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
@@ -18,17 +18,24 @@ def process_tm_results(params, results, geojson_dir, project_ids=None, save_geoj
     criteria = params.get("criteria", {})
     drop_missing = criteria.get("drop_missing", False)
     cohort_raw = out['cohort']
-    cohort = 'terrafund' if cohort_raw == 'c1' else 'terrafund-landscapes'
+    cohort = 'terrafund-cohort-1' if cohort_raw == 'c1' else 'terrafund-cohort-2'
 
     # Ingest polygon data
     df = _read_geoparquet(results)
 
-    # Filter and rename for standard columns
-    raw_df = flatten_tm_geoparquet(df)
+    # Filter for test projects
+    test_short_name_prefix = 'TEST_'
+    if limit_to_test_projects:
+        filtered_df = df[df['short_name'].str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
+    else:
+        filtered_df = df[~df['short_name'].str.contains(test_short_name_prefix, case=False, na=False) | df['short_name'].isna()].reset_index(drop=True)
 
     # Filter to specified projects for projectid mode
-    if project_ids is not None:
-        raw_df = raw_df[raw_df['project_id'].isin(project_ids)].reset_index(drop=True)
+    if project_ids:
+        filtered_df = filtered_df[filtered_df['project_id'].isin(project_ids)].reset_index(drop=True)
+
+    # Filter and rename for standard columns
+    raw_df = flatten_tm_geoparquet(filtered_df)
 
     # Filter to specified cohort
     raw_df = raw_df[(raw_df.cohort == cohort)]

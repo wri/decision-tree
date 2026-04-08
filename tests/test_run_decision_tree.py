@@ -7,38 +7,42 @@ from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TE
 from tools import has_expected_project_ev_values
 
 
-@pytest.mark.skip(reason="This option is very slow and expensive so not normally executed.")
+@pytest.mark.skip(reason="Disabled until an AWS role is available for execution in GitHub Actions.")
 def test_run_decision_tree_full():
-    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
-    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
+    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=None, limit_to_test_projects=True)
 
     # verify that a project was returned
     assert len(prj_results) >= 1
 
     # Clean up temporary folders
+    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     remove_folder(os.path.join(test_project, "slope"))
     remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
-@pytest.mark.skip(reason="The TEST_01_GRI project is not yet available in the geoparquet files, so skipping test.")
+@pytest.mark.skip(reason="Disabled until an AWS role is available for execution in GitHub Actions.")
 def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
-    project_ids = [TEST_01_GRI_PROJECT_ID] # TEST_01_GRI
-    # project_ids = ['d1f355a2-3e0f-4ffd-bb2f-eec104bf8442'] # Only use for examination of an actual project
-    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids)
+    project_ids = [TEST_01_GRI_PROJECT_ID]
+    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids, limit_to_test_projects=True)
+
+    # REAL PROJECT BELOW - Only use for examination of an actual project
+    # project_ids = ['6daf9f10-dcb8-4b6d-8955-19e6df7ec48a'] # 'BUR_23_GB'
+    # slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids)
+    # REAL PROJECT ABOVE
 
     expected_project_count = 1
     expected_polygon_count= 3
     expected_median_slope = 34.4
-    expected_project_label = 'review required'
+    expected_project_label = 'not available' # 'review required'
     expected_baseline_total = 0 # TODO Determine how to modify the data to get more variation
     expected_ev_total = 0 # TODO Determine how to modify the data to get more variation
     has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
@@ -54,7 +58,7 @@ def test_run_decision_tree_score():
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
-    slope_statistics, poly_results, prj_results = workflow.run_decision_tree(None)
+    slope_statistics, poly_results, prj_results = workflow.run_decision_tree()
 
     # verify that two projects were returned
     expected_project_count = 1

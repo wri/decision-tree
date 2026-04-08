@@ -112,14 +112,14 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self, project_ids: list[str] = None):
+    def run_decision_tree(self, project_ids: list[str] = None, limit_to_test_projects: bool = False):
         if self.mode not in ["full", "score", "projectids"]:
             raise ValueError("Invalid mode")
 
-        if self.mode in ["full", "score"] and project_ids is not None:
+        if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
             raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
 
-        if self.mode == "projectids" and project_ids is None:
+        if self.mode == "projectids" and (project_ids is None or project_ids == []):
             raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
         slope_statistics = None
@@ -127,7 +127,7 @@ class VerificationDecisionTree:
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
 
-            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir, project_ids)
+            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir, project_ids, limit_to_test_projects)
             self.checkpoint.save("feats", tm_clean)
 
             slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)

@@ -30,6 +30,7 @@ from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
 from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder, remove_folder
+from gri_shared_library.s3_tools import get_aws_session
 
 
 def _create_folder_if_not_exists(folder_path):
@@ -75,8 +76,8 @@ def get_geoparquet(params, secrets, tm_raw):
     create_folder(target_folder)
 
     # Retrieve parquet file from S3
-    session = boto3.Session(profile_name=aws_profile)
-    s3_client = session.client("s3")
+    aws_session = get_aws_session(profile_name=aws_profile)
+    s3_client = aws_session.client("s3")
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 

@@ -7,7 +7,6 @@ from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TE
 from tools import has_expected_project_ev_values
 
 
-@pytest.mark.skip(reason="Disabled until an AWS role is available for execution in GitHub Actions.")
 def test_run_decision_tree_full():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
 
@@ -24,7 +23,6 @@ def test_run_decision_tree_full():
     remove_folder(os.path.join(test_project, "tm_api_response"))
 
 
-@pytest.mark.skip(reason="Disabled until an AWS role is available for execution in GitHub Actions.")
 def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")

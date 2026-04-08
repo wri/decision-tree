@@ -36,6 +36,25 @@ jobs:
      - name: Install UV
        uses: astral-sh/setup-uv@v6
 
+      # Configure AWS credentials (OIDC, modern)
+     - name: Configure LAND AWS credentials
+       id: land_creds
+       uses: aws-actions/configure-aws-credentials@v5
+       with:
+         role-to-assume: ${{ secrets.LAND_ROLE_ARN }}
+         aws-region: us-east-1
+         output-credentials: true
+
+     - name: Write named AWS profiles
+       run: |
+        mkdir -p ~/.aws
+        cat <<EOF > ~/.aws/credentials
+        [LandResearchUser]
+        aws_access_key_id=${{ steps.land_creds.outputs.aws-access-key-id }}
+        aws_secret_access_key=${{ steps.land_creds.outputs.aws-secret-access-key }}
+        aws_session_token=${{ steps.land_creds.outputs.aws-session-token }}
+        EOF
+
       # Authenticate git+https://github.com/... for uv/pip
      - name: Configure Git auth for private GitHub deps
        run: |
@@ -48,12 +67,6 @@ jobs:
        run: |
         sudo apt update
         sudo apt install -y gdal-bin libgdal-dev
-
-     - name: Configure AWS Credentials
-       uses: aws-actions/configure-aws-credentials@v5.1.0
-       with:
-         role-to-assume: arn:aws:iam::838255262149:role/restoration-gitub-actions
-         aws-region: us-east-1
 
      - name: Run Tests
        run: uv run pytest tests/

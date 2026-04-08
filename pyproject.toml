@@ -23,7 +23,7 @@ dependencies = [
     "shapely",
     "tqdm",
     "utm",
-    "gri-shared-library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@main",
+    "gri-shared-library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@s3_client_attempt",
 ]
 
 [build-system]

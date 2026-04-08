@@ -48,7 +48,7 @@ outfile:
   project_stats: slope/project_statistics/{name}_slope_stats.csv
   feats: feats/tm_feats_{cohort}_{data_version}.csv
   feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv # confirm this
-  maxar_meta: imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
+  maxar_meta: imagery_availability/comb_img_availability_{cohort}.csv
   tree_results: tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
   poly_decision: decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
   prj_decision: decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv

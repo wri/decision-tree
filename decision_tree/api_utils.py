@@ -58,9 +58,12 @@ def get_geoparquet(params, secrets, tm_raw):
     - tm_outfile is the CSV output path
     - AWS auth through console credentials and profile
     """
-
-    s3_url = params["s3"].get("geoparquet")
+    data_v = params["outfile"].get("data_version")
+    month, day, year = data_v.split("-")
+    data_v_reformat = f"{year}-{month}-{day}"
+    s3_url = params["s3"].get("geoparquet").format(data_version=data_v_reformat)
     aws_profile = secrets.get("aws", {}).get("aws_profile")
+    print(s3_url)
 
     # Parse s3:// url to get bucket/key
     parsed = urlparse(s3_url)

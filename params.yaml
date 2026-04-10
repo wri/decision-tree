@@ -7,10 +7,9 @@
 #
 # Notes:
 # - 'mode' indicates where the pipeline begins. Options: full, partial, score
-# File storage:
-# - files are named according to the 'data_version', 'experiment_id' and 'cohort'
+# File storage: files are named according to the 'data_version', 'experiment_id' and 'cohort'
 #   - 'data version' identifies cached inputs by the date they were downloaded
-#   - 'experiment id' tracks different experiments using same input data
+#   - 'experiment id' tracks different experiments using same data version
 #   - 'cohort' refers to the batch of TerraFund projects that will be processed
 # =============================================================================
 
@@ -21,7 +20,7 @@ s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
-  geoparquet: s3://wri-restoration-geodata/terramatch/tm.geoparquet
+  geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
 
 asana:
   upload: false
@@ -52,7 +51,7 @@ cost:
   remote: 20.0
 
 outfile: # file paths are relative to the project root
-  data_version: 03-30-2026 #DD-MM-YYYY
+  data_version: 04-09-2026 #MM-DD-YYYY
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'data'

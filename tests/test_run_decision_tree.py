@@ -1,13 +1,14 @@
 import os
 import pytest
+import yaml
 from gri_shared_library.os_tools import remove_folder
 
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, \
+    TEST_REAL_PROJECT_C1_ID
 from tools import has_expected_project_ev_values
 
 
-@pytest.mark.skip(reason="Disabled until an AWS role is available for execution in GitHub Actions.")
 def test_run_decision_tree_full():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
 
@@ -19,12 +20,9 @@ def test_run_decision_tree_full():
     assert len(prj_results) >= 1
 
     # Clean up temporary folders
-    test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
-    remove_folder(os.path.join(test_project, "slope"))
-    remove_folder(os.path.join(test_project, "tm_api_response"))
+    _cleanup_test_result_folders(params_path)
 
 
-@pytest.mark.skip(reason="Disabled until an AWS role is available for execution in GitHub Actions.")
 def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
@@ -35,7 +33,7 @@ def test_run_decision_tree_projectids():
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids, limit_to_test_projects=True)
 
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    # project_ids = ['6daf9f10-dcb8-4b6d-8955-19e6df7ec48a'] # 'BUR_23_GB'
+    # project_ids = [TEST_REAL_PROJECT_C1_ID]
     # slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids)
     # REAL PROJECT ABOVE
 
@@ -49,8 +47,7 @@ def test_run_decision_tree_projectids():
                                    expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
     # Clean up temporary folders
-    remove_folder(os.path.join(test_project, "slope"))
-    remove_folder(os.path.join(test_project, "tm_api_response"))
+    _cleanup_test_result_folders(params_path)
 
 
 def test_run_decision_tree_score():
@@ -69,6 +66,9 @@ def test_run_decision_tree_score():
     expected_ev_total = 0 # TODO Determine how to modify the data to get more variation
     has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
                                    expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
+
+    # Clean up temporary folders
+    _cleanup_test_result_folders(params_path)
 
 
 def test_run_decision_tree_param_parsing():
@@ -100,3 +100,14 @@ def _has_expected_attributes(obj, expected_attrs):
         raise ValueError("All attribute names must be strings")
 
     return all(hasattr(obj, attr) for attr in expected_attrs)
+
+def _cleanup_test_result_folders(params_path):
+    # Clean up temporary folders
+    with open(params_path, 'r') as file:
+        params = yaml.safe_load(file)
+    project_data_folder = params['outfile']['project_data_folder']
+    test_project = str(os.path.join(DT_TEST_PROJECTS, project_data_folder))
+    remove_folder(os.path.join(test_project, "geojsons"))
+    remove_folder(os.path.join(test_project, "tm_raw"))
+    remove_folder(os.path.join(test_project, "slope"))
+    remove_folder(os.path.join(test_project, "tm_api_response"))

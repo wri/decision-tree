@@ -7,7 +7,12 @@ import os
 import json
 from shapely import wkb
 
-def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_test_projects: bool = False, save_geojsons: bool = True):
+def process_tm_results(params, 
+                       results: str, 
+                       geojson_dir: str, 
+                       project_ids=None, 
+                       limit_to_test_projects: bool = False, 
+                       save_geojsons: bool = True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
@@ -26,19 +31,23 @@ def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_
     # Filter for test projects
     test_short_name_prefix = 'TEST_'
     if limit_to_test_projects:
-        filtered_df = df[df['short_name'].str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
+        filtered_df = df[df['short_name']
+                         .str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
     else:
-        filtered_df = df[~df['short_name'].str.contains(test_short_name_prefix, case=False, na=False) | df['short_name'].isna()].reset_index(drop=True)
+        filtered_df = df[~df['short_name']
+                         .str.contains(test_short_name_prefix, case=False, na=False) 
+                         | df['short_name'].isna()].reset_index(drop=True)
 
     # Filter to specified projects for projectid mode
     if project_ids:
-        filtered_df = filtered_df[filtered_df['project_id'].isin(project_ids)].reset_index(drop=True)
+        filtered_df = filtered_df[filtered_df['project_id']
+                                  .isin(project_ids)].reset_index(drop=True)
 
     # Filter and rename for standard columns
     raw_df = flatten_tm_geoparquet(filtered_df)
 
     # Filter to specified cohort
-    raw_df = raw_df[(raw_df.cohort == cohort)]
+    raw_df = raw_df[raw_df["cohort"].str.contains(cohort, na=False)]
 
     raw_df.columns = raw_df.columns.str.lower()
     input_ids = set(raw_df["project_id"].dropna().unique())
@@ -54,17 +63,21 @@ def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_
         save_project_geojsons(clean_df, geojson_dir, data_version)
 
     output_ids = set(clean_df["project_id"].dropna().unique())
+    poly_ids = set(clean_df["poly_id"].dropna().unique())
+    total_area = sum(clean_df.calc_area)
 
     assert len(input_ids) == len(pre_clean_ids) == len(output_ids), (
         f"input: {len(input_ids)}, "
         f"preclean: {len(pre_clean_ids)}, "
         f"output: {len(output_ids)}"
     )
-    missing_projects = input_ids - output_ids
-    if missing_projects:
-        print(f"Missing prj ids: {missing_projects}")
-
-    print(f"\n Running forecast for {len(output_ids)} projects in {cohort} cohort.")
+    print(
+        f"\nRunning forecast for {cohort} cohort\n"
+        f"{cohort} has a total of:\n"
+        f"  {len(output_ids)} total projects\n"
+        f"  {len(poly_ids)} total polygons\n" 
+        f"  {total_area:,.2f} total hectares" 
+    )
     return clean_df
 
 

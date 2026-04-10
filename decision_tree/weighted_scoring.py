@@ -51,7 +51,7 @@ def apply_scoring(
     ev_col: str = "ev_decision",
 ) -> pd.DataFrame:
     """
-    Compute a single “Remote Suitability” score per polygon for baseline and EV.
+    Compute a single "Remote Suitability" score per polygon for baseline and EV.
 
     Concept
     -------
@@ -102,9 +102,37 @@ def apply_scoring(
     ev_only   = feats.get("ev_only", {}) or {}
 
     def _z_for(mode_col: str, extra_feats: dict, prefix: str):
+        """
+        Build and write the suitability score columns for one mode (baseline or EV).
+
+        Steps:
+          1. Feature contributions — iterate over all features defined in params
+             (common + mode-specific). For each feature value/condition that matches
+             a row, add the configured delta to that row's raw z score.
+             z > 0 pushes toward remote; z < 0 pushes toward field.
+
+          2. Discrete bonus — apply a small continuity nudge based on the
+             classification decision already assigned (e.g. 'strong remote' gets +1.0).
+             This keeps the continuous score consistent with the discrete decision.
+
+          3. Masking — set z to NaN for polygons that should not receive a numeric
+             score: mangrove polygons, 'review required', and 'not available'.
+             QA flag columns (e.g. baseline_mask_mangrove) are written for traceability.
+
+          4. Scale to 0–100 — pass z through logistic (or minmax) transformation.
+             Area-weighted score is also produced (score × polygon area).
+
+          5. Simple bin label — bucket the 0–100 score into human-readable labels
+             (strong remote / weak remote / weak field / strong field), then
+             overwrite masked polygons with their special label.
+
+        Writes columns: {prefix}_raw, {prefix}_score, {prefix}_score_wtd,
+                        {prefix}_simple_bin, {prefix}_mask_mangrove,
+                        {prefix}_mask_review_required, {prefix}_mask_not_available
+        """
         z = np.zeros(len(df), dtype=float)
 
-        # 1) feature contributions
+        # 1) Feature contributions
         for feat, value_map in {**common, **extra_feats}.items():
             if feat not in df.columns:
                 continue
@@ -116,7 +144,7 @@ def apply_scoring(
                 if mask.any():
                     z[mask.values] += float(delta)
 
-        # 2) optional continuity bonus from discrete decision
+        # 2) Discrete continuity bonus from classification decision
         if mode_col in df.columns:
             cur = df[mode_col].astype(str).str.strip().str.lower()
             for klass, bonus in base_bonus.items():
@@ -124,30 +152,22 @@ def apply_scoring(
                     continue
                 z[cur == str(klass).strip().lower()] += float(bonus)
 
-        # 3) Mask special cases (mode-aware)
-        #    - Mask mangrove & review in both modes
-        #    - Mask "not available" in whichever mode we're scoring (baseline OR EV)
+        # 3) Mask special cases — mangrove, review required, not available
         target = df.get("target_sys", pd.Series("", index=df.index)).astype(str).str.strip().str.lower()
         dec    = df.get(mode_col, pd.Series("", index=df.index)).astype(str).str.strip().str.lower()
         mang_mask   = (target == "mangrove")
         review_mask = (dec == "review required")
-        na_mask     = (dec == "not available")   # <-- mode-aware: baseline NA and EV NA both masked
+        na_mask     = (dec == "not available")
 
-        # QA flags
+        # QA flag columns for traceability
         df[f"{prefix}_mask_mangrove"]        = mang_mask
         df[f"{prefix}_mask_review_required"] = review_mask
         df[f"{prefix}_mask_not_available"]   = na_mask
 
-        # (optional) reason column helps debugging
-        # reason = pd.Series("", index=df.index)
-        # reason[mang_mask] = "mangrove"; reason[review_mask] = "review required"; reason[na_mask] = "not available"
-        # df[f"{prefix}_mask_reason"] = reason.replace("", np.nan)
-
-        # Apply masks to raw axis
         z = pd.Series(z, index=df.index, name=f"{prefix}_raw")
         z[mang_mask | review_mask | na_mask] = np.nan
 
-        # 4) map to 0..100 and area-weight
+        # 4) Scale to 0..100 and area-weight
         score_0_100 = pd.Series(
             _map_z_to_0_100(z.fillna(0).to_numpy(), scale_cfg),
             index=df.index, name=f"{prefix}_score"
@@ -156,21 +176,20 @@ def apply_scoring(
         area = pd.to_numeric(df.get(area_col, 1.0), errors="coerce").fillna(0).clip(lower=0)
         score_wtd = (score_0_100 * area).rename(f"{prefix}_score_wtd")
 
-        # 5) simple label for readability (remote/field bins); overwrite masked cases
+        # 5) Simple bin label; overwrite masked cases with their special label
         bins = np.array([0, 30, 55, 70, 100], dtype=float)
         labels = np.array(["strong field", "weak field", "weak remote", "strong remote"])
         lab = pd.cut(score_0_100, bins=bins, labels=labels, include_lowest=True).astype(object)
-        lab[mang_mask] = "mangrove"
-        lab[na_mask]   = "not available"
+        lab[mang_mask]   = "mangrove"
+        lab[na_mask]     = "not available"
         lab[review_mask] = "review required"
 
-        # write outputs
+        # Write outputs
         df[z.name] = z
         df[score_0_100.name] = score_0_100.round(1)
         df[score_wtd.name]   = score_wtd.round(1)
         df[f"{prefix}_simple_bin"] = lab
 
-    # single-underscore prefixes (prevents double-underscore column names)
     _z_for(baseline_col, base_only, prefix="baseline")
     _z_for(ev_col,       ev_only,   prefix="ev")
 
@@ -187,6 +206,87 @@ def _label_from_score(score: float, thr: Dict[str, float]) -> Optional[str]:
     if score >= thr.get("weak_remote", 55):   return "weak remote"
     if score >= thr.get("weak_field", 30):    return "weak field"
     return "strong field"
+
+
+def _score_one_mode(
+    g: pd.DataFrame,
+    score_col: str,
+    mask_prefix: str,
+    total_area: float,
+    min_cov: float,
+    thr: dict,
+    mang_thr: float,
+    rev_thr: float,
+    precedence: list,
+) -> dict:
+    """
+    Compute score, label, and coverage stats for one mode (baseline or EV)
+    for a single project group.
+
+    Parameters
+    ----------
+    g            : polygon-level rows for one project
+    score_col    : name of the 0–100 score column (e.g. 'baseline_score')
+    mask_prefix  : prefix used on QA mask columns (e.g. 'baseline')
+    total_area   : sum of all polygon areas in the project
+    min_cov      : minimum fraction of area that must be scored to publish a result
+    thr          : score thresholds for labelling (weak_field, weak_remote, strong_remote)
+    mang_thr     : area fraction above which project is labelled 'mangrove'
+    rev_thr      : area fraction above which project is labelled 'review required'
+    precedence   : order in which special labels override the numeric label
+
+    Returns
+    -------
+    dict with keys:
+      score_pub        : area-weighted project score (NaN if coverage too low)
+      label            : human-readable label (strong remote … strong field,
+                         or mangrove / review required / not available)
+      pct_area_scored  : fraction of project area with a valid score (0–1)
+      poly_frac_scored : fraction of polygons with a valid score (0–1)
+      scored_area      : total area of scored polygons
+      frac_mangrove    : fraction of project area flagged as mangrove
+    """
+    scored_mask = g[score_col].notna()
+    area_scored = g.loc[scored_mask, "_area_clean_"].sum()
+    coverage    = (area_scored / total_area) if total_area > 0 else 0.0
+
+    mang_mask = g.get(f"{mask_prefix}_mask_mangrove",
+                      pd.Series(False, index=g.index)).astype(bool)
+    rev_mask  = g.get(f"{mask_prefix}_mask_review_required",
+                      pd.Series(False, index=g.index)).astype(bool)
+
+    frac_mang = g.loc[mang_mask, "_area_clean_"].sum() / total_area if total_area > 0 else 0.0
+    frac_rev  = g.loc[rev_mask,  "_area_clean_"].sum() / total_area if total_area > 0 else 0.0
+
+    poly_frac_scored = round(scored_mask.sum() / len(g), 3) if len(g) > 0 else 0.0
+
+    raw_score = (
+        (g.loc[scored_mask, score_col] * g.loc[scored_mask, "_area_clean_"]).sum() / area_scored
+        if area_scored > 0 else np.nan
+    )
+
+    # Provisional label from coverage
+    if coverage < min_cov:
+        score_pub, label = np.nan, "not available"
+    else:
+        score_pub = round(float(raw_score), 1) if pd.notna(raw_score) else np.nan
+        label = _label_from_score(score_pub, thr) if pd.notna(score_pub) else "not available"
+
+    # Special-label overrides in precedence order
+    for tag in precedence:
+        if tag == "mangrove"        and frac_mang >= mang_thr: label, score_pub = "mangrove", np.nan; break
+        if tag == "review required" and frac_rev  >= rev_thr:  label, score_pub = "review required", np.nan; break
+        if tag == "not available"   and coverage  < min_cov:   label, score_pub = "not available", np.nan; break
+
+    return {
+        "score_pub":        score_pub,
+        "label":            label,
+        "pct_area_scored":  round(float(coverage), 3),
+        "poly_frac_scored": poly_frac_scored,
+        "scored_area":      round(float(area_scored), 3),
+        "frac_mangrove":    round(float(frac_mang), 3),
+    }
+
 
 def aggregate_project_score(
     params: Dict,
@@ -206,19 +306,27 @@ def aggregate_project_score(
     - Special labels 'mangrove' / 'review required' can override via area fractions.
 
     'not available' is determined *only* by coverage (no NA-area threshold).
+
+    Output columns
+    --------------
+    base_score            : area-weighted 0–100 suitability score
+    base_label            : human-readable label for the project
+    base_pct_area_scored  : fraction of project area with a valid polygon score (0–1)
+    base_poly_frac_scored : fraction of polygons with a valid score (0–1)
+    base_scored_area      : total area (ha) of scored polygons
+    base_frac_mangrove    : fraction of project area flagged as mangrove
+    ev_*                  : same set of columns for the EV mode
     """
     suit = (params or {}).get("suitability", {})
     area_col = area_col or suit.get("area_col", "area")
     min_cov = float(suit.get("min_coverage", 0.6))
     thr = suit.get("thresholds", {"weak_field": 30, "weak_remote": 55, "strong_remote": 70})
 
-    # Special-label thresholds & precedence (no NA threshold)
     spec = suit.get("special_labels", {}) or {}
-    mang_thr = float(spec.get("mangrove_area_frac_threshold", 0.10))
-    rev_thr  = float(spec.get("review_area_frac_threshold", 0.10))
+    mang_thr   = float(spec.get("mangrove_area_frac_threshold", 0.10))
+    rev_thr    = float(spec.get("review_area_frac_threshold", 0.10))
     precedence = spec.get("precedence", ["mangrove", "review required", "not available"])
 
-    # Clean area
     area = pd.to_numeric(df.get(area_col, 1.0), errors="coerce").fillna(0).clip(lower=0)
     work = df.copy()
     work["_area_clean_"] = area
@@ -226,111 +334,38 @@ def aggregate_project_score(
     out_rows: List[Dict] = []
     for prj, g in work.groupby(project_col, dropna=False):
         total_area = g["_area_clean_"].sum()
-        total_polys = len(g)
 
-        # Project name (first non-null)
-        prj_name = g[project_name_col].dropna().iloc[0] if project_name_col in g.columns and g[project_name_col].notna().any() else None
+        prj_name = (
+            g[project_name_col].dropna().iloc[0]
+            if project_name_col in g.columns and g[project_name_col].notna().any()
+            else None
+        )
 
-        # ---------- BASELINE ----------
-        bmask_scored = g[baseline_score_col].notna()
-        b_area_scored = g.loc[bmask_scored, "_area_clean_"].sum()
-        b_cov = (b_area_scored / total_area) if total_area > 0 else 0.0
-
-        # Special-label area fractions (mangrove / review)
-        b_mang = (g.get("baseline_mask_mangrove", pd.Series(False, index=g.index))).astype(bool)
-        b_rev  = (g.get("baseline_mask_review_required", pd.Series(False, index=g.index))).astype(bool)
-
-        b_area_mang = g.loc[b_mang, "_area_clean_"].sum()
-        b_area_rev  = g.loc[b_rev,  "_area_clean_"].sum()
-        b_frac_mang = (b_area_mang / total_area) if total_area > 0 else 0.0
-        b_frac_rev  = (b_area_rev  / total_area) if total_area > 0 else 0.0
-
-        # Numeric score (area-weighted over scored polygons)
-        if b_area_scored > 0:
-            b_score = (g.loc[bmask_scored, baseline_score_col] * g.loc[bmask_scored, "_area_clean_"]).sum() / b_area_scored
-        else:
-            b_score = np.nan
-
-        # Provisional publish via coverage
-        if b_cov < min_cov:
-            b_score_pub = np.nan
-            b_label = "not available"
-        else:
-            b_score_pub = round(float(b_score), 1) if pd.notna(b_score) else np.nan
-            b_label = _label_from_score(b_score_pub, thr) if pd.notna(b_score_pub) else "not available"
-
-        # Override by precedence (no NA-area branch)
-        for tag in precedence:
-            if tag == "mangrove" and b_frac_mang >= mang_thr:
-                b_label, b_score_pub = "mangrove", np.nan
-                break
-            if tag == "review required" and b_frac_rev >= rev_thr:
-                b_label, b_score_pub = "review required", np.nan
-                break
-            if tag == "not available" and b_cov < min_cov:
-                b_label, b_score_pub = "not available", np.nan
-                break
-
-        # ---------- EV ----------
-        emask_scored = g[ev_score_col].notna()
-        e_area_scored = g.loc[emask_scored, "_area_clean_"].sum()
-        e_cov = (e_area_scored / total_area) if total_area > 0 else 0.0
-
-        e_mang = (g.get("ev_mask_mangrove", pd.Series(False, index=g.index))).astype(bool)
-        e_rev  = (g.get("ev_mask_review_required", pd.Series(False, index=g.index))).astype(bool)
-
-        e_area_mang = g.loc[e_mang, "_area_clean_"].sum()
-        e_area_rev  = g.loc[e_rev,  "_area_clean_"].sum()
-        e_frac_mang = (e_area_mang / total_area) if total_area > 0 else 0.0
-        e_frac_rev  = (e_area_rev  / total_area) if total_area > 0 else 0.0
-
-        if e_area_scored > 0:
-            e_score = (g.loc[emask_scored, ev_score_col] * g.loc[emask_scored, "_area_clean_"]).sum() / e_area_scored
-        else:
-            e_score = np.nan
-
-        if e_cov < min_cov:
-            e_score_pub = np.nan
-            e_label = "not available"
-        else:
-            e_score_pub = round(float(e_score), 1) if pd.notna(e_score) else np.nan
-            e_label = _label_from_score(e_score_pub, thr) if pd.notna(e_score_pub) else "not available"
-
-        for tag in precedence:
-            if tag == "mangrove" and e_frac_mang >= mang_thr:
-                e_label, e_score_pub = "mangrove", np.nan
-                break
-            if tag == "review required" and e_frac_rev >= rev_thr:
-                e_label, e_score_pub = "review required", np.nan
-                break
-            if tag == "not available" and e_cov < min_cov:
-                e_label, e_score_pub = "not available", np.nan
-                break
+        b = _score_one_mode(g, baseline_score_col, "baseline",
+                            total_area, min_cov, thr, mang_thr, rev_thr, precedence)
+        e = _score_one_mode(g, ev_score_col, "ev",
+                            total_area, min_cov, thr, mang_thr, rev_thr, precedence)
 
         out_rows.append({
-            project_col: prj,
+            project_col:      prj,
             project_name_col: prj_name,
-            "total_area": round(float(total_area), 3),
+            "total_area":     round(float(total_area), 3),
 
             # Baseline
-            "baseline_project_score_0_100": b_score_pub,
-            "baseline_project_label": b_label,
-            "baseline_coverage_area_frac": round(float(b_cov), 3),
-            "baseline_scored_poly_count": int(bmask_scored.sum()),
-            "baseline_total_poly_count": int(total_polys),
-            "scored_area_baseline": round(float(b_area_scored), 3),
-            "baseline_frac_mangrove": round(float(b_frac_mang), 3),
-            "baseline_frac_review":   round(float(b_frac_rev), 3),
+            "base_score":            b["score_pub"],
+            "base_label":            b["label"],
+            "base_pct_area_scored":  b["pct_area_scored"],
+            "base_poly_frac_scored": b["poly_frac_scored"],
+            "base_scored_area":      b["scored_area"],
+            "base_frac_mangrove":    b["frac_mangrove"],
 
             # EV
-            "ev_project_score_0_100": e_score_pub,
-            "ev_project_label": e_label,
-            "ev_coverage_area_frac": round(float(e_cov), 3),
-            "ev_scored_poly_count": int(emask_scored.sum()),
-            "ev_total_poly_count": int(total_polys),
-            "scored_area_ev": round(float(e_area_scored), 3),
-            "ev_frac_mangrove": round(float(e_frac_mang), 3),
-            "ev_frac_review":   round(float(e_frac_rev), 3),
+            "ev_score":            e["score_pub"],
+            "ev_label":            e["label"],
+            "ev_pct_area_scored":  e["pct_area_scored"],
+            "ev_poly_frac_scored": e["poly_frac_scored"],
+            "ev_scored_area":      e["scored_area"],
+            "ev_frac_mangrove":    e["frac_mangrove"],
         })
 
     return pd.DataFrame(out_rows)

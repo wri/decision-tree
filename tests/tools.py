@@ -1,13 +1,4 @@
 import math
-import os
-
-from decision_tree.constants import PROJECT_ROOT
-
-
-def delete_source_geojsons_file(filename):
-    scratch_file_path1 = os.path.join(PROJECT_ROOT, "tests", "data", "geojsons", filename)
-    if os.path.isfile(scratch_file_path1):
-        os.remove(scratch_file_path1)
 
 
 def has_expected_project_ev_values(slope_statistics, poly_results, prj_results,

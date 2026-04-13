@@ -1,7 +1,6 @@
 import os
 import pytest
 import yaml
-from gri_shared_library.os_tools import remove_folder
 
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
 from conftest import DT_TEST_PROJECTS, DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, \
@@ -27,6 +26,7 @@ def test_run_decision_tree_projectids():
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     project_ids = [TEST_01_GRI_PROJECT_ID]
+
     slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids, limit_to_test_projects=True)
 
     # REAL PROJECT BELOW - Only use for examination of an actual project

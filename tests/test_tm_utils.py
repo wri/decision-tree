@@ -1,6 +1,6 @@
 import os
 import yaml
-from gri_shared_library.os_tools import remove_folder, create_folder
+from gri_shared_library.os_tools import create_folder
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 from decision_tree.constants import PROJECT_ROOT

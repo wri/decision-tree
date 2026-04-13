@@ -5,7 +5,7 @@ import pandas as pd
 import json
 from pathlib import Path
 
-from gri_shared_library.os_tools import create_folder, remove_folder
+from gri_shared_library.os_tools import create_folder
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
@@ -15,7 +15,6 @@ from decision_tree.slope import apply_slope_classification
 from decision_tree.s3_utils import upload_to_s3
 import decision_tree.decision_trees as tree
 import decision_tree.cost_calculator as price
-# from src import decision_tree as scoring, decision_tree as asana
 import decision_tree.weighted_scoring as scoring
 import decision_tree.update_asana as update_asana
 from decision_tree.tools import convert_to_os_path, load_secrets
@@ -38,12 +37,6 @@ class Checkpointer:
     def save(self, key: str, df: pd.DataFrame, always: bool = False):
         if self.enabled or always:
             path = self.paths[key]
-
-            # Create target folder
-            target_folder = os.path.dirname(path)
-            remove_folder(target_folder)
-            create_folder(target_folder)
-
             df.to_csv(path, index=False)
             print(f"[checkpoint] {key} → {path}")
 
@@ -126,7 +119,6 @@ class VerificationDecisionTree:
         if self.mode in ("full", "projectids"):
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
-
             tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir, project_ids, limit_to_test_projects)
             self.checkpoint.save("feats", tm_clean)
 
@@ -156,7 +148,7 @@ class VerificationDecisionTree:
 
 
 def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
-    """Run decision tree branch logic. Returns ev DataFrame — caller decides whether to persist."""
+    """Run decision tree branch logic."""
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
     branch_slope = apply_slope_classification(params, branch_canopy, slope_statistics)
@@ -165,7 +157,7 @@ def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statis
     return ev
 
 def compute_project_results(params, ev):
-    """Run decision scoring. Returns poly/prj DataFrame — caller decides whether to persist."""
+    """Run decision scoring."""
     scored = scoring.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(params, scored)
     prj_results = scoring.aggregate_project_score(params, scored)

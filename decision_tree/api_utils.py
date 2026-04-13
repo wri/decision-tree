@@ -72,7 +72,6 @@ def get_geoparquet(params, secrets, tm_raw):
 
     # Create target folder
     target_folder = os.path.dirname(tm_raw)
-    remove_folder(target_folder)
     create_folder(target_folder)
 
     # Retrieve parquet file from S3

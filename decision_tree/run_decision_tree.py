@@ -5,7 +5,7 @@ import pandas as pd
 import json
 from pathlib import Path
 
-from gri_shared_library.os_tools import create_folder, remove_folder
+from gri_shared_library.os_tools import create_folder
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
@@ -41,7 +41,6 @@ class Checkpointer:
 
             # Create target folder
             target_folder = os.path.dirname(path)
-            remove_folder(target_folder)
             create_folder(target_folder)
 
             df.to_csv(path, index=False)

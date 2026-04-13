@@ -19,9 +19,6 @@ def test_run_decision_tree_full():
     # verify that a project was returned
     assert len(prj_results) >= 1
 
-    # Clean up temporary folders
-    _cleanup_test_result_folders(params_path)
-
 
 def test_run_decision_tree_projectids():
     test_project = os.path.join(DT_TEST_PROJECTS, "test_01_gri")
@@ -46,9 +43,6 @@ def test_run_decision_tree_projectids():
     has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
                                    expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
 
-    # Clean up temporary folders
-    _cleanup_test_result_folders(params_path)
-
 
 def test_run_decision_tree_score():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
@@ -66,9 +60,6 @@ def test_run_decision_tree_score():
     expected_ev_total = 0 # TODO Determine how to modify the data to get more variation
     has_expected_project_ev_values(slope_statistics, poly_results, prj_results, expected_project_count, expected_polygon_count,
                                    expected_project_label, expected_median_slope, expected_baseline_total, expected_ev_total)
-
-    # Clean up temporary folders
-    _cleanup_test_result_folders(params_path)
 
 
 def test_run_decision_tree_param_parsing():
@@ -100,14 +91,3 @@ def _has_expected_attributes(obj, expected_attrs):
         raise ValueError("All attribute names must be strings")
 
     return all(hasattr(obj, attr) for attr in expected_attrs)
-
-def _cleanup_test_result_folders(params_path):
-    # Clean up temporary folders
-    with open(params_path, 'r') as file:
-        params = yaml.safe_load(file)
-    project_data_folder = params['outfile']['project_data_folder']
-    test_project = str(os.path.join(DT_TEST_PROJECTS, project_data_folder))
-    remove_folder(os.path.join(test_project, "geojsons"))
-    remove_folder(os.path.join(test_project, "tm_raw"))
-    remove_folder(os.path.join(test_project, "slope"))
-    remove_folder(os.path.join(test_project, "tm_api_response"))

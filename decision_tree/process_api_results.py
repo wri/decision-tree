@@ -52,6 +52,7 @@ def process_tm_results(params,
     raw_df.columns = raw_df.columns.str.lower()
     input_ids = set(raw_df["project_id"].dropna().unique())
     pre_clean_ids = set(raw_df["project_id"].dropna().unique())
+    raw_df['notes'] = None
 
     clean_df = clean_datetime_column(raw_df, "plantstart")
     clean_df = missing_planting_dates(clean_df, drop_missing)
@@ -64,7 +65,7 @@ def process_tm_results(params,
 
     output_ids = set(clean_df["project_id"].dropna().unique())
     poly_ids = set(clean_df["poly_id"].dropna().unique())
-    total_area = sum(clean_df.calc_area)
+    total_area = sum(clean_df["area"])
 
     assert len(input_ids) == len(pre_clean_ids) == len(output_ids), (
         f"input: {len(input_ids)}, "
@@ -127,9 +128,7 @@ def flatten_tm_geoparquet(results):
             "plantstart": row_dict.get("plantstart"),
             "practice": row_dict.get("practice"),
             "target_sys": row_dict.get("target_sys"),
-            "dist": row_dict.get("distr"),
-            "project_phase": row_dict.get("project_phase"),
-            "area": row_dict.get("calcarea"),
+            "area": row_dict.get("calc_area"),
             **tree_cover_years,
         })
 
@@ -148,10 +147,12 @@ def extract_tree_cover_years(row_dict):
     if not isinstance(ttc_values, list):
         return out
 
+    current_year = datetime.today().year
     for item in ttc_values:
         year, percent_cover = item
         year = int(year)
-        out[f"ttc_{year}"] = percent_cover
+        if 2020 <= year <= current_year:
+            out[f"ttc_{year}"] = percent_cover
 
     return out
 
@@ -164,6 +165,7 @@ def save_project_geojsons(df, geojson_dir, data_version):
     - Flags and skips null or empty geometries
     - Attempts to repair invalid geometries with buffer(0); skips if unrecoverable
     - Serializes list-type fields (e.g. dist) that are unsupported by OGR (type 5 = RealList)
+    Problematic polygons persist but are not written to disk.
     """
     os.makedirs(geojson_dir, exist_ok=True)
     print("Saving project GeoJSONs...")
@@ -219,6 +221,7 @@ def save_project_geojsons(df, geojson_dir, data_version):
                     f"⚠️ Skipping polygon: project={project_name}, "
                     f"project_id={project_id}, poly_id={poly_id}, reason={reason}"
                 )
+                df.loc[df['poly_id'] == poly_id, 'notes'] = 'invalid-geometry'
  
         if not valid_rows:
             print(f"⚠️ No valid polygons for {project_name} ({project_id}); skipping GeoJSON.")
@@ -281,6 +284,14 @@ def missing_planting_dates(df, drop=False):
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
     missing_start = df[df['plantstart'].isna()]
+    df.loc[missing_start.index, 'notes'] = 'missing-plantstart'
+
+    # invalid plantstart
+    current_year = datetime.today().year
+    plantstart_year = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
+    invalid_year_mask = (plantstart_year < 2020) | (plantstart_year > current_year)
+    df.loc[invalid_year_mask, 'notes'] = 'invalid-plantstart'
+
     for _, row in missing_start[['project_name', 'project_id', 'poly_id']].drop_duplicates().iterrows():
         print(f"{row['project_name']} | {row['project_id']} | {row['poly_id']}")
 
@@ -328,8 +339,11 @@ def missing_features(df, drop=False, save_missing=True):
     # Only consider missing TTC for plantstart years 2017-2025 inclusive
     eligible_ttc_mask = plantstart_year.between(2017, 2025, inclusive='both')
     null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
+    df.loc[null_rows.index, 'notes'] = 'missing-ttc'
     missing_practice = df[df['practice'].isna()]
+    df.loc[missing_practice.index, 'notes'] = 'missing-practice'
     missing_targetsys = df[df['target_sys'].isna()]
+    df.loc[missing_targetsys.index, 'notes'] = 'missing-target-sys'
     if save_missing and not null_rows.empty:
         print("TTC NaNs saved to file.")
         null_rows.to_csv('ttc_nans.csv', index=False)
@@ -398,6 +412,9 @@ def resolve_multipractice(df):
             print(f"{name} updated one polygon to -> '{val}'")
     else:
         print("No single-row multi-practice projects were updated.")
+
+    still_multi = df['practice'].astype(str).str.contains(r'\|', na=False)
+    df.loc[still_multi, 'notes'] = 'multi-practice'
 
     return df
 

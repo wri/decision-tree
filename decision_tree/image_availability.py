@@ -1,7 +1,7 @@
 import pandas as pd
 
 def analyze_image_availability(params, 
-                               proj_df: pd.Dataframe, 
+                               proj_df, 
                                maxar_fp: str):
     """
     Assesses image availability for baseline & early verification per 
@@ -36,10 +36,11 @@ def analyze_image_availability(params,
             ]].copy()
 
     img_df["img_date"] = pd.to_datetime(
-        img_df["datetime"].str.strip(), 
-        format="%m/%d/%y",
-        errors="coerce"
-        )
+        img_df["datetime"].str.strip(),
+        format="%Y-%m-%d %H:%M:%S.%f%z",
+        errors="coerce",
+        utc=True
+    ).dt.tz_convert(None)
 
     # Ensure correct datatypes & merge
     proj_df['plantstart'] = pd.to_datetime(proj_df['plantstart'], errors='coerce')

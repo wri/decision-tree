@@ -1,47 +1,29 @@
 import numpy as np
 import pandas as pd
-import re
 from typing import Dict, List, Optional
 
-_OP_RE = re.compile(r'^\s*(>=|<=|==|>|<)\s*([-+]?\d+(?:\.\d+)?)\s*$')
 
-def _cond_mask(series: pd.Series, cond) -> pd.Series:
+# ---------------------------------------------------------------------------
+# Polygon-level scoring
+# ---------------------------------------------------------------------------
+
+def _get_ttc_for_year(df: pd.DataFrame, year_series: pd.Series) -> pd.Series:
     """
-    Build a boolean mask for rows of `series` that satisfy `cond`.
+    Extract the per-row TTC value using a Series of integer years.
 
-    `cond` can be:
-      - a comparison string like ">=2", "<1", "==3" (numeric compare)
-      - an exact literal like "open", "closed" (case/space-normalized)
-
-    Non-numeric cells become NaN for numeric compares and evaluate False.
+    Looks for columns named ttc_{YYYY} and returns the value from the column
+    whose year matches year_series for each row. Returns NaN where no match.
     """
-    m = _OP_RE.match(str(cond))
-    if m:
-        op, val = m.group(1), float(m.group(2))
-        s = pd.to_numeric(series, errors="coerce")
-        return {">=": s >= val, "<=": s <= val, "==": s == val, ">": s > val, "<": s < val}[op]
-    return series.astype(str).str.strip().str.lower() == str(cond).strip().lower()
-
-
-def _map_z_to_0_100(z: np.ndarray, scale_cfg: dict) -> np.ndarray:
-    """
-    Map raw axis score z -> [0,100].
-
-    scale_cfg:
-      method: "logistic" or "minmax"
-      k: slope for logistic (default 0.8)
-      min, max: expected min/max of z for minmax scaling
-    """
-    method = (scale_cfg or {}).get("method", "logistic")
-    if method == "minmax":
-        mn = float((scale_cfg or {}).get("min", -6))
-        mx = float((scale_cfg or {}).get("max", 6))
-        s = (z - mn) / (mx - mn)
-        return np.clip(s, 0, 1) * 100.0
-    # logistic by default: squashes to (0,1)
-    k = float((scale_cfg or {}).get("k", 0.8))
-    s = 1.0 / (1.0 + np.exp(-k * z))
-    return s * 100.0
+    ttc_year_cols = {
+        int(col[4:]): col
+        for col in df.columns
+        if col.startswith("ttc_") and col[4:].isdigit() and len(col[4:]) == 4
+    }
+    result = pd.Series(np.nan, index=df.index)
+    for year, col in ttc_year_cols.items():
+        mask = (year_series == year) & df[col].notna()
+        result[mask] = df.loc[mask, col]
+    return result
 
 
 def apply_scoring(
@@ -51,240 +33,342 @@ def apply_scoring(
     ev_col: str = "ev_decision",
 ) -> pd.DataFrame:
     """
-    Compute a single "Remote Suitability" score per polygon for baseline and EV.
+    Compute a Remote Suitability score (0–100) per polygon for baseline and EV.
 
-    Concept
-    -------
-    - We build a raw axis score z by summing feature contributions:
-        z > 0  => more suitable for REMOTE verification
-        z < 0  => more suitable for FIELD verification
-    - Then we map z to [0,100] using logistic (default) or minmax scaling.
-    - We also produce an area-weighted variant for project roll-ups:
-        suitability_weighted = suitability_0_100 * area
+    The score is a supplemental gradient signal only — the decision tree
+    (baseline_decision / ev_decision) remains the authoritative classification.
+    It answers: given this polygon's continuous feature values, how strongly
+    do they lean toward remote vs. field verification?
 
-    Inputs
-    ------
-    df : DataFrame with your existing columns (canopy, slope, *_img_count, etc.)
-    params['suitability'] :
-      - area_col: name of area column (default 'area')
-      - scale: mapping method config (see _map_z_to_0_100)
-      - base_bonus: optional nudges from your discrete decisions
-      - features: dict with groups 'common', 'baseline_only', 'ev_only'
-                  Each feature maps values/conditions -> scalar delta added to z.
-                  Positive delta pushes toward remote; negative toward field.
-                  Use `null` for values you want to ignore here (no delta).
+        Higher score → stronger remote candidate
+        Lower score  → stronger field candidate
 
-    Outputs (added columns)
-    -----------------------
-    baseline_raw               : raw axis score (baseline)
-    baseline_score             : z mapped to [0,100] (baseline)
-    baseline_score_wtd         : area-weighted score (baseline)
-    baseline_simple_bin        : simple label from thresholds (remote/field)
+    The score is driven by three continuous variables only:
 
-    ev_raw, ev_score, ev_score_wtd, ev_simple_bin
+      1. Canopy cover (TTC)   — lower TTC = more open = stronger remote
+      2. Image count + timing — more images, closer to planting = stronger remote;
+                                 images in the extended 1.5yr window score at half
+                                 the weight of images in the core 1yr window
+      3. Slope                — higher % steep area = weaker field classification
 
-    Thresholds
-    ----------
-    The simple label uses these defaults on 0..100 (tune if desired):
-      >= 70  => "strong remote"
-      55-70  => "weak remote"
-      30-55  => "weak field"
-      <  30  => "strong field"
+    All weights and normalisation caps are configurable in params under 'scoring'.
+
+    Polygons classified as mangrove, review required, or not available receive
+    NaN scores and are excluded from project-level rollups. Mask flags are
+    computed internally and are NOT written to the output DataFrame.
+
+    Outputs added to df
+    -------------------
+    baseline_remote_suitability     : 0–100 score (baseline)
+    baseline_remote_suitability_wtd : score × area (baseline)
+    ev_remote_suitability           : 0–100 score (EV)
+    ev_remote_suitability_wtd       : score × area (EV)
     """
-    cfg = (params or {}).get("suitability", {})
-    area_col  = cfg.get("area_col", "area")
-    scale_cfg = cfg.get("scale", {})
-    base_bonus = cfg.get("base_bonus", {}) or {}
+    cfg = (params or {}).get("scoring", {})
 
-    feats     = cfg.get("features", {}) or {}
-    common    = feats.get("common", {}) or {}
-    base_only = feats.get("baseline_only", {}) or {}
-    ev_only   = feats.get("ev_only", {}) or {}
+    area_col       = cfg.get("area_col", "area")
+    w_canopy       = float(cfg.get("weight_canopy",   0.40))
+    w_img          = float(cfg.get("weight_img",      0.40))
+    w_slope        = float(cfg.get("weight_slope",    0.20))
+    max_imgs       = float(cfg.get("max_imgs",        5.0))
+    img_1yr_wt     = float(cfg.get("img_1yr_weight",  1.0))
+    img_ext_wt     = float(cfg.get("img_ext_weight",  0.5))
 
-    def _z_for(mode_col: str, extra_feats: dict, prefix: str):
+    # ------------------------------------------------------------------
+    # Canopy score  (0 = fully closed → score 0;  100 = fully open → score 100)
+    # baseline: ttc at plantstart_year - 1
+    # ev:       ttc at plantstart_year + 2
+    # ------------------------------------------------------------------
+    base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
+
+    baseline_ttc = _get_ttc_for_year(df, base_years - 1)
+    ev_ttc       = _get_ttc_for_year(df, base_years + 2)
+
+    canopy_base = (100.0 - pd.to_numeric(baseline_ttc, errors="coerce")).clip(0, 100)
+    canopy_ev   = (100.0 - pd.to_numeric(ev_ttc,       errors="coerce")).clip(0, 100)
+
+    # ------------------------------------------------------------------
+    # Image score  (0 = no imagery → score 0;  max_imgs in 1yr → score 100)
+    # Extension-only images (between 1yr and 1.5yr) score at img_ext_weight.
+    # Missing or unresolvable image counts remain NaN and propagate to NaN score.
+    # ------------------------------------------------------------------
+    _nan_col = pd.Series(np.nan, index=df.index)
+
+    for _col in ["baseline_img_count", "baseline_ext_img_count", "ev_img_count"]:
+        if _col not in df.columns:
+            print(f"[scoring] WARNING: column '{_col}' not found — "
+                  f"image score will be NaN for all polygons.")
+
+    img_1yr      = pd.to_numeric(df.get("baseline_img_count",     _nan_col), errors="coerce").clip(lower=0)
+    img_ext_tot  = pd.to_numeric(df.get("baseline_ext_img_count", _nan_col), errors="coerce").clip(lower=0)
+    img_ext_only = (img_ext_tot - img_1yr).clip(lower=0)
+    img_ev       = pd.to_numeric(df.get("ev_img_count",           _nan_col), errors="coerce").clip(lower=0)
+
+    img_base = (
+        img_1yr_wt * (img_1yr      / max_imgs).clip(0, 1) +
+        img_ext_wt * (img_ext_only / max_imgs).clip(0, 1)
+    ) / (img_1yr_wt + img_ext_wt) * 100.0
+
+    img_ev_score = (img_ev / max_imgs).clip(0, 1) * 100.0
+
+    # ------------------------------------------------------------------
+    # Slope score  (slope_area = % of polygon area that is steep, 0–100)
+    # Higher steep fraction = field classification less strong = higher score.
+    # Missing slope data remains NaN and propagates to NaN score.
+    # ------------------------------------------------------------------
+    if "slope_area" not in df.columns:
+        print("[scoring] WARNING: column 'slope_area' not found — "
+              "slope score will be NaN for all polygons.")
+
+    slope_score = pd.to_numeric(df.get("slope_area", _nan_col), errors="coerce").clip(0, 100)
+
+    # ------------------------------------------------------------------
+    # Per-polygon missing component flags
+    # Written to df so they are available in poly_output and can be
+    # aggregated into project-level data quality flags downstream.
+    # ------------------------------------------------------------------
+    df["baseline_canopy_missing"] = baseline_ttc.isna()
+    df["ev_canopy_missing"]       = ev_ttc.isna()
+    df["baseline_img_missing"]    = img_1yr.isna() | img_ext_tot.isna()
+    df["ev_img_missing"]          = img_ev.isna()
+    df["slope_missing"]           = slope_score.isna()
+
+    # ------------------------------------------------------------------
+    # Weighted average — reweighted dynamically per polygon
+    #
+    # If a component is NaN for a given polygon (e.g. slope data unavailable),
+    # that component's weight is excluded from the denominator so the score
+    # is still computed from the remaining valid components. A polygon only
+    # receives NaN if every component is NaN.
+    # ------------------------------------------------------------------
+    def _weighted_mean(components: dict, weight_map: dict) -> pd.Series:
         """
-        Build and write the suitability score columns for one mode (baseline or EV).
-
-        Steps:
-          1. Feature contributions — iterate over all features defined in params
-             (common + mode-specific). For each feature value/condition that matches
-             a row, add the configured delta to that row's raw z score.
-             z > 0 pushes toward remote; z < 0 pushes toward field.
-
-          2. Discrete bonus — apply a small continuity nudge based on the
-             classification decision already assigned (e.g. 'strong remote' gets +1.0).
-             This keeps the continuous score consistent with the discrete decision.
-
-          3. Masking — set z to NaN for polygons that should not receive a numeric
-             score: mangrove polygons, 'review required', and 'not available'.
-             QA flag columns (e.g. baseline_mask_mangrove) are written for traceability.
-
-          4. Scale to 0–100 — pass z through logistic (or minmax) transformation.
-             Area-weighted score is also produced (score × polygon area).
-
-          5. Simple bin label — bucket the 0–100 score into human-readable labels
-             (strong remote / weak remote / weak field / strong field), then
-             overwrite masked polygons with their special label.
-
-        Writes columns: {prefix}_raw, {prefix}_score, {prefix}_score_wtd,
-                        {prefix}_simple_bin, {prefix}_mask_mangrove,
-                        {prefix}_mask_review_required, {prefix}_mask_not_available
+        Compute a per-row weighted average over a dict of named component Series.
+        NaN components are excluded per row; weight denominator adjusts accordingly.
         """
-        z = np.zeros(len(df), dtype=float)
+        comp_df   = pd.DataFrame(components)
+        weight_s  = pd.Series(weight_map)
+        numer     = (comp_df * weight_s).sum(axis=1, skipna=True)
+        denom     = comp_df.notna().multiply(weight_s).sum(axis=1)
+        return numer / denom   # NaN only when denom == 0 (all components NaN)
 
-        # 1) Feature contributions
-        for feat, value_map in {**common, **extra_feats}.items():
-            if feat not in df.columns:
-                continue
-            series = df[feat]
-            for feat_val, delta in (value_map or {}).items():
-                if delta is None:
-                    continue
-                mask = _cond_mask(series, feat_val)
-                if mask.any():
-                    z[mask.values] += float(delta)
+    score_base = _weighted_mean(
+        {"canopy": canopy_base, "img": img_base,      "slope": slope_score},
+        {"canopy": w_canopy,    "img": w_img,          "slope": w_slope},
+    )
+    score_ev = _weighted_mean(
+        {"canopy": canopy_ev,   "img": img_ev_score,  "slope": slope_score},
+        {"canopy": w_canopy,    "img": w_img,          "slope": w_slope},
+    )
 
-        # 2) Discrete continuity bonus from classification decision
-        if mode_col in df.columns:
-            cur = df[mode_col].astype(str).str.strip().str.lower()
-            for klass, bonus in base_bonus.items():
-                if bonus is None:
-                    continue
-                z[cur == str(klass).strip().lower()] += float(bonus)
+    # ------------------------------------------------------------------
+    # Null mask — computed locally, NOT written to output DataFrame
+    # Polygons with missing decision or target_sys values are treated as
+    # unscoreable (NaN) rather than receiving a misleading score.
+    # ------------------------------------------------------------------
+    for _col in ["target_sys", baseline_col, ev_col]:
+        if _col not in df.columns:
+            print(f"[scoring] WARNING: column '{_col}' not found — "
+                  f"all polygons will be treated as unscoreable.")
 
-        # 3) Mask special cases — mangrove, review required, not available
-        target = df.get("target_sys", pd.Series("", index=df.index)).astype(str).str.strip().str.lower()
-        dec    = df.get(mode_col, pd.Series("", index=df.index)).astype(str).str.strip().str.lower()
-        mang_mask   = (target == "mangrove")
-        review_mask = (dec == "review required")
-        na_mask     = (dec == "not available")
+    target_raw   = df.get("target_sys", pd.Series(np.nan, index=df.index))
+    base_dec_raw = df.get(baseline_col, pd.Series(np.nan, index=df.index))
+    ev_dec_raw   = df.get(ev_col,       pd.Series(np.nan, index=df.index))
 
-        # QA flag columns for traceability
-        df[f"{prefix}_mask_mangrove"]        = mang_mask
-        df[f"{prefix}_mask_review_required"] = review_mask
-        df[f"{prefix}_mask_not_available"]   = na_mask
+    target   = target_raw.fillna("").astype(str).str.strip().str.lower()
+    base_dec = base_dec_raw.fillna("").astype(str).str.strip().str.lower()
+    ev_dec   = ev_dec_raw.fillna("").astype(str).str.strip().str.lower()
 
-        z = pd.Series(z, index=df.index, name=f"{prefix}_raw")
-        z[mang_mask | review_mask | na_mask] = np.nan
+    base_null = (
+        (target == "mangrove") |
+        (base_dec == "review required") |
+        (base_dec == "not available") |
+        base_dec_raw.isna()
+    )
+    ev_null = (
+        (target == "mangrove") |
+        (ev_dec == "review required") |
+        (ev_dec == "not available") |
+        ev_dec_raw.isna()
+    )
 
-        # 4) Scale to 0..100 and area-weight
-        score_0_100 = pd.Series(
-            _map_z_to_0_100(z.fillna(0).to_numpy(), scale_cfg),
-            index=df.index, name=f"{prefix}_score"
-        )
-        score_0_100[z.isna()] = np.nan
-        area = pd.to_numeric(df.get(area_col, 1.0), errors="coerce").fillna(0).clip(lower=0)
-        score_wtd = (score_0_100 * area).rename(f"{prefix}_score_wtd")
+    score_base = score_base.round(1)
+    score_ev   = score_ev.round(1)
+    score_base[base_null] = np.nan
+    score_ev[ev_null]     = np.nan
 
-        # 5) Simple bin label; overwrite masked cases with their special label
-        bins = np.array([0, 30, 55, 70, 100], dtype=float)
-        labels = np.array(["strong field", "weak field", "weak remote", "strong remote"])
-        lab = pd.cut(score_0_100, bins=bins, labels=labels, include_lowest=True).astype(object)
-        lab[mang_mask]   = "mangrove"
-        lab[na_mask]     = "not available"
-        lab[review_mask] = "review required"
+    # ------------------------------------------------------------------
+    # Area-weighted variant for project rollups
+    # ------------------------------------------------------------------
+    area = pd.to_numeric(df.get(area_col, np.nan), errors="coerce").clip(lower=0)
 
-        # Write outputs
-        df[z.name] = z
-        df[score_0_100.name] = score_0_100.round(1)
-        df[score_wtd.name]   = score_wtd.round(1)
-        df[f"{prefix}_simple_bin"] = lab
+    missing_area = area.isna().sum()
+    if missing_area > 0:
+        print(f"[scoring] WARNING: {missing_area} polygon(s) have no area value — "
+              f"area-weighted scores will be NaN for those rows.")
 
-    _z_for(baseline_col, base_only, prefix="baseline")
-    _z_for(ev_col,       ev_only,   prefix="ev")
+    df["baseline_remote_suitability"]     = score_base
+    df["baseline_remote_suitability_wtd"] = (score_base * area).round(1)
+    df["ev_remote_suitability"]           = score_ev
+    df["ev_remote_suitability_wtd"]       = (score_ev * area).round(1)
 
     return df
 
 
-def _label_from_score(score: float, thr: Dict[str, float]) -> Optional[str]:
-    """
-    Map a 0–100 Remote Suitability score to a simple label.
-    """
-    if pd.isna(score):
-        return None
-    if score >= thr.get("strong_remote", 70): return "strong remote"
-    if score >= thr.get("weak_remote", 55):   return "weak remote"
-    if score >= thr.get("weak_field", 30):    return "weak field"
-    return "strong field"
-
+# ---------------------------------------------------------------------------
+# Project-level aggregation
+# ---------------------------------------------------------------------------
 
 def _score_one_mode(
     g: pd.DataFrame,
     score_col: str,
-    mask_prefix: str,
+    dec_col: str,
     total_area: float,
     min_cov: float,
-    thr: dict,
     mang_thr: float,
     rev_thr: float,
-    precedence: list,
+    missing_thr: float = 0.20,
+    canopy_missing_col: str = "baseline_canopy_missing",
+    img_missing_col: str = "baseline_img_missing",
 ) -> dict:
     """
-    Compute score, label, and coverage stats for one mode (baseline or EV)
-    for a single project group.
+    Compute score, label, coverage stats, and data quality flag for one mode
+    (baseline or EV) for a single project group.
 
-    Parameters
-    ----------
-    g            : polygon-level rows for one project
-    score_col    : name of the 0–100 score column (e.g. 'baseline_score')
-    mask_prefix  : prefix used on QA mask columns (e.g. 'baseline')
-    total_area   : sum of all polygon areas in the project
-    min_cov      : minimum fraction of area that must be scored to publish a result
-    thr          : score thresholds for labelling (weak_field, weak_remote, strong_remote)
-    mang_thr     : area fraction above which project is labelled 'mangrove'
-    rev_thr      : area fraction above which project is labelled 'review required'
-    precedence   : order in which special labels override the numeric label
+    Project label = majority DT decision by area among scoreable polygons.
+    Suitability score = area-weighted average (supplemental signal only).
 
-    Returns
-    -------
-    dict with keys:
-      score_pub        : area-weighted project score (NaN if coverage too low)
-      label            : human-readable label (strong remote … strong field,
-                         or mangrove / review required / not available)
-      pct_area_scored  : fraction of project area with a valid score (0–1)
-      poly_frac_scored : fraction of polygons with a valid score (0–1)
-      scored_area      : total area of scored polygons
-      frac_mangrove    : fraction of project area flagged as mangrove
+    Special label override order (fixed):
+      1. mangrove        — overrides everything if ≥ mang_thr of area
+      2. review required — overrides if ≥ rev_thr fraction of polygons are review required
+      3. not available   — applied if fewer than min_cov fraction of polygons have a valid score
+
+    Data quality flag
+    -----------------
+    After the label is determined, each missing-data component (canopy, imagery,
+    slope) is checked against missing_thr. Flags are labelled HIGH or LOW based
+    on whether the missing component is material to the assigned label:
+
+      Field project  → slope missing = HIGH;  canopy / imagery missing = LOW
+      Remote project → canopy + imagery missing = HIGH;  slope missing = LOW
+      Other labels   → all missing components flagged without priority label
     """
-    scored_mask = g[score_col].notna()
-    area_scored = g.loc[scored_mask, "_area_clean_"].sum()
-    coverage    = (area_scored / total_area) if total_area > 0 else 0.0
+    target_raw = g.get("target_sys", pd.Series(np.nan, index=g.index))
+    dec_raw    = g.get(dec_col,      pd.Series(np.nan, index=g.index))
 
-    mang_mask = g.get(f"{mask_prefix}_mask_mangrove",
-                      pd.Series(False, index=g.index)).astype(bool)
-    rev_mask  = g.get(f"{mask_prefix}_mask_review_required",
-                      pd.Series(False, index=g.index)).astype(bool)
+    target = target_raw.fillna("").astype(str).str.strip().str.lower()
+    dec    = dec_raw.fillna("").astype(str).str.strip().str.lower()
 
-    frac_mang = g.loc[mang_mask, "_area_clean_"].sum() / total_area if total_area > 0 else 0.0
-    frac_rev  = g.loc[rev_mask,  "_area_clean_"].sum() / total_area if total_area > 0 else 0.0
+    mang_mask = (target == "mangrove")
+    rev_mask  = (dec == "review required")
 
+    # Polygons with no decision are unscoreable — exclude from rollup
+    missing_dec = dec_raw.isna()
+
+    scored_mask      = g[score_col].notna() & ~missing_dec
+    area_scored      = g.loc[scored_mask, "_area_clean_"].sum()
+    coverage         = (area_scored / total_area) if total_area > 0 else 0.0
+    frac_mang        = g.loc[mang_mask, "_area_clean_"].sum() / total_area if total_area > 0 else 0.0
     poly_frac_scored = round(scored_mask.sum() / len(g), 3) if len(g) > 0 else 0.0
+
+    # Review required: use polygon count fraction so a single large polygon
+    # cannot override the project label on its own.
+    frac_rev = round(rev_mask.sum() / len(g), 3) if len(g) > 0 else 0.0
 
     raw_score = (
         (g.loc[scored_mask, score_col] * g.loc[scored_mask, "_area_clean_"]).sum() / area_scored
         if area_scored > 0 else np.nan
     )
 
-    # Provisional label from coverage
-    if coverage < min_cov:
+    if poly_frac_scored < min_cov:
         score_pub, label = np.nan, "not available"
     else:
         score_pub = round(float(raw_score), 1) if pd.notna(raw_score) else np.nan
-        label = _label_from_score(score_pub, thr) if pd.notna(score_pub) else "not available"
+        label_area = g.loc[scored_mask, "_area_clean_"].groupby(dec[scored_mask]).sum()
+        label = label_area.idxmax() if not label_area.empty else "not available"
 
-    # Special-label overrides in precedence order
-    for tag in precedence:
-        if tag == "mangrove"        and frac_mang >= mang_thr: label, score_pub = "mangrove", np.nan; break
-        if tag == "review required" and frac_rev  >= rev_thr:  label, score_pub = "review required", np.nan; break
-        if tag == "not available"   and coverage  < min_cov:   label, score_pub = "not available", np.nan; break
+    # Special label overrides — applied in fixed priority order
+    if frac_mang >= mang_thr:
+        label, score_pub = "mangrove", np.nan
+    elif frac_rev >= rev_thr:
+        label, score_pub = "review required", np.nan
+    elif poly_frac_scored < min_cov:
+        label, score_pub = "not available", np.nan
+
+    # Convert remote suitability → label confidence.
+    # For field-classified projects the raw score runs in the wrong direction
+    # (low raw score = strong field = high confidence), so invert it so that
+    # a high confidence value always means "continuous data strongly supports
+    # the assigned label."
+    if "field" in label.lower() and pd.notna(score_pub):
+        score_pub = round(100.0 - score_pub, 1)
+
+    # ------------------------------------------------------------------
+    # Context-aware data quality flag
+    # ------------------------------------------------------------------
+    n_poly = len(g)
+
+    def _missing_frac(col):
+        if col in g.columns and n_poly > 0:
+            return g[col].sum() / n_poly
+        return 0.0
+
+    frac_canopy_missing = _missing_frac(canopy_missing_col)
+    frac_img_missing    = _missing_frac(img_missing_col)
+    frac_slope_missing  = _missing_frac("slope_missing")
+
+    label_lower = label.lower()
+    is_field    = "field"  in label_lower
+    is_remote   = "remote" in label_lower
+
+    flags = []
+    if is_field:
+        # Slope is the component most material to a field classification
+        if frac_slope_missing >= missing_thr:
+            flags.append(
+                f"slope missing for {frac_slope_missing:.0%} of polygons [HIGH: field project]"
+            )
+        if frac_canopy_missing >= missing_thr:
+            flags.append(
+                f"canopy missing for {frac_canopy_missing:.0%} of polygons [LOW: field project]"
+            )
+        if frac_img_missing >= missing_thr:
+            flags.append(
+                f"imagery missing for {frac_img_missing:.0%} of polygons [LOW: field project]"
+            )
+    elif is_remote:
+        # Canopy and imagery are the components most material to a remote classification
+        if frac_canopy_missing >= missing_thr:
+            flags.append(
+                f"canopy missing for {frac_canopy_missing:.0%} of polygons [HIGH: remote project]"
+            )
+        if frac_img_missing >= missing_thr:
+            flags.append(
+                f"imagery missing for {frac_img_missing:.0%} of polygons [HIGH: remote project]"
+            )
+        if frac_slope_missing >= missing_thr:
+            flags.append(
+                f"slope missing for {frac_slope_missing:.0%} of polygons [LOW: remote project]"
+            )
+    else:
+        # mangrove / review required / not available — flag all missing generically
+        if frac_canopy_missing >= missing_thr:
+            flags.append(f"canopy missing for {frac_canopy_missing:.0%} of polygons")
+        if frac_img_missing >= missing_thr:
+            flags.append(f"imagery missing for {frac_img_missing:.0%} of polygons")
+        if frac_slope_missing >= missing_thr:
+            flags.append(f"slope missing for {frac_slope_missing:.0%} of polygons")
+
+    data_quality_flag = "; ".join(flags) if flags else ""
 
     return {
-        "score_pub":        score_pub,
-        "label":            label,
-        "pct_area_scored":  round(float(coverage), 3),
-        "poly_frac_scored": poly_frac_scored,
-        "scored_area":      round(float(area_scored), 3),
-        "frac_mangrove":    round(float(frac_mang), 3),
+        "conf":               score_pub,
+        "label":              label,
+        "pct_area_scored":    round(float(coverage), 3),
+        "poly_frac_scored":   poly_frac_scored,
+        "scored_area":        round(float(area_scored), 3),
+        "frac_mangrove":      round(float(frac_mang), 3),
+        "data_quality_flag":  data_quality_flag,
     }
 
 
@@ -293,41 +377,50 @@ def aggregate_project_score(
     df: pd.DataFrame,
     project_col: str = "project_id",
     area_col: Optional[str] = None,
-    baseline_score_col: str = "baseline_score",
-    ev_score_col: str = "ev_score",
+    baseline_score_col: str = "baseline_remote_suitability",
+    ev_score_col: str = "ev_remote_suitability",
+    baseline_dec_col: str = "baseline_decision",
+    ev_dec_col: str = "ev_decision",
     project_name_col: str = "project_name",
 ) -> pd.DataFrame:
     """
-    Compute a single, area-weighted Remote Suitability score per PROJECT.
+    Compute a single, area-weighted confidence score per project.
 
-    - Project score per mode (baseline/EV):
-          sum(score_0_100 * area) / sum(area)   over polygons with a valid score.
-    - If scored-area coverage < min_coverage, publish NaN and label 'not available'.
-    - Special labels 'mangrove' / 'review required' can override via area fractions.
-
-    'not available' is determined *only* by coverage (no NA-area threshold).
+    Project label is derived from the majority DT decision by area across
+    scoreable polygons. The suitability score is a supplemental signal only.
 
     Output columns
     --------------
-    base_score            : area-weighted 0–100 suitability score
-    base_label            : human-readable label for the project
-    base_pct_area_scored  : fraction of project area with a valid polygon score (0–1)
-    base_poly_frac_scored : fraction of polygons with a valid score (0–1)
-    base_scored_area      : total area (ha) of scored polygons
-    base_frac_mangrove    : fraction of project area flagged as mangrove
-    ev_*                  : same set of columns for the EV mode
+    base_conf              : 0–100 label confidence score (supplemental).
+                             For remote projects: higher = continuous data more
+                             strongly supports remote. For field projects: score is
+                             inverted (100 − raw) so higher still means more
+                             confident in the field classification. NaN for mangrove,
+                             review required, and not available.
+    base_label             : project label from majority DT decision by area
+    base_pct_area_scored   : fraction of project area with a valid polygon score
+    base_poly_frac_scored  : fraction of polygons with a valid score
+    base_scored_area       : total area (ha) of scored polygons
+    base_frac_mangrove     : fraction of project area flagged as mangrove
+    base_data_quality_flag : human-readable note when a component is missing for
+                             ≥ missing_data_threshold of polygons; priority label
+                             (HIGH/LOW) reflects materiality to the assigned label
+    ev_*                   : same columns for the EV mode
     """
-    suit = (params or {}).get("suitability", {})
-    area_col = area_col or suit.get("area_col", "area")
-    min_cov = float(suit.get("min_coverage", 0.6))
-    thr = suit.get("thresholds", {"weak_field": 30, "weak_remote": 55, "strong_remote": 70})
+    cfg         = (params or {}).get("scoring", {})
+    area_col    = area_col or cfg.get("area_col", "area")
+    min_cov     = float(cfg.get("min_coverage",           0.60))
+    mang_thr    = float(cfg.get("mangrove_frac_threshold", 0.10))
+    rev_thr     = float(cfg.get("review_frac_threshold",   0.60))
+    missing_thr = float(cfg.get("missing_data_threshold",  0.20))
 
-    spec = suit.get("special_labels", {}) or {}
-    mang_thr   = float(spec.get("mangrove_area_frac_threshold", 0.10))
-    rev_thr    = float(spec.get("review_area_frac_threshold", 0.10))
-    precedence = spec.get("precedence", ["mangrove", "review required", "not available"])
+    area = pd.to_numeric(df.get(area_col, np.nan), errors="coerce").clip(lower=0)
 
-    area = pd.to_numeric(df.get(area_col, 1.0), errors="coerce").fillna(0).clip(lower=0)
+    missing_area = area.isna().sum()
+    if missing_area > 0:
+        print(f"[aggregate] WARNING: {missing_area} polygon(s) have no area value — "
+              f"they will be excluded from area-weighted project scores.")
+
     work = df.copy()
     work["_area_clean_"] = area
 
@@ -341,31 +434,41 @@ def aggregate_project_score(
             else None
         )
 
-        b = _score_one_mode(g, baseline_score_col, "baseline",
-                            total_area, min_cov, thr, mang_thr, rev_thr, precedence)
-        e = _score_one_mode(g, ev_score_col, "ev",
-                            total_area, min_cov, thr, mang_thr, rev_thr, precedence)
+        b = _score_one_mode(
+            g, baseline_score_col, baseline_dec_col,
+            total_area, min_cov, mang_thr, rev_thr,
+            missing_thr=missing_thr,
+            canopy_missing_col="baseline_canopy_missing",
+            img_missing_col="baseline_img_missing",
+        )
+        e = _score_one_mode(
+            g, ev_score_col, ev_dec_col,
+            total_area, min_cov, mang_thr, rev_thr,
+            missing_thr=missing_thr,
+            canopy_missing_col="ev_canopy_missing",
+            img_missing_col="ev_img_missing",
+        )
 
         out_rows.append({
             project_col:      prj,
             project_name_col: prj_name,
             "total_area":     round(float(total_area), 3),
 
-            # Baseline
-            "base_score":            b["score_pub"],
-            "base_label":            b["label"],
-            "base_pct_area_scored":  b["pct_area_scored"],
-            "base_poly_frac_scored": b["poly_frac_scored"],
-            "base_scored_area":      b["scored_area"],
-            "base_frac_mangrove":    b["frac_mangrove"],
+            "base_conf":               b["conf"],
+            "base_label":              b["label"],
+            "base_pct_area_scored":    b["pct_area_scored"],
+            "base_poly_frac_scored":   b["poly_frac_scored"],
+            "base_scored_area":        b["scored_area"],
+            "base_frac_mangrove":      b["frac_mangrove"],
+            "base_data_quality_flag":  b["data_quality_flag"],
 
-            # EV
-            "ev_score":            e["score_pub"],
-            "ev_label":            e["label"],
-            "ev_pct_area_scored":  e["pct_area_scored"],
-            "ev_poly_frac_scored": e["poly_frac_scored"],
-            "ev_scored_area":      e["scored_area"],
-            "ev_frac_mangrove":    e["frac_mangrove"],
+            "ev_conf":               e["conf"],
+            "ev_label":              e["label"],
+            "ev_pct_area_scored":    e["pct_area_scored"],
+            "ev_poly_frac_scored":   e["poly_frac_scored"],
+            "ev_scored_area":        e["scored_area"],
+            "ev_frac_mangrove":      e["frac_mangrove"],
+            "ev_data_quality_flag":  e["data_quality_flag"],
         })
 
     return pd.DataFrame(out_rows)

@@ -27,6 +27,11 @@ def apply_canopy_classification(params, df):
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
     """
+    #label missing ttc
+    ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
+    null_rows = df[df[ttc_cols].isna().all(axis=1)]
+    df.loc[null_rows.index, 'notes'] = 'missing-ttc'
+
     n_projects = df['project_id'].nunique()
     n_polys = df['poly_id'].nunique() 
     print(f"Analyzing canopy cover for {n_projects} projects and {n_polys} polygons...")

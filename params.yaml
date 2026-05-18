@@ -14,7 +14,7 @@
 # =============================================================================
 
 config: secrets.yaml
-mode: full  # options: full, partial, score
+mode: full  # options: full, score, projectids
 
 s3:
   upload: false
@@ -52,8 +52,8 @@ cost:
   remote: 20.0
 
 outfile: # file paths are relative to the project root
-  data_version: 04-11-2026 #MM-DD-YYYY
-  experiment_id: exp1
+  data_version: 04-13-2026 #MM-DD-YYYY
+  experiment_id: exp3
   cohort: c2
   project_data_folder: 'data'
   # file paths are relative to the project_data_folder under the project root
@@ -70,54 +70,24 @@ outfile: # file paths are relative to the project root
   prj_decision: decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
 
-suitability:
+scoring:
   area_col: area
-  min_coverage: 0.6         # require at least 60% of available area to have a valid polygon score
-  thresholds:
-    weak_field: 30
-    weak_remote: 55
-    strong_remote: 70
-  special_labels:
-    mangrove_area_frac_threshold: 0.10     # label "mangrove" if ≥10% of total area is mangrove
-    review_area_frac_threshold:  0.10      # label "review required" if ≥10% is review
-    precedence: ["mangrove", "review required", "not available"]
+ 
+  # How much each variable contributes to score
+  weight_canopy: 0.40   
+  weight_img:    0.40   
+  weight_slope:  0.20   
+ 
+  # Image normalisation: img count at which score reaches 100 (scores are capped at 100)
+  max_imgs: 4
+ 
+  # Timing weights for baseline imagery
+  img_1yr_weight: 1.0
+  img_ext_weight: 0.5
 
-  # How to map raw axis score -> 0..100
-  scale:
-    method: logistic   # or "minmax"
-    k: 0.8             # only used for logistic; larger k => steeper curve
-    min: -6            # only used for minmax
-    max: 6
-
-  # Weights from your discrete tree outputs
-  base_bonus:
-    strong remote:  +1.0
-    weak remote:    +0.5
-    weak field:     -0.5
-    strong field:   -1.0
-
-  # Feature contributions 
-  features:
-    common:
-      baseline_canopy:
-        open:   +2.0
-        closed: -2.0
-      slope:
-        steep:  -2.0
-        flat:   -0.5
-      target_sys:
-        mangrove: null 
-
-  baseline_only:
-    baseline_img_count:        # high-quality images within 1yr 
-      ">=1": +2.0                 # ideal case — full confidence
-      "<1":   0.0                 # neutral; fall through to ext check
-    baseline_ext_img_count:       # any image within 1.5yr 
-      ">=1": +1.0                 # acceptable — reduced confidence
-      "<1":  -1.0                 # no imagery in either window
-
-  ev_only:
-    ev_img_count:
-      ">=2": +2.0
-      "==1": +1.0
-      "<1":  -1.0
+  # Project-level aggregation thresholds
+  min_coverage: 0.60            # min fraction of prj area with a valid score to publish a result
+  mangrove_frac_threshold: 0.20 # label project "mangrove" if ≥20% of total area is mangrove
+  review_frac_threshold: 0.60   # label project "review required" if ≥60% of polygons are review required
+  missing_data_threshold: 0.20  # flag a missing component if it affects ≥20% of a project's polygons
+  

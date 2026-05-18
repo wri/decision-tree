@@ -52,8 +52,8 @@ cost:
   remote: 20.0
 
 outfile: # file paths are relative to the project root
-  data_version: 04-13-2026 #MM-DD-YYYY
-  experiment_id: exp3
+  data_version: 05-18-2016 #MM-DD-YYYY
+  experiment_id: exp1
   cohort: c2
   project_data_folder: 'data'
   # file paths are relative to the project_data_folder under the project root

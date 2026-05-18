@@ -339,7 +339,7 @@ def missing_features(df, drop=False, save_missing=True):
     # Only consider missing TTC for plantstart years 2017-2025 inclusive
     eligible_ttc_mask = plantstart_year.between(2017, 2025, inclusive='both')
     null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
-    df.loc[null_rows.index, 'notes'] = 'missing-ttc'
+    # placeholder for notes label missing-ttc 
     missing_practice = df[df['practice'].isna()]
     df.loc[missing_practice.index, 'notes'] = 'missing-practice'
     missing_targetsys = df[df['target_sys'].isna()]

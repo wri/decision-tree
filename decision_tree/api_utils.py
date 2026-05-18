@@ -29,23 +29,8 @@ from exactextract import exact_extract
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
 from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
-from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder, remove_folder
+from gri_shared_library.os_tools import is_file_recent, create_folder
 from gri_shared_library.s3_tools import get_aws_session
-
-
-def _create_folder_if_not_exists(folder_path):
-    """
-    Creates a folder if it does not already exist.
-
-    Args:
-        folder_path (str): The path of the folder to create.
-    """
-    try:
-        # os.makedirs with exist_ok=True will not raise an error if the folder exists
-        os.makedirs(folder_path, exist_ok=True)
-        print(f"Folder ready at: {folder_path}")
-    except OSError as e:
-        print(f"Error creating folder '{folder_path}': {e}")
 
 def get_geoparquet(params, secrets, tm_raw):
     """
@@ -72,11 +57,6 @@ def get_geoparquet(params, secrets, tm_raw):
 
     bucket = parsed.netloc
     key = parsed.path.lstrip("/")
-
-    # Create target folder
-    target_folder = os.path.dirname(tm_raw)
-    remove_folder(target_folder)
-    create_folder(target_folder)
 
     # Retrieve parquet file from S3
     aws_session = get_aws_session(profile_name=aws_profile)

@@ -12,7 +12,7 @@ def calc_cost_to_verify(params, df, area_col="area", decimals=1):
       - Costs are rounded to `decimals` (default 1 = nearest tenth).
       - If `save_path` is provided, the updated df is saved to CSV.
     '''
-    r_price = params['cost']['field']
+    r_price = params['cost']['remote']
     f_price = params['cost']['field']
     # normalize decisions and area
     base_dec = df["baseline_decision"].astype(str).str.strip().str.lower()

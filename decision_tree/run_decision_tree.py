@@ -9,13 +9,13 @@ from gri_shared_library.os_tools import create_folder
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 import decision_tree.process_api_results as clean
-from decision_tree.image_availability import analyze_image_availability
+from decision_tree.image_availability import analyze_image_availability 
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.slope import apply_slope_classification
 from decision_tree.s3_utils import upload_to_s3
-import decision_tree.decision_trees as tree
+import decision_tree.polygon_decisions as poly_tree
 import decision_tree.cost_calculator as price
-import decision_tree.weighted_scoring as scoring
+import decision_tree.project_decisions as proj_tree
 import decision_tree.update_asana as update_asana
 from decision_tree.tools import convert_to_os_path, load_secrets
 
@@ -119,14 +119,26 @@ class VerificationDecisionTree:
         if self.mode in ("full", "projectids"):
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
-            tm_clean = clean.process_tm_results(self.params, tm_raw_path, self.geojson_dir, project_ids, limit_to_test_projects)
-            self.checkpoint.save("feats", tm_clean)
+            tm_clean = clean.process_tm_results(self.params, 
+                                                tm_raw_path, 
+                                                self.geojson_dir, 
+                                                project_ids, 
+                                                limit_to_test_projects)
 
-            slope_statistics = opentopo_pull_wrapper(self.params, self.secrets, self.geojson_dir, tm_clean, process_in_utm_coordinates=True)
+            self.checkpoint.save("feats", tm_clean)
+            slope_statistics = opentopo_pull_wrapper(self.params, 
+                                                     self.secrets, 
+                                                     self.geojson_dir, 
+                                                     tm_clean, 
+                                                     process_in_utm_coordinates=True)
             self.checkpoint.save("slope_stats", slope_statistics)
 
             # pipeline pause here to get maxar metadata
-            ev = compute_branches(self.params, self.rules, tm_clean, self.maxar_meta, slope_statistics)
+            ev = compute_branches(self.params, 
+                                  self.rules, 
+                                  tm_clean, 
+                                  self.maxar_meta, 
+                                  slope_statistics)
             self.checkpoint.save("tree_results", ev)
 
         elif self.mode == "score":
@@ -144,7 +156,7 @@ class VerificationDecisionTree:
         if self.params['s3']['upload']:
             upload_to_s3(self.prj_score, self.params, self.secrets) 
 
-        return slope_statistics, poly_results, prj_results
+        return poly_results, prj_results 
 
 
 def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
@@ -152,15 +164,15 @@ def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statis
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
     branch_slope = apply_slope_classification(params, branch_canopy, slope_statistics)
-    baseline = tree.apply_rules_baseline(rules_file_path, branch_slope)
-    ev = tree.apply_rules_ev(params, rules_file_path, baseline)
+    baseline = poly_tree.apply_rules_baseline(rules_file_path, branch_slope)
+    ev = poly_tree.apply_rules_ev(params, rules_file_path, baseline)
     return ev
 
 def compute_project_results(params, ev):
     """Run decision scoring."""
-    scored = scoring.apply_scoring(params, ev)
+    scored = poly_tree.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(params, scored)
-    prj_results = scoring.aggregate_project_score(params, scored)
+    prj_results = proj_tree.aggregate_project_score(params, scored)
     return poly_results, prj_results
 
 def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):

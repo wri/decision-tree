@@ -1,6 +1,6 @@
 import os
 import yaml
-from gri_shared_library.os_tools import remove_folder, create_folder
+from gri_shared_library.os_tools import create_folder
 
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
 from decision_tree.constants import PROJECT_ROOT
@@ -21,10 +21,6 @@ def test_tm_features():
 
     # Confirm that the file contains at least one polygon
     assert len(features) == 3
-
-    # cleanup
-    tm_raw_dir = os.path.dirname(parquet_outfile)
-    remove_folder(tm_raw_dir)
 
 
 def test_clean_tm_features():
@@ -47,11 +43,6 @@ def test_clean_tm_features():
     expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
-
-    # cleanup
-    tm_raw_dir = os.path.dirname(parquet_outfile)
-    remove_folder(tm_raw_dir)
-    remove_folder(geojson_dir)
 
 
 def test_slope_statistics(tmp_path):
@@ -83,11 +74,6 @@ def test_slope_statistics(tmp_path):
     expected_attribute_count = 19
     assert actual_attribute_count == expected_attribute_count
 
-    # cleanup
-    tm_raw_dir = os.path.dirname(parquet_outfile)
-    remove_folder(tm_raw_dir)
-    remove_folder(geojson_dir)
-
 
 def _get_project_tm_features(project_ids):
     outfile = PARAMS['outfile']
@@ -97,7 +83,6 @@ def _get_project_tm_features(project_ids):
 
     # cleanup target
     tm_raw_dir = os.path.dirname(parquet_outfile)
-    remove_folder(tm_raw_dir)
     create_folder(tm_raw_dir)
 
     features = get_geoparquet(PARAMS, SECRETS, parquet_outfile)

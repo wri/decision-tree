@@ -32,7 +32,6 @@ def analyze_image_availability(params,
             'area:cloud_cover_percentage',
             'view:sun_elevation',
             'area:avg_off_nadir_angle',
-            'area:coverage_fraction'
             ]].copy()
 
     img_df["img_date"] = pd.to_datetime(

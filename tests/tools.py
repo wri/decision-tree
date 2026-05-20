@@ -1,24 +1,30 @@
-import math
 
-
-def has_expected_project_ev_values(slope_statistics, poly_results, prj_results,
-                                   expected_project_count, expected_polygon_count, expected_project_label,
-                                   expected_median_slope, expected_baseline_total, expected_ev_total):
-    assert len(prj_results) == expected_project_count
-
-    assert prj_results['ev_total_poly_count'].values[0] == expected_polygon_count
-
-    actual_project_label = prj_results['baseline_project_label'].values[0]
-    assert actual_project_label == expected_project_label, f"Expected: {expected_project_label!r}, Actual: {actual_project_label!r}"
-
-    if expected_median_slope is not None:
-        actual_median_slope = slope_statistics['median_slope'].median()
-        assert math.isclose(actual_median_slope, expected_median_slope, rel_tol=0.1), f"Expected {expected_median_slope}, got {actual_median_slope}"
-    else:
-        assert slope_statistics is None, f"Expected slop_statistics to be None, but got values."
+def has_expected_project_ev_values(poly_results, prj_results,
+                                   expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,
+                                   expected_project_count, expected_project_ev_label, expected_pct_area_scored
+                                   ):
+    # poly_results
+    actual_poly_baseline_sustainability = str(poly_results['baseline_remote_suitability'].values[0])
+    assert actual_poly_baseline_sustainability == str(expected_poly_baseline_suitability),\
+        f"Expected baseline_remote_sustainability = {actual_poly_baseline_sustainability}, got {expected_poly_baseline_suitability}"
 
     actual_baseline_total = poly_results["baseline_cost"].sum()
-    assert actual_baseline_total == expected_baseline_total, f"Expected baseline_total = {expected_baseline_total}, got {actual_baseline_total}"
+    assert actual_baseline_total == expected_poly_baseline_total,\
+        f"Expected baseline_total = {expected_poly_baseline_total}, got {actual_baseline_total}"
 
     actual_ev_total = poly_results["ev_cost"].sum()
-    assert actual_ev_total == expected_ev_total, f"Expected ev_total = {expected_ev_total}, got {actual_ev_total}"
+    assert actual_ev_total == expected_poly_ev_total, f"Expected ev_total = {expected_poly_ev_total}, got {actual_ev_total}"
+
+
+    # prj_results
+    actual_project_count = len(prj_results)
+    assert actual_project_count == expected_project_count, \
+        f"Expected project_count = {expected_project_count}, got {actual_project_count}"
+
+    actual_project_ev_label = prj_results['ev_label'].values[0]
+    assert actual_project_ev_label == expected_project_ev_label, \
+        f"Expected ev_label = {actual_project_ev_label}, got {expected_project_ev_label}"
+
+    actual_pct_area_scored = prj_results['ev_pct_area_scored'].values[0]
+    assert actual_pct_area_scored == expected_pct_area_scored,\
+        f"Expected: {expected_pct_area_scored!r}, Actual: {actual_pct_area_scored!r}"

@@ -37,10 +37,10 @@ def test_clean_tm_features():
     assert len(cleaned_features) == 3
 
     actual_attribute_count = cleaned_features.shape[1]
-    expected_column_count = 12
+    expected_column_count = 11
     assert actual_attribute_count == expected_column_count
 
-    expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
+    expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes']
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
 
@@ -71,7 +71,7 @@ def test_slope_statistics(tmp_path):
     assert len(slope_statistics) == len(cleaned_features)
 
     actual_attribute_count = slope_statistics.shape[1]
-    expected_attribute_count = 19
+    expected_attribute_count = 18
     assert actual_attribute_count == expected_attribute_count
 
 

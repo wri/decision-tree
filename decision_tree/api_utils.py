@@ -58,6 +58,9 @@ def get_geoparquet(params, secrets, tm_raw):
     bucket = parsed.netloc
     key = parsed.path.lstrip("/")
 
+    tm_raw_dir = os.path.dirname(tm_raw)
+    create_folder(tm_raw_dir)
+
     # Retrieve parquet file from S3
     aws_session = get_aws_session(profile_name=aws_profile)
     s3_client = aws_session.client("s3")

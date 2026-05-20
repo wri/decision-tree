@@ -37,6 +37,11 @@ class Checkpointer:
     def save(self, key: str, df: pd.DataFrame, always: bool = False):
         if self.enabled or always:
             path = self.paths[key]
+
+            # Create target folder
+            target_folder = os.path.dirname(path)
+            create_folder(target_folder)
+
             df.to_csv(path, index=False)
             print(f"[checkpoint] {key} → {path}")
 

@@ -2,7 +2,7 @@ import os
 from numpy import nan
 
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 from tools import has_expected_project_ev_values
 
 
@@ -23,7 +23,6 @@ def test_run_decision_tree_projectids():
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     project_ids = [TEST_01_GRI_PROJECT_ID]
-
     poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids, limit_to_test_projects=True)
 
     # REAL PROJECT BELOW - Only use for examination of an actual project

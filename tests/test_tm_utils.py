@@ -1,13 +1,13 @@
 import os
+
 import yaml
 from gri_shared_library.os_tools import create_folder
 
+from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
-from decision_tree.constants import PROJECT_ROOT
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 
 params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
 with open(params_path, 'r') as file:

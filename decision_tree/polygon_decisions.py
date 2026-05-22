@@ -51,6 +51,7 @@ def apply_rules_baseline(rules_file_path, df):
       • for first_decision=='field', look only at slope rules  
       • mangrove stays as is (final_decision = 'mangrove')
     """
+    df = df.copy()
     rules = pd.read_csv(rules_file_path)
 
     # Clean rules df

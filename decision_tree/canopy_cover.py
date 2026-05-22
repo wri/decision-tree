@@ -1,8 +1,6 @@
 import pandas as pd
-import geopandas as gpd
 import numpy as np
 from datetime import datetime
-import yaml
 
 def apply_canopy_classification(params, df):
     """

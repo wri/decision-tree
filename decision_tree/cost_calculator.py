@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 def calc_cost_to_verify(params, df, area_col="area", decimals=1):
     '''

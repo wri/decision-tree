@@ -1,5 +1,4 @@
 import yaml
-import numpy as np
 import boto3
 import os
 

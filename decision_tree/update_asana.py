@@ -1,9 +1,6 @@
-import yaml
 import asana
-from asana import UsersApi, SectionsApi, TasksApi, CustomFieldsApi, ProjectsApi, StoriesApi
+from asana import UsersApi, SectionsApi, TasksApi, CustomFieldsApi
 import pandas as pd
-from typing import List, Optional, Union
-from datetime import date, datetime
 import difflib
 
 def update_asana_status_by_gid(params: dict, 

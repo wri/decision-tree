@@ -1,9 +1,4 @@
-import os
-import geopandas as gpd
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import yaml
         
 def apply_slope_classification(params, df, slope_stats):
     '''

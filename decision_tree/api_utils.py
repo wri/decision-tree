@@ -1,19 +1,15 @@
 import shutil
 
 import requests
-import yaml
 import pandas as pd
 import os
-import json
 import numpy as np
-import sys
 import utm
 import geopandas as gpd
 import rasterio as rs
 import rasterio.mask
 import tempfile
 import math
-import boto3
 from urllib.parse import urlparse
 
 from rasterio.warp import calculate_default_transform, reproject
@@ -23,7 +19,6 @@ from contextlib import contextmanager
 from typing import Union
 from pyproj import CRS
 from shapely.geometry import box, shape
-from tqdm import tqdm
 from exactextract import exact_extract
 
 from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI

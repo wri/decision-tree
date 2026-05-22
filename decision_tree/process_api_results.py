@@ -4,7 +4,6 @@ import calendar
 from datetime import datetime
 import geopandas as gpd
 import os
-import json
 from shapely import wkb
 
 def process_tm_results(params, 

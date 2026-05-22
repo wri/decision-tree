@@ -1,6 +1,7 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
+import re
 
 def parse_condition(value, actual):
     """
@@ -9,6 +10,9 @@ def parse_condition(value, actual):
     from the rules CSV.
     """
     if isinstance(value, str) and any(op in value for op in [">=", "<=", ">", "<", "=="]):
+        value = value.strip()
+        if not re.fullmatch(r"(>=|<=|>|<|==)-?\d+(\.\d+)?", value):
+            raise ValueError(f"Malformed condition string: {value!r}")
         try:
             return eval(f"{actual} {value}")
         except Exception:

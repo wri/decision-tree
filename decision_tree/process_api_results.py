@@ -247,30 +247,28 @@ def clean_datetime_column(df, column_name):
     """
     Cleans a datetime column in a pandas DataFrame by:
     1. Replacing invalid date strings ('0000-00-00') with NaT.
-    2. Converting the column to datetime format with error handling.
-    3. Printing the number of missing dates after conversion.
+    2. Remapping Feb 29 on non-leap years to Feb 28 prior to datetime conversion.
+    3. Converting the column to datetime format with error coercion.
 
-    Handles issues with dates pertaining to 1) missing dates
-    2) illegal month error resulting from NaN values 3) start
-    date calculation lands on a leap year
+    The leap year handling must occur before pd.to_datetime() is called, because
+    dates like '2023-02-29' would be silently coerced to NaT. String-based detection 
+    (str.match, str[:4]) is used instead of .dt accessors.
     """
     df[column_name] = df[column_name].astype(str)
 
     # Replace known invalid date formats with NaT
     df[column_name] = df[column_name].replace(['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT)
+
+    # Handle leap year Feb 29 cases on the string column, before datetime conversion
+    is_feb_29 = df[column_name].str.match(r'^\d{4}-02-29$', na=False)
+    non_leap = is_feb_29 & ~df.loc[is_feb_29, column_name].str[:4].apply(
+        lambda y: calendar.isleap(int(y))
+    ).reindex(df.index, fill_value=False)
+    df.loc[non_leap, column_name] = df.loc[non_leap, column_name].str.replace('-02-29', '-02-28')
+
+    # Now safe to convert — invalid dates already handled
     df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
 
-    # Handle leap year Feb 29 cases
-    is_feb_29 = df[column_name].notna() & (df[column_name].dt.month == 2) & (df[column_name].dt.day == 29)
-    years = df.loc[is_feb_29, column_name].dt.year
-
-    # Ensure aligned index with is_feb_29
-    non_leap_years = ~years.apply(calendar.isleap)
-    affected_rows = is_feb_29.where(~is_feb_29, non_leap_years.values)
-
-    df.loc[affected_rows, column_name] = df.loc[affected_rows, column_name].apply(
-        lambda x: datetime(x.year, 2, 28)
-    )
     return df
 
 def missing_planting_dates(df, drop=False):

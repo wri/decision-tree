@@ -193,7 +193,7 @@ def apply_rules_ev(params, rules_file_path, df):
             )
 
     # Clean input df
-    for col in ['ev_canopy', 'target_sys', 'practice', 'slope']:
+    for col in ['target_sys', 'practice', 'slope']:
         df.loc[:, col] = df[col].astype(str).str.strip().str.lower()
 
 

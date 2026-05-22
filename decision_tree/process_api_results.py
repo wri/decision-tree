@@ -322,7 +322,7 @@ def missing_planting_dates(df, drop=False):
 def missing_features(df, drop=False, save_missing=True):
     '''
     Identifies rows where ttc is only NaN values (no data for any years)
-    but only for polygons with plantstart year between 2017 and 2024 inclusive.
+    but only for polygons with plantstart year between 2017 and 2025 inclusive.
     Identifies rows where practice or targetsys is NaN.
     Optionally drops these rows based on the drop argument 
     and prints a statement about the count of rows affected.
@@ -338,7 +338,7 @@ def missing_features(df, drop=False, save_missing=True):
     # Only consider missing TTC for plantstart years 2017-2025 inclusive
     eligible_ttc_mask = plantstart_year.between(2017, 2025, inclusive='both')
     null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
-    # placeholder for notes label missing-ttc 
+    # placeholder for notes label missing-ttc - currently in canopy_cover.py
     missing_practice = df[df['practice'].isna()]
     df.loc[missing_practice.index, 'notes'] = 'missing-practice'
     missing_targetsys = df[df['target_sys'].isna()]

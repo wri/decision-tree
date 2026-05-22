@@ -42,13 +42,12 @@ def apply_canopy_classification(params, df):
 
     #label missing ttc - TODO: this will move to an earlier step once the TTC package is finished
     ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit() and len(col[4:]) == 4]
-    null_rows = df[df[ttc_cols].isna().all(axis=1)]
-    df.loc[null_rows.index, 'notes'] = 'missing-ttc'
-    # note this step needs to stay here
-    df.loc[null_rows, ['baseline_canopy', 'ev_canopy']] = np.nan
+    null_mask = df[ttc_cols].isna().all(axis=1)  
+    df.loc[null_mask, 'notes'] = 'missing-ttc' # this part moves, rest stays
+    df.loc[null_mask, ['baseline_canopy', 'ev_canopy']] = np.nan
 
     # Eligible rows to process further
-    eligible = ~(null_rows)
+    eligible = ~(null_mask)
 
     for idx, row in df[eligible].iterrows():
         plant_date = row['plantstart_dt']

@@ -34,6 +34,11 @@ class Checkpointer:
     def save(self, key: str, df: pd.DataFrame, always: bool = False):
         if self.enabled or always:
             path = self.paths[key]
+
+            # Create target folder
+            target_folder = os.path.dirname(path)
+            create_folder(target_folder)
+
             df.to_csv(path, index=False)
             print(f"[checkpoint] {key} → {path}")
 
@@ -103,9 +108,6 @@ class VerificationDecisionTree:
         }
 
     def run_decision_tree(self, project_ids: list[str] = None, limit_to_test_projects: bool = False):
-        if self.mode not in ["full", "score", "projectids"]:
-            raise ValueError("Invalid mode")
-
         if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
             raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
 
@@ -141,6 +143,8 @@ class VerificationDecisionTree:
         elif self.mode == "score":
             print("Running in SCORE mode — using cached prj data.")
             ev = pd.read_csv(self.tree_results)
+        else:
+            raise ValueError(f"Invalid mode: {self.mode}")
 
         # Get results
         poly_results, prj_results = compute_project_results(self.params, ev)

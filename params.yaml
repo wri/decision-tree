@@ -23,7 +23,7 @@ s3:
   geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
 
 asana:
-  upload: false
+  upload: False
   project_gid: 1209713669431043
   section: Remote
   dry_run: True
@@ -52,7 +52,7 @@ cost:
   remote: 20.0
 
 outfile: # file paths are relative to the project root
-  data_version: 05-18-2016 #MM-DD-YYYY
+  data_version: 04-13-2026 #MM-DD-YYYY
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'data'
@@ -72,15 +72,15 @@ outfile: # file paths are relative to the project root
 
 scoring:
   area_col: area
- 
+
   # How much each variable contributes to score
-  weight_canopy: 0.40   
-  weight_img:    0.40   
-  weight_slope:  0.20   
- 
+  weight_canopy: 0.40
+  weight_img:    0.40
+  weight_slope:  0.20
+
   # Image normalisation: img count at which score reaches 100 (scores are capped at 100)
   max_imgs: 4
- 
+
   # Timing weights for baseline imagery
   img_1yr_weight: 1.0
   img_ext_weight: 0.5
@@ -90,4 +90,3 @@ scoring:
   mangrove_frac_threshold: 0.20 # label project "mangrove" if ≥20% of total area is mangrove
   review_frac_threshold: 0.60   # label project "review required" if ≥60% of polygons are review required
   missing_data_threshold: 0.20  # flag a missing component if it affects ≥20% of a project's polygons
-  

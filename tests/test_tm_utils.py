@@ -4,7 +4,7 @@ import yaml
 from gri_shared_library.os_tools import create_folder
 
 from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
-from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
+from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets
@@ -31,7 +31,7 @@ def test_clean_tm_features():
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, results=parquet_outfile, geojson_dir=geojson_dir,
+    cleaned_features = process_tm_results(params=PARAMS, tm_geoparquet_path=parquet_outfile, geojson_dir=geojson_dir,
                                           project_ids=project_ids, limit_to_test_projects=True)
 
     assert len(cleaned_features) == 3
@@ -62,7 +62,7 @@ def test_slope_statistics(tmp_path):
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, results=parquet_outfile, geojson_dir=geojson_dir,
+    cleaned_features = process_tm_results(params=PARAMS, tm_geoparquet_path=parquet_outfile, geojson_dir=geojson_dir,
                                           project_ids=project_ids, limit_to_test_projects=limit_to_test_projects)
 
     # get slope statistics
@@ -85,8 +85,8 @@ def _get_project_tm_features(project_ids):
     tm_raw_dir = os.path.dirname(parquet_outfile)
     create_folder(tm_raw_dir)
 
-    features = get_geoparquet(PARAMS, SECRETS, parquet_outfile)
-    df = _read_geoparquet(features)
+    download_geoparquet(PARAMS, SECRETS, parquet_outfile)
+    df = _read_geoparquet(parquet_outfile)
     raw_df = flatten_tm_geoparquet(df)
 
     # Thin to projects

@@ -27,7 +27,7 @@ from decision_tree.tools import convert_to_os_path
 from gri_shared_library.os_tools import is_file_recent, create_folder
 from gri_shared_library.s3_tools import get_aws_session
 
-def get_geoparquet(params, secrets, tm_raw):
+def download_geoparquet(params, secrets, tm_raw):
     """
     Download a geoparquet file from S3 with boto3, load it with GeoPandas,
     and save it as a CSV.
@@ -63,7 +63,6 @@ def get_geoparquet(params, secrets, tm_raw):
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 
-    return tm_raw
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     '''

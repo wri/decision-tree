@@ -6,15 +6,23 @@ import geopandas as gpd
 import os
 from shapely import wkb
 
-def process_tm_results(params, 
-                       results: str, 
-                       geojson_dir: str, 
-                       project_ids=None, 
-                       limit_to_test_projects: bool = False, 
+def process_tm_results(params: str,
+                       tm_geoparquet_path: str,
+                       geojson_dir: str,
+                       project_ids=None,
+                       limit_to_test_projects: bool = False,
                        save_geojsons: bool = True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
+
+    Args:
+        params: String path to params.yaml file.
+        tm_geoparquet_path: String path to geoparquet file of polygons.
+        geojson_dir: Output string path for polygon geojson file.
+        project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
+        limit_to_test_projects: Optional flag to restrict projects to test projects (short_name starts with "TEST_")
+        save_geojsons: Optional flag to save geojson files to geojson_dir
 
     Returns: Cleaned dataframe for downstream decision-tree analysis.
     """
@@ -25,7 +33,7 @@ def process_tm_results(params,
     cohort = 'terrafund-cohort-1' if cohort_raw == 'c1' else 'terrafund-cohort-2'
 
     # Ingest polygon data
-    df = _read_geoparquet(results)
+    df = _read_geoparquet(tm_geoparquet_path)
 
     # Filter for test projects
     test_short_name_prefix = 'TEST_'
@@ -34,7 +42,7 @@ def process_tm_results(params,
                          .str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
     else:
         filtered_df = df[~df['short_name']
-                         .str.contains(test_short_name_prefix, case=False, na=False) 
+                         .str.contains(test_short_name_prefix, case=False, na=False)
                          | df['short_name'].isna()].reset_index(drop=True)
 
     # Filter to specified projects for projectid mode
@@ -76,7 +84,7 @@ def process_tm_results(params,
         f"{cohort} has a total of:\n"
         f"  {len(output_ids)} total projects\n"
         f"  {len(poly_ids)} total polygons\n" 
-        f"  {total_area:,.2f} total hectares" 
+        f"  {total_area:,.2f} total hectares"
     )
     return clean_df
 
@@ -260,11 +268,16 @@ def clean_datetime_column(df, column_name):
     df[column_name] = df[column_name].replace(['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT)
 
     # Handle leap year Feb 29 cases on the string column, before datetime conversion
-    is_feb_29 = df[column_name].str.match(r'^\d{4}-02-29$', na=False)
-    non_leap = is_feb_29 & ~df.loc[is_feb_29, column_name].str[:4].apply(
-        lambda y: calendar.isleap(int(y))
-    ).reindex(df.index, fill_value=False)
-    df.loc[non_leap, column_name] = df.loc[non_leap, column_name].str.replace('-02-29', '-02-28')
+    is_feb_29 = df[column_name].str.match(r'^\d{4}-02-29$', na=False).fillna(False).astype(bool)
+
+    feb29_rows = df.loc[is_feb_29, column_name]
+    is_leap = feb29_rows.str[:4].astype(int).apply(calendar.isleap)
+    non_leap_idx = is_leap[~is_leap].index
+
+    df.loc[non_leap_idx, column_name] = (
+        df.loc[non_leap_idx, column_name]
+        .str.replace('-02-29', '-02-28', regex=False)
+    )
 
     # Now safe to convert — invalid dates already handled
     df[column_name] = pd.to_datetime(df[column_name], errors='coerce')

@@ -1,10 +1,11 @@
+import os
 import yaml
 import pandas as pd
 from pathlib import Path
 
 from gri_shared_library.os_tools import create_folder
 
-from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
+from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 import decision_tree.process_api_results as clean
 from decision_tree.image_availability import analyze_image_availability 
 from decision_tree.canopy_cover import apply_canopy_classification
@@ -117,9 +118,9 @@ class VerificationDecisionTree:
         slope_statistics = None
         if self.mode in ("full", "projectids"):
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
-            tm_raw_path = get_geoparquet(self.params, self.secrets, self.tm_raw)
+            download_geoparquet(self.params, self.secrets, self.tm_raw)
             tm_clean = clean.process_tm_results(self.params, 
-                                                tm_raw_path, 
+                                                self.tm_raw,
                                                 self.geojson_dir, 
                                                 project_ids, 
                                                 limit_to_test_projects)

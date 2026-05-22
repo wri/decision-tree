@@ -25,11 +25,6 @@ def apply_canopy_classification(params, df):
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
     """
-    #label missing ttc
-    ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
-    null_rows = df[df[ttc_cols].isna().all(axis=1)]
-    df.loc[null_rows.index, 'notes'] = 'missing-ttc'
-
     n_projects = df['project_id'].nunique()
     n_polys = df['poly_id'].nunique() 
     print(f"Analyzing canopy cover for {n_projects} projects and {n_polys} polygons...")
@@ -38,7 +33,6 @@ def apply_canopy_classification(params, df):
     canopy_thresh = criteria.get('canopy_threshold')
     baseline_range = criteria.get("baseline_range")
     ev_range = criteria.get("ev_range")
-
     current_year = datetime.today().year
 
     df['plantstart_dt'] = pd.to_datetime(df['plantstart'], errors='coerce')
@@ -46,15 +40,15 @@ def apply_canopy_classification(params, df):
     df.loc[:, 'baseline_canopy'] = 'unknown'
     df.loc[:, 'ev_canopy'] = 'unknown'
 
-    ttc_cols = [col for col in df.columns 
-                if col.startswith('ttc_') and col[4:].isdigit() and len(col[4:]) == 4]
-
-    # Tag rows where all TTC values are NaN
-    all_ttc_nan = df[ttc_cols].isna().all(axis=1)
-    df.loc[all_ttc_nan, ['baseline_canopy', 'ev_canopy']] = np.nan
+    #label missing ttc - TODO: this will move to an earlier step once the TTC package is finished
+    ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit() and len(col[4:]) == 4]
+    null_rows = df[df[ttc_cols].isna().all(axis=1)]
+    df.loc[null_rows.index, 'notes'] = 'missing-ttc'
+    # note this step needs to stay here
+    df.loc[null_rows, ['baseline_canopy', 'ev_canopy']] = np.nan
 
     # Eligible rows to process further
-    eligible = ~(all_ttc_nan)
+    eligible = ~(null_rows)
 
     for idx, row in df[eligible].iterrows():
         plant_date = row['plantstart_dt']

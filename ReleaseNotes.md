@@ -14,7 +14,7 @@
 4. params.yaml - Added tm_environment option to params.yaml file to specify whether to use prod or staging URL
 5. Added temporary caching of DEM files from OpenTopo.
 6. Began using basic functions in the gri-pipeline gri_shared_library
-7. Tweaked the toml and setup_uv.sh files based on current understanding of what is needed for both linux and macos
+7. Tweaked the toml and setup_uv.sh files based on current understanding of what is needed for both linux and macOS
 
 ## 2026/01/30
 1. Resolved relative paths to absolute paths

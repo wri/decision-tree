@@ -1,5 +1,7 @@
+import warnings
+
 import pandas as pd
-import numpy as np
+
 
 def calc_cost_to_verify(params, df, area_col="area", decimals=1):
     '''
@@ -12,7 +14,7 @@ def calc_cost_to_verify(params, df, area_col="area", decimals=1):
       - Costs are rounded to `decimals` (default 1 = nearest tenth).
       - If `save_path` is provided, the updated df is saved to CSV.
     '''
-    r_price = params['cost']['field']
+    r_price = params['cost']['remote']
     f_price = params['cost']['field']
     # normalize decisions and area
     base_dec = df["baseline_decision"].astype(str).str.strip().str.lower()
@@ -21,7 +23,8 @@ def calc_cost_to_verify(params, df, area_col="area", decimals=1):
 
     remote_set = {"weak remote", "strong remote"}
     field_set  = {"weak field", "strong field"}
-    zero_set   = {"mangrove", "not available"}
+    zero_set   = {"mangrove", "not available", "review required"}
+    known_set  = remote_set | field_set | zero_set
 
     # initialize columns
     df["baseline_cost"] = 0.0
@@ -36,6 +39,26 @@ def calc_cost_to_verify(params, df, area_col="area", decimals=1):
     df.loc[ev_dec.isin(remote_set), "ev_cost"] = area[ev_dec.isin(remote_set)] * r_price
     df.loc[ev_dec.isin(field_set),  "ev_cost"] = area[ev_dec.isin(field_set)]  * f_price
     df.loc[ev_dec.isin(zero_set),   "ev_cost"] = 0.0
+
+    # Warn on any unrecognized decision values (assigned $0 by default)
+    base_unknown = ~base_dec.isin(known_set)
+    ev_unknown   = ~ev_dec.isin(known_set)
+
+    if base_unknown.any():
+        bad_vals = base_dec[base_unknown].unique().tolist()
+        warnings.warn(
+            f"Unrecognized baseline_decision value(s) {bad_vals} in "
+            f"{base_unknown.sum()} row(s) — assigned $0 cost.",
+            UserWarning, stacklevel=2
+        )
+
+    if ev_unknown.any():
+        bad_vals = ev_dec[ev_unknown].unique().tolist()
+        warnings.warn(
+            f"Unrecognized ev_decision value(s) {bad_vals} in "
+            f"{ev_unknown.sum()} row(s) — assigned $0 cost.",
+            UserWarning, stacklevel=2
+        )
 
     # Round to nearest tenth (or whatever `decimals` you pass)
     if decimals is not None:

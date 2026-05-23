@@ -1,13 +1,13 @@
 import os
+
 import yaml
 from gri_shared_library.os_tools import create_folder
 
-from decision_tree.api_utils import opentopo_pull_wrapper, get_geoparquet
-from decision_tree.constants import PROJECT_ROOT
+from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
+from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 
 params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
 with open(params_path, 'r') as file:
@@ -31,16 +31,16 @@ def test_clean_tm_features():
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, results=parquet_outfile, geojson_dir=geojson_dir,
+    cleaned_features = process_tm_results(params=PARAMS, tm_geoparquet_path=parquet_outfile, geojson_dir=geojson_dir,
                                           project_ids=project_ids, limit_to_test_projects=True)
 
     assert len(cleaned_features) == 3
 
     actual_attribute_count = cleaned_features.shape[1]
-    expected_column_count = 12
+    expected_column_count = 11
     assert actual_attribute_count == expected_column_count
 
-    expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'dist', 'project_phase', 'area']
+    expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes']
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
 
@@ -62,7 +62,7 @@ def test_slope_statistics(tmp_path):
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, results=parquet_outfile, geojson_dir=geojson_dir,
+    cleaned_features = process_tm_results(params=PARAMS, tm_geoparquet_path=parquet_outfile, geojson_dir=geojson_dir,
                                           project_ids=project_ids, limit_to_test_projects=limit_to_test_projects)
 
     # get slope statistics
@@ -71,7 +71,7 @@ def test_slope_statistics(tmp_path):
     assert len(slope_statistics) == len(cleaned_features)
 
     actual_attribute_count = slope_statistics.shape[1]
-    expected_attribute_count = 19
+    expected_attribute_count = 18
     assert actual_attribute_count == expected_attribute_count
 
 
@@ -85,8 +85,8 @@ def _get_project_tm_features(project_ids):
     tm_raw_dir = os.path.dirname(parquet_outfile)
     create_folder(tm_raw_dir)
 
-    features = get_geoparquet(PARAMS, SECRETS, parquet_outfile)
-    df = _read_geoparquet(features)
+    download_geoparquet(PARAMS, SECRETS, parquet_outfile)
+    df = _read_geoparquet(parquet_outfile)
     raw_df = flatten_tm_geoparquet(df)
 
     # Thin to projects

@@ -219,7 +219,7 @@ def plot_risk_map(df: pd.DataFrame,
                   label_top_n: int = 10):
     """Scatter of Baseline vs EV % Field per project; bubble size = # EV polys."""
     d = _ensure_categories(df)
-    # remove past subset bc polygons shouldnt be dropped
+    # remove past subset bc polygons shouldn't be dropped
     # this could still be plotted 
     past = _past_subset(d, cutoff=f"{year_cutoff}-12")
 

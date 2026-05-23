@@ -1,10 +1,7 @@
-import pandas as pd
-import geopandas as gpd
-import numpy as np
-import matplotlib.pyplot as plt
 import re
-import os
-import math
+
+import geopandas as gpd
+import pandas as pd
 
 
 def summarize_results(df):

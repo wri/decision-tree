@@ -1,11 +1,26 @@
+
+# =============================================================================
+# Project Parameters File (params.yaml)
+#
+# This file stores all configuration values for the Decision Tree pipeline.
+# Update paths, thresholds, scoring rules, and API settings here.
+#
+# Notes:
+# - 'mode' indicates where the pipeline begins. Options: full, partial, score
+# File storage: files are named according to the 'data_version', 'experiment_id' and 'cohort'
+#   - 'data version' identifies cached inputs by the date they were downloaded
+#   - 'experiment id' tracks different experiments using same data version
+#   - 'cohort' refers to the batch of TerraFund projects that will be processed
+# =============================================================================
+
 config: secrets.yaml
-mode: full
+mode: full  # options: full, score, projectids
 
 s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
-  geoparquet: s3://wri-restoration-geodata/terramatch/tm.geoparquet
+  geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
 
 asana:
   upload: False
@@ -23,9 +38,10 @@ criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50                                             # threshold for identifying image quality
   off_nadir: 30                                                # number of degrees that the sensor varies from vertical
-  sun_elevation: 30
+  sun_elevation: 20
   img_count: 1                                                 # threshold for identifying image availability
-  baseline_range: [-365, 0]                                    # baseline window (1 year before plant start date)
+  baseline_range: [-365, 60]                                   # baseline window (1 year pre - 2 months post)
+  ext_baseline_range: [-548, 60]                               # extended window (1.5 pre - 2 months post)
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
@@ -35,70 +51,42 @@ cost:
   field: 0.32
   remote: 20.0
 
-outfile:
-  data_version: 03-30-2026 # 03-05-2026
+outfile: # file paths are relative to the project root
+  data_version: 04-13-2026 #MM-DD-YYYY
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'tests/data/decision_tree/test_projects/test_results'
   # file paths are relative to the project_data_folder under the project root
   portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: geojsons/
-  geoparquet: tm_raw/tm_{data_version}.geoparquet
+  geoparquet: tm_raw/{data_version}_tm.geoparquet
   slope_stats: slope/slope_statistics_{cohort}_{data_version}.csv
   project_stats: slope/project_statistics/{name}_slope_stats.csv
   feats: feats/tm_feats_{cohort}_{data_version}.csv
   feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv # confirm this
-  maxar_meta: imagery_availability/comb_img_availability_{cohort}.csv
+  maxar_meta: imagery_availability/comb_img_availability_{cohort}_{data_version}.csv
   tree_results: tree_output/dtree_output_{cohort}_{data_version}_{experiment_id}.csv
   poly_decision: decision_scores/poly_output_{cohort}_{data_version}_{experiment_id}.csv
   prj_decision: decision_scores/prj_output_{cohort}_{data_version}_{experiment_id}.csv
 
-suitability:
+
+scoring:
   area_col: area
-  min_coverage: 0.6         # require at least 60% of available area to have a valid polygon score
-  thresholds:
-    weak_field: 30
-    weak_remote: 55
-    strong_remote: 70
-  special_labels:
-    mangrove_area_frac_threshold: 0.10     # label "mangrove" if ≥10% of total area is mangrove
-    review_area_frac_threshold:  0.10      # label "review required" if ≥10% is review
-    precedence: ["mangrove", "review required", "not available"]
 
-  # How to map raw axis score -> 0..100
-  scale:
-    method: logistic   # or "minmax"
-    k: 0.8             # only used for logistic; larger k => steeper curve
-    min: -6            # only used for minmax
-    max: 6
+  # How much each variable contributes to score
+  weight_canopy: 0.40
+  weight_img:    0.40
+  weight_slope:  0.20
 
-  # Optional nudges from your discrete tree outputs (keeps continuity)
-  base_bonus:
-    strong remote:  +1.0
-    weak remote:    +0.5
-    weak field:     -0.5
-    strong field:   -1.0
+  # Image normalisation: img count at which score reaches 100 (scores are capped at 100)
+  max_imgs: 4
 
-  # Feature contributions (same columns you already have)
-  features:
-    common:
-      baseline_canopy:
-        open:   +2.0
-        closed: -2.0
-      slope:
-        steep:  -2.0
-        flat:   -0.5
-      target_sys:
-        mangrove: null  # we’ll mask these to NaN in code (not part of remote/field axis)
+  # Timing weights for baseline imagery
+  img_1yr_weight: 1.0
+  img_ext_weight: 0.5
 
-    baseline_only:
-      baseline_img_count:
-        ">=2": +2.0
-        "==1": +1.0
-        "<1":  -1.0
-
-    ev_only:
-      ev_img_count:
-        ">=2": +2.0
-        "==1": +1.0
-        "<1":  -1.0
+  # Project-level aggregation thresholds
+  min_coverage: 0.60            # min fraction of prj area with a valid score to publish a result
+  mangrove_frac_threshold: 0.20 # label project "mangrove" if ≥20% of total area is mangrove
+  review_frac_threshold: 0.60   # label project "review required" if ≥60% of polygons are review required
+  missing_data_threshold: 0.20  # flag a missing component if it affects ≥20% of a project's polygons

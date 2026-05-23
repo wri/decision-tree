@@ -1,8 +1,7 @@
-import pandas as pd
-import geopandas as gpd
-import numpy as np
 from datetime import datetime
-import yaml
+
+import numpy as np
+import pandas as pd
 
 def apply_canopy_classification(params, df):
     """
@@ -12,9 +11,9 @@ def apply_canopy_classification(params, df):
     For each row:
     - Calculates the baseline year - calendar year prior to plant start and references 
     `ttc_{year}` for baseline statistics.
-    - If plantstart is before 2020 or in the future, flags as 'invalid'.
     - If all TTC values are NaN, flags as 'NaN'.
-    - If TTC data exists but not in the expected time window, flags as 'investigate'.
+    - If the TTC column for the expected baseline year is missing or has no data
+      for that polygon, flags as 'investigate'.
     - If planting occurred too recently for EV, sets 'ev_canopy' as 'not available'.
     - Otherwise, classifies as 'open' or 'closed' using the `canopy_thresh`.
 
@@ -33,9 +32,8 @@ def apply_canopy_classification(params, df):
 
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
-    baseline_range = criteria.get("baseline_range", [-365, 0])
-    ev_range = criteria.get("ev_range", [730, 1095])
-
+    baseline_range = criteria.get("baseline_range")
+    ev_range = criteria.get("ev_range")
     current_year = datetime.today().year
 
     df['plantstart_dt'] = pd.to_datetime(df['plantstart'], errors='coerce')
@@ -43,25 +41,20 @@ def apply_canopy_classification(params, df):
     df.loc[:, 'baseline_canopy'] = 'unknown'
     df.loc[:, 'ev_canopy'] = 'unknown'
 
-    ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
-
-    # Tag plantstart years that are invalid (too early or in the future)
-    invalid_years = (df['baseline_year'] < 2020) | (df['baseline_year'] > current_year)
-    df.loc[invalid_years, ['baseline_canopy', 'ev_canopy']] = 'invalid'
-
-    # Tag rows where all TTC values are NaN
-    all_ttc_nan = df[ttc_cols].isna().all(axis=1)
-    df.loc[all_ttc_nan, ['baseline_canopy', 'ev_canopy']] = np.nan
+    #label missing ttc - TODO: this will move to an earlier step once the TTC package is finished
+    ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit() and len(col[4:]) == 4]
+    null_mask = df[ttc_cols].isna().all(axis=1)  
+    df.loc[null_mask, 'notes'] = 'missing-ttc' # this part moves, rest stays
+    df.loc[null_mask, ['baseline_canopy', 'ev_canopy']] = np.nan
 
     # Eligible rows to process further
-    eligible = ~(invalid_years | all_ttc_nan)
+    eligible = ~(null_mask)
 
     for idx, row in df[eligible].iterrows():
         plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_target_date = plant_date + pd.Timedelta(days=baseline_range[0])
-        baseline_year = int(baseline_target_date.year)
+        baseline_year = plant_date.year - 1
         baseline_col = f'ttc_{baseline_year}'
 
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):
@@ -75,9 +68,8 @@ def apply_canopy_classification(params, df):
 
         if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
-        else:
-            ev_target_date = plant_date + pd.Timedelta(days=ev_range[0])
-            ev_year = int(ev_target_date.year)
+        else:  
+            ev_year = plant_date.year + 2
             ev_col = f'ttc_{ev_year}'
             if ev_col in ttc_cols and pd.notna(row[ev_col]):
                 val = row[ev_col]

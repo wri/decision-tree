@@ -1,53 +1,32 @@
-import shutil
-
-import requests
-import yaml
-import pandas as pd
-import os
-import json
-import numpy as np
-import sys
-import utm
-import geopandas as gpd
-import rasterio as rs
-import rasterio.mask
-import tempfile
+import configparser
 import math
-import boto3
-from urllib.parse import urlparse
-
-from rasterio.warp import calculate_default_transform, reproject
-from rasterio.enums import Resampling
-from rasterio.io import MemoryFile
+import os
+import shutil
+import tempfile
 from contextlib import contextmanager
 from typing import Union
-from pyproj import CRS
-from shapely.geometry import box, shape
-from tqdm import tqdm
+from urllib.parse import urlparse
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import rasterio as rs
+import rasterio.mask
+import requests
+import utm
 from exactextract import exact_extract
-
-from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
-from decision_tree.s3_utils import upload_to_s3
-from decision_tree.tools import convert_to_os_path
-from gri_shared_library.os_tools import get_project_root_dir, is_file_recent, create_folder
+from gri_shared_library.os_tools import is_file_recent, create_folder
 from gri_shared_library.s3_tools import get_aws_session
+from pyproj import CRS
+from rasterio.enums import Resampling
+from rasterio.io import MemoryFile
+from rasterio.warp import calculate_default_transform, reproject
+from shapely.geometry import box
+
+from decision_tree.tools import convert_to_os_path
 
 
-def _create_folder_if_not_exists(folder_path):
-    """
-    Creates a folder if it does not already exist.
-
-    Args:
-        folder_path (str): The path of the folder to create.
-    """
-    try:
-        # os.makedirs with exist_ok=True will not raise an error if the folder exists
-        os.makedirs(folder_path, exist_ok=True)
-        print(f"Folder ready at: {folder_path}")
-    except OSError as e:
-        print(f"Error creating folder '{folder_path}': {e}")
-
-def get_geoparquet(params, secrets, tm_raw):
+def download_geoparquet(params, secrets, tm_raw):
     """
     Download a geoparquet file from S3 with boto3, load it with GeoPandas,
     and save it as a CSV.
@@ -58,9 +37,12 @@ def get_geoparquet(params, secrets, tm_raw):
     - tm_outfile is the CSV output path
     - AWS auth through console credentials and profile
     """
-
-    s3_url = params["s3"].get("geoparquet")
+    data_v = params["outfile"].get("data_version")
+    month, day, year = data_v.split("-")
+    data_v_reformat = f"{year}-{month}-{day}"
+    s3_url = params["s3"].get("geoparquet").format(data_version=data_v_reformat)
     aws_profile = secrets.get("aws", {}).get("aws_profile")
+    print(s3_url)
 
     # Parse s3:// url to get bucket/key
     parsed = urlparse(s3_url)
@@ -80,7 +62,6 @@ def get_geoparquet(params, secrets, tm_raw):
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 
-    return tm_raw
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     '''
@@ -90,7 +71,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     output will be zero
 
     NaN values indicate no data available for poly
-        1. poly doesnt overlap with raster at all
+        1. poly doesn't overlap with raster at all
         2. overlapping region is entirely no data
     returns a percentage and status label to identify these cases
     '''
@@ -129,7 +110,6 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     slope_thresh = params['criteria']['slope_thresh']
 
     project_names = feats_df['project_name'].unique()
-    project_names = [i for i in project_names]  
     dfs_to_concat = []
     for name in project_names:
         this_project = []
@@ -189,7 +169,8 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
             if process_in_utm_coordinates:
                 site_polygons, slope_raster = _prepare_utm_features(project_polygons, dem_path)
             else:
-                site_polygons, slope_raster = _prepare_latlon_features(total_bounds, project_polygons, dem_path)
+                site_polygons = project_polygons
+                slope_raster = _prepare_latlon_features(total_bounds, dem_path)
 
             if slope_raster.crs != site_polygons.crs:
                 print("CRS mismatch between raster and prj polygon")
@@ -208,13 +189,12 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
                                                       row.geometry,
                                                       threshold=slope_thresh)
 
-                project_data = []
-                project_data.append({
+                project_data = [{
                     'project_name': name,
                     'project_id': project_id,
                     'poly_id': getattr(row, 'poly_id'),
                     'slope_stats': slope_stats,
-                    'slope_area': area_stat})
+                    'slope_area': area_stat}]
 
                 df = pd.DataFrame(project_data).round(1)
                 expanded = df["slope_stats"].apply(pd.Series).add_suffix("_slope")
@@ -250,26 +230,25 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     return comb
 
 
-def _prepare_latlon_features(total_bounds, project_polygons, dem_path):
+def _prepare_latlon_features(total_bounds, dem_path):
     # convert degrees to meters
     latitude = (total_bounds[1] + total_bounds[3]) / 2
     meters_per_degree = 111320 * math.cos(math.radians(latitude))
     z_factor = 1 / meters_per_degree
 
     # Read DEM into memory
+    dem_memory_file = None
     try:
         dem_memory_file = _load_dem_to_memoryfile(dem_path)
-
-        slope_raster = _compute_slope_percent_from_memory(dem_memory_file, z_factor, Resampling.bilinear)
-
-    except Exception as ex:
-        print(ex)
-
+        slope_raster = _compute_slope_percent_from_memory(
+            dem_memory_file, z_factor, Resampling.bilinear
+        )
     finally:
         # close memory files
-        dem_memory_file.close()
+        if dem_memory_file is not None:
+            dem_memory_file.close()
 
-    return project_polygons, slope_raster
+    return slope_raster
 
 
 def _prepare_utm_features(project_polygons, dem_path):
@@ -277,26 +256,26 @@ def _prepare_utm_features(project_polygons, dem_path):
 
     # determine best utm projection
     with rs.open(dem_path) as dem_r:
-        src_bbox = [dem_r.bounds[0], dem_r.bounds[1], dem_r.bounds[2], dem_r.bounds[3]]
-    dst_crs = _get_utm_zone_epsg(src_bbox)
+        bounds = dem_r.bounds
+    dst_crs = _get_utm_zone_epsg([bounds.left, bounds.bottom, bounds.right, bounds.top])
 
+    # Read DEM into memory and project to UTM
+    dem_memory_file = None
+    reprojected_mem_file = None
     try:
-        # Read DEM into memory and project to uTM
         dem_memory_file = _load_dem_to_memoryfile(dem_path)
         reprojected_mem_file = _reproject_raster_in_memory(dem_memory_file, dst_crs)
-
-        slope_raster = _compute_slope_percent_from_memory(reprojected_mem_file, z_factor, Resampling.bilinear)
-
-    except Exception as ex:
-        print(ex)
-
+        slope_raster = _compute_slope_percent_from_memory(
+            reprojected_mem_file, z_factor, Resampling.bilinear
+        )
     finally:
         # close memory files
-        dem_memory_file.close()
-        reprojected_mem_file.close()
+        if reprojected_mem_file is not None:
+            reprojected_mem_file.close()
+        if dem_memory_file is not None:
+            dem_memory_file.close()
 
     projected_project_polygons = project_polygons.to_crs(dst_crs)
-
     return projected_project_polygons, slope_raster
 
 
@@ -396,13 +375,13 @@ def _compute_slope_percent_from_memory(
         padded = np.pad(dem_scaled, pad_width=1, mode='edge')
 
         # Neighbors (Horn)
-        z1 = padded[:-2, :-2];
-        z2 = padded[:-2, 1:-1];
+        z1 = padded[:-2, :-2]
+        z2 = padded[:-2, 1:-1]
         z3 = padded[:-2, 2:]
-        z4 = padded[1:-1, :-2];
+        z4 = padded[1:-1, :-2]
         z6 = padded[1:-1, 2:]
-        z7 = padded[2:, :-2];
-        z8 = padded[2:, 1:-1];
+        z7 = padded[2:, :-2]
+        z8 = padded[2:, 1:-1]
         z9 = padded[2:, 2:]
 
         # Partial derivatives
@@ -507,8 +486,6 @@ def aws_profile_exists(profile_name: str) -> bool:
     Returns:
         bool: True if the profile exists, False otherwise.
     """
-    import configparser
-
     if not profile_name or not isinstance(profile_name, str):
         raise ValueError("Profile name must be a non-empty string.")
 

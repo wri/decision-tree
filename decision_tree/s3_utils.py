@@ -1,7 +1,9 @@
 import yaml
-import numpy as np
 import boto3
 import os
+
+from botocore.exceptions import ClientError
+
 
 def upload_to_s3(params, config_path, project_name, today):
     '''
@@ -18,14 +20,17 @@ def upload_to_s3(params, config_path, project_name, today):
     folder_path = f"{folder_prefix}/{project_name}/geojson/"
     s3_key = f"{folder_path}{filename}"
     local_path = os.path.join(params["outfile"]["geojsons"], filename)
-    
-    s3 = boto3.client('s3', 
-                      aws_access_key_id=aak, 
-                      aws_secret_access_key=ask)
 
-    # Check if the project folder exists
-    result = s3.list_objects_v2(Bucket=bucket, Prefix=folder_path, MaxKeys=1)
-    if 'Contents' not in result:
-        s3.put_object(Bucket=bucket, Key=folder_path)
+    try:
+        s3 = boto3.client('s3',
+                          aws_access_key_id=aak,
+                          aws_secret_access_key=ask)
 
-    s3.upload_file(local_path, bucket, s3_key)
+        # Check if the project folder exists
+        result = s3.list_objects_v2(Bucket=bucket, Prefix=folder_path, MaxKeys=1)
+        if 'Contents' not in result:
+            s3.put_object(Bucket=bucket, Key=folder_path)
+
+        s3.upload_file(local_path, bucket, s3_key)
+    except ClientError as e:
+        print(e.response['Error']['Message'])

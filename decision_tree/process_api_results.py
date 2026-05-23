@@ -1,16 +1,29 @@
-import pandas as pd
 import ast
 import calendar
-from datetime import datetime
-import geopandas as gpd
 import os
-import json
+from datetime import datetime
+
+import geopandas as gpd
+import pandas as pd
 from shapely import wkb
 
-def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_test_projects: bool = False, save_geojsons: bool = True):
+def process_tm_results(params: str,
+                       tm_geoparquet_path: str,
+                       geojson_dir: str,
+                       project_ids=None,
+                       limit_to_test_projects: bool = False,
+                       save_geojsons: bool = True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
+
+    Args:
+        params: String path to params.yaml file.
+        tm_geoparquet_path: String path to geoparquet file of polygons.
+        geojson_dir: Output string path for polygon geojson file.
+        project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
+        limit_to_test_projects: Optional flag to restrict projects to test projects (short_name starts with "TEST_")
+        save_geojsons: Optional flag to save geojson files to geojson_dir
 
     Returns: Cleaned dataframe for downstream decision-tree analysis.
     """
@@ -21,28 +34,33 @@ def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_
     cohort = 'terrafund-cohort-1' if cohort_raw == 'c1' else 'terrafund-cohort-2'
 
     # Ingest polygon data
-    df = _read_geoparquet(results)
+    df = _read_geoparquet(tm_geoparquet_path)
 
     # Filter for test projects
     test_short_name_prefix = 'TEST_'
     if limit_to_test_projects:
-        filtered_df = df[df['short_name'].str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
+        filtered_df = df[df['short_name']
+                         .str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
     else:
-        filtered_df = df[~df['short_name'].str.contains(test_short_name_prefix, case=False, na=False) | df['short_name'].isna()].reset_index(drop=True)
+        filtered_df = df[~df['short_name']
+                         .str.contains(test_short_name_prefix, case=False, na=False)
+                         | df['short_name'].isna()].reset_index(drop=True)
 
     # Filter to specified projects for projectid mode
     if project_ids:
-        filtered_df = filtered_df[filtered_df['project_id'].isin(project_ids)].reset_index(drop=True)
+        filtered_df = filtered_df[filtered_df['project_id']
+                                  .isin(project_ids)].reset_index(drop=True)
 
     # Filter and rename for standard columns
     raw_df = flatten_tm_geoparquet(filtered_df)
 
     # Filter to specified cohort
-    raw_df = raw_df[(raw_df.cohort == cohort)]
+    raw_df = raw_df[raw_df["cohort"].str.contains(cohort, na=False)]
 
     raw_df.columns = raw_df.columns.str.lower()
     input_ids = set(raw_df["project_id"].dropna().unique())
     pre_clean_ids = set(raw_df["project_id"].dropna().unique())
+    raw_df['notes'] = None
 
     clean_df = clean_datetime_column(raw_df, "plantstart")
     clean_df = missing_planting_dates(clean_df, drop_missing)
@@ -54,17 +72,21 @@ def process_tm_results(params, results, geojson_dir, project_ids=None, limit_to_
         save_project_geojsons(clean_df, geojson_dir, data_version)
 
     output_ids = set(clean_df["project_id"].dropna().unique())
+    poly_ids = set(clean_df["poly_id"].dropna().unique())
+    total_area = sum(clean_df["area"])
 
     assert len(input_ids) == len(pre_clean_ids) == len(output_ids), (
         f"input: {len(input_ids)}, "
         f"preclean: {len(pre_clean_ids)}, "
         f"output: {len(output_ids)}"
     )
-    missing_projects = input_ids - output_ids
-    if missing_projects:
-        print(f"Missing prj ids: {missing_projects}")
-
-    print(f"\n Running forecast for {len(output_ids)} projects in {cohort} cohort.")
+    print(
+        f"\nRunning forecast for {cohort} cohort\n"
+        f"{cohort} has a total of:\n"
+        f"  {len(output_ids)} total projects\n"
+        f"  {len(poly_ids)} total polygons\n" 
+        f"  {total_area:,.2f} total hectares"
+    )
     return clean_df
 
 
@@ -114,9 +136,7 @@ def flatten_tm_geoparquet(results):
             "plantstart": row_dict.get("plantstart"),
             "practice": row_dict.get("practice"),
             "target_sys": row_dict.get("target_sys"),
-            "dist": row_dict.get("distr"),
-            "project_phase": row_dict.get("project_phase"),
-            "area": row_dict.get("calcarea"),
+            "area": row_dict.get("calc_area"),
             **tree_cover_years,
         })
 
@@ -135,10 +155,12 @@ def extract_tree_cover_years(row_dict):
     if not isinstance(ttc_values, list):
         return out
 
+    current_year = datetime.today().year
     for item in ttc_values:
         year, percent_cover = item
         year = int(year)
-        out[f"ttc_{year}"] = percent_cover
+        if 2020 <= year <= current_year:
+            out[f"ttc_{year}"] = percent_cover
 
     return out
 
@@ -151,6 +173,7 @@ def save_project_geojsons(df, geojson_dir, data_version):
     - Flags and skips null or empty geometries
     - Attempts to repair invalid geometries with buffer(0); skips if unrecoverable
     - Serializes list-type fields (e.g. dist) that are unsupported by OGR (type 5 = RealList)
+    Problematic polygons persist but are not written to disk.
     """
     os.makedirs(geojson_dir, exist_ok=True)
     print("Saving project GeoJSONs...")
@@ -206,6 +229,7 @@ def save_project_geojsons(df, geojson_dir, data_version):
                     f"⚠️ Skipping polygon: project={project_name}, "
                     f"project_id={project_id}, poly_id={poly_id}, reason={reason}"
                 )
+                df.loc[df['poly_id'] == poly_id, 'notes'] = 'invalid-geometry'
  
         if not valid_rows:
             print(f"⚠️ No valid polygons for {project_name} ({project_id}); skipping GeoJSON.")
@@ -228,35 +252,44 @@ def save_project_geojsons(df, geojson_dir, data_version):
  
     return None
 
+
 def clean_datetime_column(df, column_name):
     """
     Cleans a datetime column in a pandas DataFrame by:
     1. Replacing invalid date strings ('0000-00-00') with NaT.
-    2. Converting the column to datetime format with error handling.
-    3. Printing the number of missing dates after conversion.
+    2. Remapping Feb 29 on non-leap years to Feb 28 prior to datetime conversion.
+    3. Converting the column to datetime format with error coercion.
 
-    Handles issues with dates pertaining to 1) missing dates
-    2) illegal month error resulting from NaN values 3) start
-    date calculation lands on a leap year
+    The leap year handling must occur before pd.to_datetime() is called, because
+    dates like '2023-02-29' would be silently coerced to NaT. String-based detection
+    (str.match, str[:4]) is used instead of .dt accessors.
     """
+
     df[column_name] = df[column_name].astype(str)
 
     # Replace known invalid date formats with NaT
-    df[column_name] = df[column_name].replace(['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT)
-    df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
-
-    # Handle leap year Feb 29 cases
-    is_feb_29 = df[column_name].notna() & (df[column_name].dt.month == 2) & (df[column_name].dt.day == 29)
-    years = df.loc[is_feb_29, column_name].dt.year
-
-    # Ensure aligned index with is_feb_29
-    non_leap_years = ~years.apply(calendar.isleap)
-    affected_rows = is_feb_29.where(~is_feb_29, non_leap_years.values)
-
-    df.loc[affected_rows, column_name] = df.loc[affected_rows, column_name].apply(
-        lambda x: datetime(x.year, 2, 28)
+    df[column_name] = df[column_name].replace(
+        ['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT
     )
+
+    # Handle leap year Feb 29 cases on the string column, before datetime conversion
+    is_feb_29 = (
+        df[column_name].str.match(r'^\d{4}-02-29$', na=False)
+        .fillna(False)
+        .astype(bool)
+    )
+    feb29_rows = df.loc[is_feb_29, column_name]
+    is_leap = feb29_rows.str[:4].astype(int).apply(calendar.isleap)
+    non_leap_idx = is_leap[~is_leap].index
+    df.loc[non_leap_idx, column_name] = (
+        df.loc[non_leap_idx, column_name]
+        .str.replace('-02-29', '-02-28', regex=False)
+    )
+
+    # Now safe to convert — invalid dates already handled
+    df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
     return df
+
 
 def missing_planting_dates(df, drop=False):
     '''
@@ -268,6 +301,14 @@ def missing_planting_dates(df, drop=False):
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
     missing_start = df[df['plantstart'].isna()]
+    df.loc[missing_start.index, 'notes'] = 'missing-plantstart'
+
+    # invalid plantstart
+    current_year = datetime.today().year
+    plantstart_year = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
+    invalid_year_mask = (plantstart_year < 2020) | (plantstart_year > current_year)
+    df.loc[invalid_year_mask, 'notes'] = 'invalid-plantstart'
+
     for _, row in missing_start[['project_name', 'project_id', 'poly_id']].drop_duplicates().iterrows():
         print(f"{row['project_name']} | {row['project_id']} | {row['poly_id']}")
 
@@ -299,7 +340,7 @@ def missing_planting_dates(df, drop=False):
 def missing_features(df, drop=False, save_missing=True):
     '''
     Identifies rows where ttc is only NaN values (no data for any years)
-    but only for polygons with plantstart year between 2017 and 2024 inclusive.
+    but only for polygons with plantstart year between 2017 and 2025 inclusive.
     Identifies rows where practice or targetsys is NaN.
     Optionally drops these rows based on the drop argument 
     and prints a statement about the count of rows affected.
@@ -315,8 +356,11 @@ def missing_features(df, drop=False, save_missing=True):
     # Only consider missing TTC for plantstart years 2017-2025 inclusive
     eligible_ttc_mask = plantstart_year.between(2017, 2025, inclusive='both')
     null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
+    # placeholder for notes label missing-ttc - currently in canopy_cover.py
     missing_practice = df[df['practice'].isna()]
+    df.loc[missing_practice.index, 'notes'] = 'missing-practice'
     missing_targetsys = df[df['target_sys'].isna()]
+    df.loc[missing_targetsys.index, 'notes'] = 'missing-target-sys'
     if save_missing and not null_rows.empty:
         print("TTC NaNs saved to file.")
         null_rows.to_csv('ttc_nans.csv', index=False)
@@ -385,6 +429,9 @@ def resolve_multipractice(df):
             print(f"{name} updated one polygon to -> '{val}'")
     else:
         print("No single-row multi-practice projects were updated.")
+
+    still_multi = df['practice'].astype(str).str.contains(r'\|', na=False)
+    df.loc[still_multi, 'notes'] = 'multi-practice'
 
     return df
 

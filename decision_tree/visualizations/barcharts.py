@@ -544,7 +544,7 @@ def plot_project_scores_dumbbell(
     label_offset: float = 0.5        # x-offset (data units) for annotation text
 ):
     """
-    Horizontal plot where EACH project row shows a faint line from 0–100
+    Horizontal plot where EACH project row shows a faint line from 0 to 100
     and two markers placed at the baseline and EV scores.
 
     Color coding is based on the score using the following buckets:

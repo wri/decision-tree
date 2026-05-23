@@ -1,23 +1,57 @@
-import pandas as pd
-from datetime import datetime, timedelta
-import numpy as np
+import operator
 import re
+from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
+
+# Operator dispatch table — avoids eval() for safe, explicit comparisons
+_OPS = {
+    ">=": operator.ge,
+    "<=": operator.le,
+    ">":  operator.gt,
+    "<":  operator.lt,
+    "==": operator.eq,
+}
 
 def parse_condition(value, actual):
     """
-    Evaluate simple condition like '>=1', '<2', or direct value.
-    Interprets and evaluates conditional expressions (like ">=1") 
-    from the rules CSV.
+    Evaluate a simple condition string like '>=1', '<2', or a direct equality value.
+
+    Interprets and evaluates conditional expressions (like ">=1") from the rules CSV.
+    Uses an explicit operator dispatch table instead of eval() for safety.
+
+    Parameters
+    ----------
+    value : str or scalar
+        The rule value from the CSV. If it begins with a comparison operator
+        (>=, <=, >, <, ==) it is treated as a condition; otherwise an equality
+        check is performed.
+    actual : numeric or scalar
+        The observed value from the data row to test against.
+
+    Returns
+    -------
+    bool
+        True if the condition is satisfied, False otherwise.
+
+    Raises
+    ------
+    ValueError
+        If the condition string is recognized as an operator expression but
+        does not match the expected pattern ``(op)(number)``.
     """
-    if isinstance(value, str) and any(op in value for op in [">=", "<=", ">", "<", "=="]):
+    if isinstance(value, str) and any(value.startswith(op) for op in _OPS):
         value = value.strip()
         if not re.fullmatch(r"(>=|<=|>|<|==)-?\d+(\.\d+)?", value):
             raise ValueError(f"Malformed condition string: {value!r}")
-        try:
-            return eval(f"{actual} {value}")
-        except Exception:
-            return False
+        # Identify the operator token (try two-char tokens before one-char)
+        for token in (">=", "<=", "==", ">", "<"):
+            if value.startswith(token):
+                threshold = float(value[len(token):])
+                return _OPS[token](actual, threshold)
     return actual == value
+
 
 def _image_timing_tier(row):
     """
@@ -34,6 +68,7 @@ def _image_timing_tier(row):
         return 'ext_18mo'
     else:
         return 'none'
+
 
 def apply_rules_baseline(rules_file_path, df):
     """

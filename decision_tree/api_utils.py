@@ -1,31 +1,30 @@
-import shutil
-
-import requests
-import pandas as pd
-import os
-import numpy as np
-import utm
-import geopandas as gpd
-import rasterio as rs
-import rasterio.mask
-import tempfile
+import configparser
 import math
-from urllib.parse import urlparse
-
-from rasterio.warp import calculate_default_transform, reproject
-from rasterio.enums import Resampling
-from rasterio.io import MemoryFile
+import os
+import shutil
+import tempfile
 from contextlib import contextmanager
 from typing import Union
-from pyproj import CRS
-from shapely.geometry import box, shape
-from exactextract import exact_extract
+from urllib.parse import urlparse
 
-from decision_tree.constants import TM_STAGING_URI, TM_PROD_URI
-from decision_tree.s3_utils import upload_to_s3
-from decision_tree.tools import convert_to_os_path
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import rasterio as rs
+import rasterio.mask
+import requests
+import utm
+from exactextract import exact_extract
 from gri_shared_library.os_tools import is_file_recent, create_folder
 from gri_shared_library.s3_tools import get_aws_session
+from pyproj import CRS
+from rasterio.enums import Resampling
+from rasterio.io import MemoryFile
+from rasterio.warp import calculate_default_transform, reproject
+from shapely.geometry import box
+
+from decision_tree.tools import convert_to_os_path
+
 
 def download_geoparquet(params, secrets, tm_raw):
     """
@@ -111,7 +110,6 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     slope_thresh = params['criteria']['slope_thresh']
 
     project_names = feats_df['project_name'].unique()
-    project_names = [i for i in project_names]  
     dfs_to_concat = []
     for name in project_names:
         this_project = []
@@ -488,8 +486,6 @@ def aws_profile_exists(profile_name: str) -> bool:
     Returns:
         bool: True if the profile exists, False otherwise.
     """
-    import configparser
-
     if not profile_name or not isinstance(profile_name, str):
         raise ValueError("Profile name must be a non-empty string.")
 

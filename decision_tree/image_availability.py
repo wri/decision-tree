@@ -8,9 +8,9 @@ def analyze_image_availability(params,
     project/polygon based on user defined windows.
 
     Parameters:
+    - params - string path to the params.yaml which contains criteria for the decision
     - proj_df (pd.DataFrame): DataFrame containing project characteristics.
-    - img_df (pd.DataFrame): DataFrame containing image observations.
-    - param_path points to the params.yaml which contains criteria for the decision
+    - maxar_fp - string path to the maxar_fp
 
     Returns:
     - pd.DataFrame: Merged DataFrame with image availability counts per polygon.
@@ -25,6 +25,7 @@ def analyze_image_availability(params,
     ev_range = tuple(criteria.get('ev_range'))
     
     proj_df.columns = proj_df.columns.str.lower()
+    # Create dataFrame containing image observations.
     img_df = pd.read_csv(maxar_fp, dtype={"datetime": "string"})
     img_df = img_df[[
             'project_id', 'poly_id', 'site_id',

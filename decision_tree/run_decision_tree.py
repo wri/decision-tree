@@ -1,21 +1,21 @@
 import os
-import yaml
-import pandas as pd
 from pathlib import Path
 
+import pandas as pd
+import yaml
 from gri_shared_library.os_tools import create_folder
 
-from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
-import decision_tree.process_api_results as clean
-from decision_tree.image_availability import analyze_image_availability 
-from decision_tree.canopy_cover import apply_canopy_classification
-from decision_tree.slope import apply_slope_classification
-from decision_tree.s3_utils import upload_to_s3
-import decision_tree.polygon_decisions as poly_tree
 import decision_tree.cost_calculator as price
+import decision_tree.polygon_decisions as poly_tree
+import decision_tree.process_api_results as clean
 import decision_tree.project_decisions as proj_tree
 import decision_tree.update_asana as update_asana
+from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
+from decision_tree.canopy_cover import apply_canopy_classification
+from decision_tree.image_availability import analyze_image_availability
+from decision_tree.slope import apply_slope_classification
 from decision_tree.tools import convert_to_os_path, load_secrets
+
 
 class Checkpointer:
     """
@@ -157,7 +157,9 @@ class VerificationDecisionTree:
         if self.params['asana']['upload']:
             update_asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
         if self.params['s3']['upload']:
-            upload_to_s3(self.prj_score, self.params, self.secrets) 
+            raise Exception("The upload to S3 option is currently not supported.")
+            # TODO The function call signature needs to be corrected.
+            # upload_to_s3(self.prj_score, self.params, self.secrets)
 
         return poly_results, prj_results 
 

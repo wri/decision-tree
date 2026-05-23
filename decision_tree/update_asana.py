@@ -1,7 +1,8 @@
-import asana
-from asana import UsersApi, SectionsApi, TasksApi, CustomFieldsApi
-import pandas as pd
 import difflib
+
+import asana
+import pandas as pd
+from asana import UsersApi, SectionsApi, TasksApi, CustomFieldsApi
 
 def update_asana_status_by_gid(params: dict, 
                                secrets: dict, 

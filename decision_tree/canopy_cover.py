@@ -1,6 +1,7 @@
-import pandas as pd
-import numpy as np
 from datetime import datetime
+
+import numpy as np
+import pandas as pd
 
 def apply_canopy_classification(params, df):
     """

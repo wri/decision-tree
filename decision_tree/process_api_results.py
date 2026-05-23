@@ -251,6 +251,7 @@ def save_project_geojsons(df, geojson_dir, data_version):
  
     return None
 
+
 def clean_datetime_column(df, column_name):
     """
     Cleans a datetime column in a pandas DataFrame by:
@@ -259,21 +260,26 @@ def clean_datetime_column(df, column_name):
     3. Converting the column to datetime format with error coercion.
 
     The leap year handling must occur before pd.to_datetime() is called, because
-    dates like '2023-02-29' would be silently coerced to NaT. String-based detection 
+    dates like '2023-02-29' would be silently coerced to NaT. String-based detection
     (str.match, str[:4]) is used instead of .dt accessors.
     """
+
     df[column_name] = df[column_name].astype(str)
 
     # Replace known invalid date formats with NaT
-    df[column_name] = df[column_name].replace(['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT)
+    df[column_name] = df[column_name].replace(
+        ['0000-00-00', 'nan', 'NaN', 'None', '', 'null'], pd.NaT
+    )
 
     # Handle leap year Feb 29 cases on the string column, before datetime conversion
-    is_feb_29 = df[column_name].str.match(r'^\d{4}-02-29$', na=False).fillna(False).astype(bool)
-
+    is_feb_29 = (
+        df[column_name].str.match(r'^\d{4}-02-29$', na=False)
+        .fillna(False)
+        .astype(bool)
+    )
     feb29_rows = df.loc[is_feb_29, column_name]
     is_leap = feb29_rows.str[:4].astype(int).apply(calendar.isleap)
     non_leap_idx = is_leap[~is_leap].index
-
     df.loc[non_leap_idx, column_name] = (
         df.loc[non_leap_idx, column_name]
         .str.replace('-02-29', '-02-28', regex=False)
@@ -281,8 +287,8 @@ def clean_datetime_column(df, column_name):
 
     # Now safe to convert — invalid dates already handled
     df[column_name] = pd.to_datetime(df[column_name], errors='coerce')
-
     return df
+
 
 def missing_planting_dates(df, drop=False):
     '''

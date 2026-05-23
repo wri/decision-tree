@@ -72,7 +72,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     output will be zero
 
     NaN values indicate no data available for poly
-        1. poly doesnt overlap with raster at all
+        1. poly doesn't overlap with raster at all
         2. overlapping region is entirely no data
     returns a percentage and status label to identify these cases
     '''
@@ -171,7 +171,8 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
             if process_in_utm_coordinates:
                 site_polygons, slope_raster = _prepare_utm_features(project_polygons, dem_path)
             else:
-                site_polygons, slope_raster = _prepare_latlon_features(total_bounds, project_polygons, dem_path)
+                site_polygons = project_polygons
+                slope_raster = _prepare_latlon_features(total_bounds, dem_path)
 
             if slope_raster.crs != site_polygons.crs:
                 print("CRS mismatch between raster and prj polygon")
@@ -190,13 +191,12 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
                                                       row.geometry,
                                                       threshold=slope_thresh)
 
-                project_data = []
-                project_data.append({
+                project_data = [{
                     'project_name': name,
                     'project_id': project_id,
                     'poly_id': getattr(row, 'poly_id'),
                     'slope_stats': slope_stats,
-                    'slope_area': area_stat})
+                    'slope_area': area_stat}]
 
                 df = pd.DataFrame(project_data).round(1)
                 expanded = df["slope_stats"].apply(pd.Series).add_suffix("_slope")
@@ -232,26 +232,25 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     return comb
 
 
-def _prepare_latlon_features(total_bounds, project_polygons, dem_path):
+def _prepare_latlon_features(total_bounds, dem_path):
     # convert degrees to meters
     latitude = (total_bounds[1] + total_bounds[3]) / 2
     meters_per_degree = 111320 * math.cos(math.radians(latitude))
     z_factor = 1 / meters_per_degree
 
     # Read DEM into memory
+    dem_memory_file = None
     try:
         dem_memory_file = _load_dem_to_memoryfile(dem_path)
-
-        slope_raster = _compute_slope_percent_from_memory(dem_memory_file, z_factor, Resampling.bilinear)
-
-    except Exception as ex:
-        print(ex)
-
+        slope_raster = _compute_slope_percent_from_memory(
+            dem_memory_file, z_factor, Resampling.bilinear
+        )
     finally:
         # close memory files
-        dem_memory_file.close()
+        if dem_memory_file is not None:
+            dem_memory_file.close()
 
-    return project_polygons, slope_raster
+    return slope_raster
 
 
 def _prepare_utm_features(project_polygons, dem_path):
@@ -259,26 +258,26 @@ def _prepare_utm_features(project_polygons, dem_path):
 
     # determine best utm projection
     with rs.open(dem_path) as dem_r:
-        src_bbox = [dem_r.bounds[0], dem_r.bounds[1], dem_r.bounds[2], dem_r.bounds[3]]
-    dst_crs = _get_utm_zone_epsg(src_bbox)
+        bounds = dem_r.bounds
+    dst_crs = _get_utm_zone_epsg([bounds.left, bounds.bottom, bounds.right, bounds.top])
 
+    # Read DEM into memory and project to UTM
+    dem_memory_file = None
+    reprojected_mem_file = None
     try:
-        # Read DEM into memory and project to uTM
         dem_memory_file = _load_dem_to_memoryfile(dem_path)
         reprojected_mem_file = _reproject_raster_in_memory(dem_memory_file, dst_crs)
-
-        slope_raster = _compute_slope_percent_from_memory(reprojected_mem_file, z_factor, Resampling.bilinear)
-
-    except Exception as ex:
-        print(ex)
-
+        slope_raster = _compute_slope_percent_from_memory(
+            reprojected_mem_file, z_factor, Resampling.bilinear
+        )
     finally:
         # close memory files
-        dem_memory_file.close()
-        reprojected_mem_file.close()
+        if reprojected_mem_file is not None:
+            reprojected_mem_file.close()
+        if dem_memory_file is not None:
+            dem_memory_file.close()
 
     projected_project_polygons = project_polygons.to_crs(dst_crs)
-
     return projected_project_polygons, slope_raster
 
 
@@ -378,13 +377,13 @@ def _compute_slope_percent_from_memory(
         padded = np.pad(dem_scaled, pad_width=1, mode='edge')
 
         # Neighbors (Horn)
-        z1 = padded[:-2, :-2];
-        z2 = padded[:-2, 1:-1];
+        z1 = padded[:-2, :-2]
+        z2 = padded[:-2, 1:-1]
         z3 = padded[:-2, 2:]
-        z4 = padded[1:-1, :-2];
+        z4 = padded[1:-1, :-2]
         z6 = padded[1:-1, 2:]
-        z7 = padded[2:, :-2];
-        z8 = padded[2:, 1:-1];
+        z7 = padded[2:, :-2]
+        z8 = padded[2:, 1:-1]
         z9 = padded[2:, 2:]
 
         # Partial derivatives

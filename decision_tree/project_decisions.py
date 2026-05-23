@@ -34,7 +34,7 @@ def _score_one_mode(
     Data quality flag
     -----------------
     After the label is determined, each missing-data component (canopy, imagery,
-    slope) is checked against missing_thr. Flags are labelled HIGH or LOW based
+    slope) is checked against missing_thr. Flags are labeled HIGH or LOW based
     on whether the missing component is material to the assigned label:
 
       Field project  → slope missing = HIGH;  canopy / imagery missing = LOW

@@ -62,7 +62,8 @@ class VerificationDecisionTree:
         self._resolve_paths()
         self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
 
-    def _load_yaml(self, path):
+    @staticmethod
+    def _load_yaml(path):
         with open(path, "r") as f:
             return yaml.safe_load(f)
 

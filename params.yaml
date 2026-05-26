@@ -24,15 +24,8 @@ s3:
 
 asana:
   upload: False
-  project_gid: 1209713669431043
   section: Remote
   dry_run: True
-
-opt_api:
-  opt_url: https://portal.opentopography.org/API/globaldem
-
-tm_api:
-  tm_environment: prod # prod or staging
 
 criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects

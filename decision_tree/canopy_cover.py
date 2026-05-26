@@ -2,6 +2,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
 
 def apply_canopy_classification(params, df):
     """
@@ -54,7 +55,7 @@ def apply_canopy_classification(params, df):
         plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_year = plant_date.year - 1
+        baseline_year = plant_date.year - BASE_OFFSET_YRS
         baseline_col = f'ttc_{baseline_year}'
 
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):
@@ -69,7 +70,7 @@ def apply_canopy_classification(params, df):
         if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:  
-            ev_year = plant_date.year + 2
+            ev_year = plant_date.year + EI_OFFSET_YRS
             ev_col = f'ttc_{ev_year}'
             if ev_col in ttc_cols and pd.notna(row[ev_col]):
                 val = row[ev_col]

@@ -24,7 +24,7 @@ from rasterio.warp import calculate_default_transform, reproject
 from shapely.geometry import box
 
 from decision_tree.tools import convert_to_os_path
-
+from constants import OPENTOPO_URI
 
 def download_geoparquet(params, secrets, tm_raw):
     """
@@ -101,9 +101,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     Calculates area with high slope.
     If a polygon falls outside the DEM extent, stats default to NaN.
     '''
-    dem_url = params['opt_api']['opt_url']
     api_key = secrets['opentopo']['opentopo_api_key']
-
     project_data_dir =  params['outfile']["project_data_folder"]
 
     data_version = params['outfile']['data_version']
@@ -155,7 +153,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
                 shutil.copyfile(cached_dem_file_path, dem_path)
             else:
                 # Download the DEM
-                response = requests.get(dem_url, stream=True, params=query)
+                response = requests.get(OPENTOPO_URI, stream=True, params=query)
                 if response.status_code != 200:
                     raise Exception(f"Error downloading DEM for project {name}: {response.text}")
 

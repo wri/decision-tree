@@ -4,7 +4,7 @@ import pandas as pd
 from constants import COST_FIELD, COST_REMOTE
 
 
-def calc_cost_to_verify(params, df, area_col="area", decimals=1):
+def calc_cost_to_verify(df, decimals=1):
     '''
     Using the remote vs field verification assignment and the polygon area,
     calculate the baseline and EV verification costs for the project.
@@ -18,7 +18,7 @@ def calc_cost_to_verify(params, df, area_col="area", decimals=1):
     # normalize decisions and area
     base_dec = df["baseline_decision"].astype(str).str.strip().str.lower()
     ev_dec   = df["ev_decision"].astype(str).str.strip().str.lower()
-    area     = pd.to_numeric(df[area_col], errors="coerce").fillna(0.0)
+    area     = pd.to_numeric(df["area"], errors="coerce").fillna(0.0)
 
     remote_set = {"weak remote", "strong remote"}
     field_set  = {"weak field", "strong field"}

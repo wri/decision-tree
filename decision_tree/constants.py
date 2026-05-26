@@ -24,3 +24,10 @@ DESIRED_COLS = fixed_cols + ttc_years
 TM_STAGING_URI = 'https://api-staging.terramatch.org/research/v3/sitePolygons?' # not currently used
 TM_PROD_URI = 'https://api.terramatch.org/research/v3/sitePolygons?'
 PROJECT_ROOT = get_project_root_dir()
+
+
+BASE_OFFSET_YRS = 1
+EI_OFFSET_YRS = 2
+
+COST_FIELD = 20.0
+COST_REMOTE = 0.32

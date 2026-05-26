@@ -2,7 +2,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
+from decision_tree.constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
 
 def apply_canopy_classification(params, df):
     """

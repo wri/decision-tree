@@ -3,7 +3,7 @@ import difflib
 import asana
 import pandas as pd
 from asana import UsersApi, SectionsApi, TasksApi, CustomFieldsApi
-from constants import ASANA_GID
+from decision_tree.constants import ASANA_GID
 
 def update_asana_status_by_gid(params: dict, 
                                secrets: dict, 

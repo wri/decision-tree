@@ -1,7 +1,7 @@
 import warnings
 
 import pandas as pd
-from constants import COST_FIELD, COST_REMOTE
+from decision_tree.constants import COST_FIELD, COST_REMOTE
 
 
 def calc_cost_to_verify(df, decimals=1):

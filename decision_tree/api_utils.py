@@ -24,7 +24,7 @@ from rasterio.warp import calculate_default_transform, reproject
 from shapely.geometry import box
 
 from decision_tree.tools import convert_to_os_path
-from constants import OPENTOPO_URI
+from decision_tree.constants import OPENTOPO_URI
 
 def download_geoparquet(params, secrets, tm_raw):
     """

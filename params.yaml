@@ -45,7 +45,6 @@ criteria:
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
-  rules: rule_template.csv
 
 outfile: # file paths are relative to the project root
   data_version: 04-13-2026 #MM-DD-YYYY

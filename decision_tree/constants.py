@@ -25,6 +25,7 @@ TM_STAGING_URI = 'https://api-staging.terramatch.org/research/v3/sitePolygons?' 
 TM_PROD_URI = 'https://api.terramatch.org/research/v3/sitePolygons?'
 PROJECT_ROOT = get_project_root_dir()
 
+RULES = 'rule_template.csv'
 
 BASE_OFFSET_YRS = 1
 EI_OFFSET_YRS = 2

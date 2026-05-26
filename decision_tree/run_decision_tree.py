@@ -15,7 +15,7 @@ from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.slope import apply_slope_classification
 from decision_tree.tools import convert_to_os_path, load_secrets
-
+from decision_tree.constants import RULES
 
 class Checkpointer:
     """
@@ -91,7 +91,7 @@ class VerificationDecisionTree:
         self.prj_score = convert_to_os_path(project_data_dir, outfile["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
-        self.rules = convert_to_os_path(project_data_dir, self.params['criteria']['rules'])
+        self.rules = convert_to_os_path(project_data_dir, RULES)
 
     def _checkpoint_paths(self) -> dict:
         """
@@ -176,7 +176,7 @@ def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statis
 def compute_project_results(params, ev):
     """Run decision scoring."""
     scored = poly_tree.apply_scoring(params, ev)
-    poly_results = price.calc_cost_to_verify(params, scored)
+    poly_results = price.calc_cost_to_verify(scored)
     prj_results = proj_tree.aggregate_project_score(params, scored)
     return poly_results, prj_results
 

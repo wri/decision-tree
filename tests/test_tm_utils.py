@@ -46,7 +46,7 @@ def test_clean_tm_features():
 
 
 def test_slope_statistics(tmp_path):
-    project_ids = [TEST_01_GRI_PROJECT_ID]; limit_to_test_projects = True
+    # project_ids = [TEST_01_GRI_PROJECT_ID]; limit_to_test_projects = True
     # REAL PROJECT BELOW - Only use for examination of an actual project
     project_ids = [TEST_REAL_PROJECT_C1_ID]; limit_to_test_projects = False
     # slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids)
@@ -69,6 +69,10 @@ def test_slope_statistics(tmp_path):
     slope_statistics = opentopo_pull_wrapper(PARAMS, SECRETS, geojson_dir, cleaned_features)
 
     assert len(slope_statistics) == len(cleaned_features)
+
+    # Ensure that statistics are unique
+    unique_df = slope_statistics.drop_duplicates(subset=None, keep=False).reset_index(drop=True)
+    assert len(slope_statistics) == len(unique_df)
 
     actual_attribute_count = slope_statistics.shape[1]
     expected_attribute_count = 18

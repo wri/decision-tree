@@ -24,15 +24,8 @@ s3:
 
 asana:
   upload: False
-  project_gid: 1209713669431043
   section: Remote
   dry_run: True
-
-opt_api:
-  opt_url: https://portal.opentopography.org/API/globaldem
-
-tm_api:
-  tm_environment: prod # prod or staging
 
 criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
@@ -45,11 +38,6 @@ criteria:
   ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
   drop_missing: False
   slope_thresh: 20
-  rules: rule_template.csv
-
-cost:
-  field: 0.32
-  remote: 20.0
 
 outfile: # file paths are relative to the project root
   data_version: 04-13-2026 #MM-DD-YYYY

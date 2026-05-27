@@ -421,9 +421,11 @@ def _get_utm_zone_epsg(bbox):
     utm_x, utm_y, band, zone = utm.from_latlon(centroid.y, centroid.x)
 
     if centroid.y > 0:  # Northern zone
-        epsg = 32600 + band
+        north_hemisphere_utm_epsg_base = 32600
+        epsg = north_hemisphere_utm_epsg_base + band
     else:
-        epsg = 32700 + band
+        south_hemisphere_utm_epsg_base = 32700
+        epsg = south_hemisphere_utm_epsg_base + band
 
     return CRS.from_string(f"EPSG:{epsg}")
 

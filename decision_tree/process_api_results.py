@@ -6,6 +6,7 @@ from datetime import datetime
 import geopandas as gpd
 import pandas as pd
 from shapely import wkb
+from decision_tree.constants import TF_START_YR
 
 def process_tm_results(params: str,
                        tm_geoparquet_path: str,
@@ -159,7 +160,7 @@ def extract_tree_cover_years(row_dict):
     for item in ttc_values:
         year, percent_cover = item
         year = int(year)
-        if 2020 <= year <= current_year:
+        if TF_START_YR <= year <= current_year:
             out[f"ttc_{year}"] = percent_cover
 
     return out

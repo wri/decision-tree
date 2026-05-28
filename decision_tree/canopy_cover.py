@@ -55,7 +55,7 @@ def apply_canopy_classification(params, df):
         plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_year = plant_date.year - BASE_OFFSET_YRS
+        baseline_year = plant_date.year + BASE_OFFSET_YRS
         baseline_col = f'ttc_{baseline_year}'
 
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):

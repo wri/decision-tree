@@ -4,10 +4,10 @@ from gri_shared_library.os_tools import get_project_root_dir
 
 
 # Construct list of desired columns
-start_year = 2020
+TF_START_YR = 2020
 current_year = date.today().year
 ttc_years = []
-for year in range(start_year, current_year, 1):
+for year in range(TF_START_YR, current_year, 1):
     ttc_year = f"ttc_{year}"
     ttc_years.append(ttc_year)
 
@@ -28,8 +28,9 @@ OPENTOPO_URI = 'https://portal.opentopography.org/API/globaldem'
 
 RULES = 'rule_template.csv'
 
-BASE_OFFSET_YRS = 1
+BASE_OFFSET_YRS = -1
 EI_OFFSET_YRS = 2
+END_OFFSET_YRS = 5
 
 COST_FIELD = 20.0
 COST_REMOTE = 0.32

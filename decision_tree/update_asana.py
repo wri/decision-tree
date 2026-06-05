@@ -3,6 +3,7 @@ import difflib
 import asana
 import pandas as pd
 from asana import UsersApi, SectionsApi, TasksApi, CustomFieldsApi
+from decision_tree.constants import ASANA_GID
 
 def update_asana_status_by_gid(params: dict, 
                                secrets: dict, 
@@ -17,7 +18,6 @@ def update_asana_status_by_gid(params: dict,
     given section, using rows from a CSV. Matches tasks by project_name
     (substring, optional fuzzy). No task creation. No due dates.
     """
-    project_gid      = params["asana"]["project_gid"]
     section_name     = params["asana"].get("section", "Remote")
     dry_run          = bool(params["asana"].get("dry_run", True))
     project_name_col = params["asana"].get("project_name_col", "project_name")
@@ -40,11 +40,11 @@ def update_asana_status_by_gid(params: dict,
 
     # ---- Resolve section ----
     secs = sections_api.get_sections_for_project(
-        project_gid, {"opt_fields": "gid,name"}
+        ASANA_GID, {"opt_fields": "gid,name"}
     ).get("data", [])
     sec = next((s for s in secs if s["name"] == section_name), None)
     if not sec:
-        raise ValueError(f"Section '{section_name}' not found in project {project_gid!r}.")
+        raise ValueError(f"Section '{section_name}' not found in project {ASANA_GID!r}.")
     section_gid = sec["gid"]
 
     # ---- Load tasks once ----

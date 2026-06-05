@@ -4,10 +4,10 @@ from gri_shared_library.os_tools import get_project_root_dir
 
 
 # Construct list of desired columns
-start_year = 2020
+TF_START_YR = 2020
 current_year = date.today().year
 ttc_years = []
-for year in range(start_year, current_year, 1):
+for year in range(TF_START_YR, current_year, 1):
     ttc_year = f"ttc_{year}"
     ttc_years.append(ttc_year)
 
@@ -24,3 +24,15 @@ DESIRED_COLS = fixed_cols + ttc_years
 TM_STAGING_URI = 'https://api-staging.terramatch.org/research/v3/sitePolygons?' # not currently used
 TM_PROD_URI = 'https://api.terramatch.org/research/v3/sitePolygons?'
 PROJECT_ROOT = get_project_root_dir()
+OPENTOPO_URI = 'https://portal.opentopography.org/API/globaldem'
+
+RULES = 'rule_template.csv'
+
+BASE_OFFSET_YRS = -1
+EI_OFFSET_YRS = 2
+END_OFFSET_YRS = 6
+
+COST_FIELD = 20.0
+COST_REMOTE = 0.32
+
+ASANA_GID = 1209713669431043

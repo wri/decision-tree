@@ -1,25 +1,24 @@
 import warnings
 
 import pandas as pd
+from decision_tree.constants import COST_FIELD, COST_REMOTE
 
 
-def calc_cost_to_verify(params, df, area_col="area", decimals=1):
+def calc_cost_to_verify(df, decimals=1):
     '''
     Using the remote vs field verification assignment and the polygon area,
     calculate the baseline and EV verification costs for the project.
 
     Rules:
       - For each phase, use that phase's decision (remote/field) to pick the rate.
-      - If the decision is "mangrove" or "not available", cost is $0.
+      - If the decision is "mangrove", "not available" or "review required" cost is $0.
       - Costs are rounded to `decimals` (default 1 = nearest tenth).
       - If `save_path` is provided, the updated df is saved to CSV.
     '''
-    r_price = params['cost']['remote']
-    f_price = params['cost']['field']
     # normalize decisions and area
     base_dec = df["baseline_decision"].astype(str).str.strip().str.lower()
     ev_dec   = df["ev_decision"].astype(str).str.strip().str.lower()
-    area     = pd.to_numeric(df[area_col], errors="coerce").fillna(0.0)
+    area     = pd.to_numeric(df["area"], errors="coerce").fillna(0.0)
 
     remote_set = {"weak remote", "strong remote"}
     field_set  = {"weak field", "strong field"}
@@ -31,13 +30,13 @@ def calc_cost_to_verify(params, df, area_col="area", decimals=1):
     df["ev_cost"] = 0.0
 
     # Baseline cost: use baseline_decision's method
-    df.loc[base_dec.isin(remote_set), "baseline_cost"] = area[base_dec.isin(remote_set)] * r_price
-    df.loc[base_dec.isin(field_set),  "baseline_cost"] = area[base_dec.isin(field_set)]  * f_price
+    df.loc[base_dec.isin(remote_set), "baseline_cost"] = area[base_dec.isin(remote_set)] * COST_REMOTE
+    df.loc[base_dec.isin(field_set),  "baseline_cost"] = area[base_dec.isin(field_set)]  * COST_FIELD
     df.loc[base_dec.isin(zero_set),   "baseline_cost"] = 0.0
 
     # EV cost: use ev_decision's method
-    df.loc[ev_dec.isin(remote_set), "ev_cost"] = area[ev_dec.isin(remote_set)] * r_price
-    df.loc[ev_dec.isin(field_set),  "ev_cost"] = area[ev_dec.isin(field_set)]  * f_price
+    df.loc[ev_dec.isin(remote_set), "ev_cost"] = area[ev_dec.isin(remote_set)] * COST_REMOTE
+    df.loc[ev_dec.isin(field_set),  "ev_cost"] = area[ev_dec.isin(field_set)]  * COST_FIELD
     df.loc[ev_dec.isin(zero_set),   "ev_cost"] = 0.0
 
     # Warn on any unrecognized decision values (assigned $0 by default)

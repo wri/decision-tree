@@ -2,7 +2,9 @@ import pandas as pd
         
 def apply_slope_classification(params, df, slope_stats):
     '''
-    Classify polygons based on the % of the area that is steep (> threshold slope).
+    each polygon already has a pre-computed number identifying the percentage of the polygon's
+    area that has a steep slope (>threshold). this function converts that number into simple 
+    flat/steep label using the threshold
     
     - "steep" if the % of area > threshold.
     - "flat" if the % of area <= threshold.

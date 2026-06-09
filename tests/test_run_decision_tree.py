@@ -2,7 +2,7 @@ import os
 
 from numpy import nan
 
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C2_ID
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
 from tools import has_expected_project_ev_values
 
@@ -27,18 +27,27 @@ def test_run_decision_tree_projectids():
     poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids, limit_to_test_projects=True)
 
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    # project_ids = [TEST_REAL_PROJECT_C1_ID]
-    # poly_results, prj_results  = workflow.run_decision_tree(project_ids=project_ids)
+    project_ids = [TEST_REAL_PROJECT_C2_ID]
+    poly_results, prj_results  = workflow.run_decision_tree(project_ids=project_ids)
     # REAL PROJECT ABOVE
 
     # TODO Determine how to modify the data to get more variation
-    expected_poly_baseline_suitability = 13.3
-    expected_poly_baseline_total = 0
-    expected_poly_ev_total = 0
+    if project_ids == [TEST_01_GRI_PROJECT_ID]:
+        expected_poly_baseline_suitability = 13.3
+        expected_poly_baseline_total = 0
+        expected_poly_ev_total = 0
 
-    expected_project_count = 1
-    expected_project_ev_label= 'review required'
-    expected_pct_area_scored = 0
+        expected_project_count = 1
+        expected_project_ev_label= 'review required'
+        expected_pct_area_scored = 0
+    else:
+        expected_poly_baseline_suitability = 0.0
+        expected_poly_baseline_total = 0
+        expected_poly_ev_total = 0
+
+        expected_project_count = 1
+        expected_project_ev_label= 'not available'
+        expected_pct_area_scored = 0
 
     has_expected_project_ev_values(poly_results, prj_results,
                            expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,

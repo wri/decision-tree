@@ -5,16 +5,15 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from decision_tree.constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
-
 # Operator dispatch table — avoids eval() for safe, explicit comparisons
 _OPS = {
     ">=": operator.ge,
     "<=": operator.le,
-    ">":  operator.gt,
-    "<":  operator.lt,
+    ">": operator.gt,
+    "<": operator.lt,
     "==": operator.eq,
 }
+
 
 def parse_condition(value, actual):
     """
@@ -55,6 +54,63 @@ def parse_condition(value, actual):
     return actual == value
 
 
+# ---------------------------------------------------------------------------
+# Rule-index helpers — replace per-row inner iterrows() with O(1) dict lookup
+# ---------------------------------------------------------------------------
+
+def _build_condition_index(rules_df, key_cols, condition_col, result_col):
+    """
+    Pre-index rules for fast lookup by exact-match key columns + one condition column.
+
+    Returns a dict mapping tuple(key_col_values) → list of (condition, result) pairs
+    in original rule order. Caller does an O(1) dict lookup and a short linear scan
+    over candidates instead of scanning the full rules DataFrame for every data row.
+    """
+    idx = {}
+    for row in rules_df.itertuples(index=False):
+        key = tuple(getattr(row, c) for c in key_cols)
+        entry = (getattr(row, condition_col), getattr(row, result_col))
+        idx.setdefault(key, []).append(entry)
+    return idx
+
+
+def _build_exact_index(rules_df, key_cols, result_col):
+    """
+    Pre-index rules that match on all key columns exactly (no condition column).
+
+    Returns a dict mapping tuple(key_col_values) → result value.
+    First-match-wins when duplicate keys exist.
+    """
+    idx = {}
+    for row in rules_df.itertuples(index=False):
+        key = tuple(getattr(row, c) for c in key_cols)
+        if key not in idx:
+            idx[key] = getattr(row, result_col)
+    return idx
+
+
+def _lookup_condition(idx, key, actual_val):
+    """
+    Return the result for the first rule candidate where
+    parse_condition(condition, actual_val) is True. Returns None if no match.
+    """
+    return next(
+        (result for cond, result in idx.get(key, []) if parse_condition(cond, actual_val)),
+        None,
+    )
+
+
+def _compute_img_tiers(df):
+    """Vectorised replacement for df.apply(_image_timing_tier, axis=1)."""
+    return pd.Series(
+        np.where(
+            df['baseline_img_count'] >= 1, 'hq_1yr',
+            np.where(df['baseline_ext_img_count'] >= 1, 'ext_18mo', 'none'),
+        ),
+        index=df.index,
+    )
+
+
 def _image_timing_tier(row):
     """
     Classify a polygon's image availability into a timing tier.
@@ -76,20 +132,20 @@ def apply_rules_baseline(rules_file_path, df):
     """
     Decision tree for baseline classification.
 
-    * If a polygon was already flagged as problematic during cleaning, 
+    * If a polygon was already flagged as problematic during cleaning,
     carry that flag through as its decision by ref 'notes' column
-    
+
     PHASE 1:
-      • assign first_decision {mangrove, remote, field}  
+      • assign first_decision {mangrove, remote, field}
         (intentionally ignores slope entirely)
-    
+
     PHASE 2:
       • for first_decision=='remote', final_decision is driven by both
         img_count rules AND the timing tier of available imagery:
           - 'hq_1yr'   : image exists within 1yr  -> apply rules normally
           - 'ext_18mo' : image only within 1.5yrs  -> cap at 'weak remote'
           - 'none'     : no imagery in either window -> 'review required'
-      • for first_decision=='field', look only at slope rules  
+      • for first_decision=='field', look only at slope rules
       • mangrove stays as is (final_decision = 'mangrove')
     """
     df = df.copy()
@@ -106,8 +162,8 @@ def apply_rules_baseline(rules_file_path, df):
     for col in ['baseline_canopy', 'target_sys', 'practice', 'slope']:
         df[col] = df[col].astype(str).str.strip().str.lower()
 
-    # Pre-compute timing tier for each polygon
-    df['img_tier'] = df.apply(_image_timing_tier, axis=1)
+    # Pre-compute timing tier for each polygon (vectorised)
+    df['img_tier'] = _compute_img_tiers(df)
 
     # Split rules into subsets each phase needs
     base_rules = rules[['canopy', 'target_sys', 'practice', 'img_count', 'first_decision']]
@@ -117,6 +173,12 @@ def apply_rules_baseline(rules_file_path, df):
     field_rules = rules[rules['first_decision'] == 'field'][[
         'canopy', 'target_sys', 'practice', 'slope', 'final_decision'
     ]]
+
+    # Pre-build rule indexes — O(1) lookup replaces inner iterrows() scans
+    base_idx = _build_condition_index(base_rules, ['canopy', 'target_sys', 'practice'], 'img_count', 'first_decision')
+    remote_idx = _build_condition_index(remote_rules, ['canopy', 'target_sys', 'practice'], 'img_count',
+                                        'final_decision')
+    field_idx = _build_exact_index(field_rules, ['canopy', 'target_sys', 'practice', 'slope'], 'final_decision')
 
     decisions = []
     for _, row in df.iterrows():
@@ -130,16 +192,8 @@ def apply_rules_baseline(rules_file_path, df):
         if row['target_sys'] == 'mangrove':
             base = 'mangrove'
         else:
-            base = None
-            for _, rule in base_rules.iterrows():
-                if (
-                    row['baseline_canopy'] == rule['canopy'] and
-                    row['target_sys']      == rule['target_sys'] and
-                    row['practice']        == rule['practice'] and
-                    parse_condition(rule['img_count'], row['baseline_ext_img_count'])
-                ):
-                    base = rule['first_decision']
-                    break
+            key = (row['baseline_canopy'], row['target_sys'], row['practice'])
+            base = _lookup_condition(base_idx, key, row['baseline_ext_img_count'])
 
         # ——— PHASE 2: final_decision — refine using img_count, timing and slope
         if base == 'remote':
@@ -147,17 +201,8 @@ def apply_rules_baseline(rules_file_path, df):
 
             if tier == 'hq_1yr':
                 # Ideal case: image within 1 year — apply rules normally
-                final = None
-                for _, rule in remote_rules.iterrows():
-                    if (
-                        row['baseline_canopy'] == rule['canopy'] and
-                        row['target_sys']      == rule['target_sys'] and
-                        row['practice']        == rule['practice'] and
-                        parse_condition(rule['img_count'], row['baseline_img_count'])
-                    ):
-                        final = rule['final_decision']
-                        break
-                final = final or 'review required'
+                key = (row['baseline_canopy'], row['target_sys'], row['practice'])
+                final = _lookup_condition(remote_idx, key, row['baseline_img_count']) or 'review required'
 
             elif tier == 'ext_18mo':
                 # Flexible: image exists within 1.5 years but not within 1 year
@@ -167,30 +212,13 @@ def apply_rules_baseline(rules_file_path, df):
             else:
                 # No imagery in either window — remote sensing not possible,
                 # fall back to field visit using slope rules
-                final = None
-                for _, rule in field_rules.iterrows():
-                    if (
-                        row['baseline_canopy'] == rule['canopy'] and
-                        row['target_sys']      == rule['target_sys'] and
-                        row['practice']        == rule['practice'] and
-                        row['slope']           == rule['slope']
-                    ):
-                        final = rule['final_decision']
-                        break
-                final = final or 'review required'
+                key = (row['baseline_canopy'], row['target_sys'], row['practice'], row['slope'])
+                final = field_idx.get(key) or 'review required'
 
         elif base == 'field':
             # only slope drives strong vs. weak field
-            final = None
-            for _, rule in field_rules.iterrows():
-                if (
-                    row['baseline_canopy'] == rule['canopy'] and
-                    row['target_sys'] == rule['target_sys'] and
-                    row['practice'] == rule['practice'] and
-                    row['slope'] == rule['slope']
-                ):
-                    final = rule['final_decision']
-                    break
+            key = (row['baseline_canopy'], row['target_sys'], row['practice'], row['slope'])
+            final = field_idx.get(key)
 
         else:
             final = base
@@ -202,11 +230,12 @@ def apply_rules_baseline(rules_file_path, df):
     # Summary
     summary = df['baseline_decision'].value_counts().reset_index()
     summary.columns = ['baseline_decision', 'count']
-    summary['proportion'] = round((summary['count'] / len(df))*100, 2)
+    summary['proportion'] = round((summary['count'] / len(df)) * 100, 2)
     print("\nBaseline Decision Summary (polygon scale):\n")
     print(summary)
 
     return df
+
 
 def apply_rules_ev(params, rules_file_path, df):
     """
@@ -214,10 +243,10 @@ def apply_rules_ev(params, rules_file_path, df):
 
     PHASE 1:
       • assign first_decision ∈ {mangrove, remote, field}
-    
+
     PHASE 2:
-      • for first_decision=='remote', look only at img_count rules  
-      • for first_decision=='field', look only at slope rules  
+      • for first_decision=='remote', look only at img_count rules
+      • for first_decision=='field', look only at slope rules
       • mangrove stays as is (final_decision = 'mangrove')
 
     Additional Rule:
@@ -237,15 +266,20 @@ def apply_rules_ev(params, rules_file_path, df):
     for col in ['target_sys', 'practice', 'slope']:
         df.loc[:, col] = df[col].astype(str).str.strip().str.lower()
 
-
     # Filter EV-specific rule columns
-    base_rules = rules[['canopy','target_sys','practice','img_count', 'first_decision']]
-    remote_rules = rules[rules['first_decision']=='remote'][[
-        'canopy','target_sys','practice','img_count','final_decision'
+    base_rules = rules[['canopy', 'target_sys', 'practice', 'img_count', 'first_decision']]
+    remote_rules = rules[rules['first_decision'] == 'remote'][[
+        'canopy', 'target_sys', 'practice', 'img_count', 'final_decision'
     ]]
-    field_rules = rules[rules['first_decision']=='field'][[
-        'canopy','target_sys','practice','slope','final_decision'
+    field_rules = rules[rules['first_decision'] == 'field'][[
+        'canopy', 'target_sys', 'practice', 'slope', 'final_decision'
     ]]
+
+    # Pre-build rule indexes — O(1) lookup replaces inner iterrows() scans
+    base_idx = _build_condition_index(base_rules, ['canopy', 'target_sys', 'practice'], 'img_count', 'first_decision')
+    remote_idx = _build_condition_index(remote_rules, ['canopy', 'target_sys', 'practice'], 'img_count',
+                                        'final_decision')
+    field_idx = _build_exact_index(field_rules, ['canopy', 'target_sys', 'practice', 'slope'], 'final_decision')
 
     today = datetime.today()
     ev_days_start, ev_days_end = params['criteria']['ev_range']
@@ -269,41 +303,18 @@ def apply_rules_ev(params, rules_file_path, df):
         if row['target_sys'] == 'mangrove':
             base = 'mangrove'
         else:
-            base = None
-            for _, rule in base_rules.iterrows():
-                if (
-                    row['baseline_canopy'] == rule['canopy'] and
-                    row['target_sys'] == rule['target_sys'] and
-                    row['practice'] == rule['practice'] and
-                    parse_condition(rule['img_count'], row['ev_img_count'])
-                ):
-                    base = rule['first_decision']
-                    break
+            key = (row['baseline_canopy'], row['target_sys'], row['practice'])
+            base = _lookup_condition(base_idx, key, row['ev_img_count'])
 
         # PHASE 2 — final_decision
         if base == 'remote':
-            final = None
-            for _, rule in remote_rules.iterrows():
-                if (
-                    row['baseline_canopy'] == rule['canopy'] and
-                    row['target_sys'] == rule['target_sys'] and
-                    row['practice'] == rule['practice'] and
-                    parse_condition(rule['img_count'], row['ev_img_count'])
-                ):
-                    final = rule['final_decision']
-                    break
+            key = (row['baseline_canopy'], row['target_sys'], row['practice'])
+            final = _lookup_condition(remote_idx, key, row['ev_img_count'])
 
         elif base == 'field':
-            final = None
-            for _, rule in field_rules.iterrows():
-                if (
-                    row['baseline_canopy'] == rule['canopy'] and
-                    row['target_sys'] == rule['target_sys'] and
-                    row['practice'] == rule['practice'] and
-                    row['slope'] == rule['slope']
-                ):
-                    final = rule['final_decision']
-                    break
+            key = (row['baseline_canopy'], row['target_sys'], row['practice'], row['slope'])
+            final = field_idx.get(key)
+
         else:
             final = base
 
@@ -346,10 +357,10 @@ def _get_ttc_for_year(df: pd.DataFrame, year_series: pd.Series) -> pd.Series:
 
 
 def apply_scoring(
-    params: dict,
-    df: pd.DataFrame,
-    baseline_col: str = "baseline_decision",
-    ev_col: str = "ev_decision",
+        params: dict,
+        df: pd.DataFrame,
+        baseline_col: str = "baseline_decision",
+        ev_col: str = "ev_decision",
 ) -> pd.DataFrame:
     """
     Compute a Remote Suitability score (0–100) per polygon for baseline and EV.
@@ -385,13 +396,13 @@ def apply_scoring(
     """
     cfg = (params or {}).get("scoring", {})
 
-    area_col       = cfg.get("area_col", "area")
-    w_canopy       = float(cfg.get("weight_canopy",   0.40))
-    w_img          = float(cfg.get("weight_img",      0.40))
-    w_slope        = float(cfg.get("weight_slope",    0.20))
-    max_imgs       = float(cfg.get("max_imgs",        5.0))
-    img_1yr_wt     = float(cfg.get("img_1yr_weight",  1.0))
-    img_ext_wt     = float(cfg.get("img_ext_weight",  0.5))
+    area_col = cfg.get("area_col", "area")
+    w_canopy = float(cfg.get("weight_canopy", 0.40))
+    w_img = float(cfg.get("weight_img", 0.40))
+    w_slope = float(cfg.get("weight_slope", 0.20))
+    max_imgs = float(cfg.get("max_imgs", 5.0))
+    img_1yr_wt = float(cfg.get("img_1yr_weight", 1.0))
+    img_ext_wt = float(cfg.get("img_ext_weight", 0.5))
 
     # ------------------------------------------------------------------
     # Canopy score  (0 = fully closed → score 0;  100 = fully open → score 100)
@@ -400,11 +411,11 @@ def apply_scoring(
     # ------------------------------------------------------------------
     base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
 
-    baseline_ttc = _get_ttc_for_year(df, base_years + BASE_OFFSET_YRS)
-    ev_ttc       = _get_ttc_for_year(df, base_years + EI_OFFSET_YRS)
+    baseline_ttc = _get_ttc_for_year(df, base_years - 1)
+    ev_ttc = _get_ttc_for_year(df, base_years + 2)
 
     canopy_base = (100.0 - pd.to_numeric(baseline_ttc, errors="coerce")).clip(0, 100)
-    canopy_ev   = (100.0 - pd.to_numeric(ev_ttc,       errors="coerce")).clip(0, 100)
+    canopy_ev = (100.0 - pd.to_numeric(ev_ttc, errors="coerce")).clip(0, 100)
 
     # ------------------------------------------------------------------
     # Image score  (0 = no imagery → score 0;  max_imgs in 1yr → score 100)
@@ -418,15 +429,15 @@ def apply_scoring(
             print(f"[scoring] WARNING: column '{_col}' not found — "
                   f"image score will be NaN for all polygons.")
 
-    img_1yr      = pd.to_numeric(df.get("baseline_img_count",     _nan_col), errors="coerce").clip(lower=0)
-    img_ext_tot  = pd.to_numeric(df.get("baseline_ext_img_count", _nan_col), errors="coerce").clip(lower=0)
+    img_1yr = pd.to_numeric(df.get("baseline_img_count", _nan_col), errors="coerce").clip(lower=0)
+    img_ext_tot = pd.to_numeric(df.get("baseline_ext_img_count", _nan_col), errors="coerce").clip(lower=0)
     img_ext_only = (img_ext_tot - img_1yr).clip(lower=0)
-    img_ev       = pd.to_numeric(df.get("ev_img_count",           _nan_col), errors="coerce").clip(lower=0)
+    img_ev = pd.to_numeric(df.get("ev_img_count", _nan_col), errors="coerce").clip(lower=0)
 
     img_base = (
-        img_1yr_wt * (img_1yr      / max_imgs).clip(0, 1) +
-        img_ext_wt * (img_ext_only / max_imgs).clip(0, 1)
-    ) / (img_1yr_wt + img_ext_wt) * 100.0
+                       img_1yr_wt * (img_1yr / max_imgs).clip(0, 1) +
+                       img_ext_wt * (img_ext_only / max_imgs).clip(0, 1)
+               ) / (img_1yr_wt + img_ext_wt) * 100.0
 
     img_ev_score = (img_ev / max_imgs).clip(0, 1) * 100.0
 
@@ -447,10 +458,10 @@ def apply_scoring(
     # aggregated into project-level data quality flags downstream.
     # ------------------------------------------------------------------
     df["baseline_canopy_missing"] = baseline_ttc.isna()
-    df["ev_canopy_missing"]       = ev_ttc.isna()
-    df["baseline_img_missing"]    = img_1yr.isna() | img_ext_tot.isna()
-    df["ev_img_missing"]          = img_ev.isna()
-    df["slope_missing"]           = slope_score.isna()
+    df["ev_canopy_missing"] = ev_ttc.isna()
+    df["baseline_img_missing"] = img_1yr.isna() | img_ext_tot.isna()
+    df["ev_img_missing"] = img_ev.isna()
+    df["slope_missing"] = slope_score.isna()
 
     # ------------------------------------------------------------------
     # Weighted average — reweighted dynamically per polygon
@@ -465,19 +476,19 @@ def apply_scoring(
         Compute a per-row weighted average over a dict of named component Series.
         NaN components are excluded per row; weight denominator adjusts accordingly.
         """
-        comp_df   = pd.DataFrame(components)
-        weight_s  = pd.Series(weight_map)
-        numer     = (comp_df * weight_s).sum(axis=1, skipna=True)
-        denom     = comp_df.notna().multiply(weight_s).sum(axis=1)
-        return numer / denom   # NaN only when denom == 0 (all components NaN)
+        comp_df = pd.DataFrame(components)
+        weight_s = pd.Series(weight_map)
+        numer = (comp_df * weight_s).sum(axis=1, skipna=True)
+        denom = comp_df.notna().multiply(weight_s).sum(axis=1)
+        return numer / denom  # NaN only when denom == 0 (all components NaN)
 
     score_base = _weighted_mean(
-        {"canopy": canopy_base, "img": img_base,      "slope": slope_score},
-        {"canopy": w_canopy,    "img": w_img,          "slope": w_slope},
+        {"canopy": canopy_base, "img": img_base, "slope": slope_score},
+        {"canopy": w_canopy, "img": w_img, "slope": w_slope},
     )
     score_ev = _weighted_mean(
-        {"canopy": canopy_ev,   "img": img_ev_score,  "slope": slope_score},
-        {"canopy": w_canopy,    "img": w_img,          "slope": w_slope},
+        {"canopy": canopy_ev, "img": img_ev_score, "slope": slope_score},
+        {"canopy": w_canopy, "img": w_img, "slope": w_slope},
     )
 
     # ------------------------------------------------------------------
@@ -490,31 +501,31 @@ def apply_scoring(
             print(f"[scoring] WARNING: column '{_col}' not found — "
                   f"all polygons will be treated as unscoreable.")
 
-    target_raw   = df.get("target_sys", pd.Series(np.nan, index=df.index))
+    target_raw = df.get("target_sys", pd.Series(np.nan, index=df.index))
     base_dec_raw = df.get(baseline_col, pd.Series(np.nan, index=df.index))
-    ev_dec_raw   = df.get(ev_col,       pd.Series(np.nan, index=df.index))
+    ev_dec_raw = df.get(ev_col, pd.Series(np.nan, index=df.index))
 
-    target   = target_raw.fillna("").astype(str).str.strip().str.lower()
+    target = target_raw.fillna("").astype(str).str.strip().str.lower()
     base_dec = base_dec_raw.fillna("").astype(str).str.strip().str.lower()
-    ev_dec   = ev_dec_raw.fillna("").astype(str).str.strip().str.lower()
+    ev_dec = ev_dec_raw.fillna("").astype(str).str.strip().str.lower()
 
     base_null = (
-        (target == "mangrove") |
-        (base_dec == "review required") |
-        (base_dec == "not available") |
-        base_dec_raw.isna()
+            (target == "mangrove") |
+            (base_dec == "review required") |
+            (base_dec == "not available") |
+            base_dec_raw.isna()
     )
     ev_null = (
-        (target == "mangrove") |
-        (ev_dec == "review required") |
-        (ev_dec == "not available") |
-        ev_dec_raw.isna()
+            (target == "mangrove") |
+            (ev_dec == "review required") |
+            (ev_dec == "not available") |
+            ev_dec_raw.isna()
     )
 
     score_base = score_base.round(1)
-    score_ev   = score_ev.round(1)
+    score_ev = score_ev.round(1)
     score_base[base_null] = np.nan
-    score_ev[ev_null]     = np.nan
+    score_ev[ev_null] = np.nan
 
     # ------------------------------------------------------------------
     # Area-weighted variant for project rollups
@@ -526,9 +537,9 @@ def apply_scoring(
         print(f"[scoring] WARNING: {missing_area} polygon(s) have no area value — "
               f"area-weighted scores will be NaN for those rows.")
 
-    df["baseline_remote_suitability"]     = score_base
+    df["baseline_remote_suitability"] = score_base
     df["baseline_remote_suitability_wtd"] = (score_base * area).round(1)
-    df["ev_remote_suitability"]           = score_ev
-    df["ev_remote_suitability_wtd"]       = (score_ev * area).round(1)
+    df["ev_remote_suitability"] = score_ev
+    df["ev_remote_suitability_wtd"] = (score_ev * area).round(1)
 
     return df

@@ -57,7 +57,7 @@ def test_run_decision_tree_projectids():
                            )
 
 
-def test_run_decision_tree_projectids_no_data_version():
+def test_run_decision_tree_projectids_api_query():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_api.yaml")
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)

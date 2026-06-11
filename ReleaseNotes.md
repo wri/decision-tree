@@ -3,6 +3,7 @@
 ## 2026/06/10
 1. Re-added option to read TerraMatch polygon data through the TerraMatch API.
 2. Added "tm_source" option to params.yaml files for controlling whether TM data are read from the geoparquet file or the TM API.
+3. Fixed bug in reading cohort from geoparquet.
 
 ## 2026/04/02
 1. Replaced TerraMatch API-based data ingestion with a GeoParquet-based approach.

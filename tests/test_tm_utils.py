@@ -46,9 +46,9 @@ def test_clean_tm_features():
 
 
 def test_slope_statistics(tmp_path):
-    # project_ids = [TEST_01_GRI_PROJECT_ID]; limit_to_test_projects = True
+    project_ids = [TEST_01_GRI_PROJECT_ID]; limit_to_test_projects = True
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    project_ids = [TEST_REAL_PROJECT_C1_ID]; limit_to_test_projects = False
+    # project_ids = [TEST_REAL_PROJECT_C1_ID]; limit_to_test_projects = False
     # slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids)
     # REAL PROJECT ABOVE
 

@@ -1,5 +1,4 @@
 import configparser
-import datetime
 import json
 import math
 import os
@@ -7,7 +6,7 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 from typing import Union
-from shapely.geometry import box, shape
+from shapely.geometry import shape
 from urllib.parse import urlparse
 
 import geopandas as gpd
@@ -157,11 +156,11 @@ def get_tm_feats(params, secrets, geojson_dir, tm_outfile, expanded_cohort, proj
     results_df = pd.DataFrame(all_results)
 
     # Hack results to match geoparquet results
+    print(results_df.columns.tolist())
     results_df['cohort'] = f'["{expanded_cohort}"]'
     results_df = results_df.rename(columns={'projectShortName': 'short_name', "calcArea": "calc_area",
                                             "poly_id": "poly_uuid", "siteId": "site_id", "plantStart": "plantstart",
                                             "targetSys": "target_sys"})
-    from shapely.geometry import shape
     results_df['geom'] = results_df['geometry'].apply(lambda g: shape(g).wkb)
 
     return results_df

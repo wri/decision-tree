@@ -31,7 +31,7 @@ def test_clean_tm_features():
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, tm_geoparquet_path=parquet_outfile, geojson_dir=geojson_dir,
+    cleaned_features = process_tm_results(params=PARAMS, tm_df=features, geojson_dir=geojson_dir,
                                           project_ids=project_ids, limit_to_test_projects=True)
 
     assert len(cleaned_features) == 3
@@ -62,7 +62,7 @@ def test_slope_statistics(tmp_path):
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, tm_geoparquet_path=parquet_outfile, geojson_dir=geojson_dir,
+    cleaned_features = process_tm_results(params=PARAMS, tm_df=features, geojson_dir=geojson_dir,
                                           project_ids=project_ids, limit_to_test_projects=limit_to_test_projects)
 
     # get slope statistics
@@ -95,6 +95,9 @@ def _get_project_tm_features(project_ids):
 
     # Thin to projects
     features = raw_df[raw_df['project_id'].isin(project_ids)].reset_index(drop=True)
+
+    # standardize column names
+    features = features.rename(columns={'project_name': 'short_name', "poly_id": "poly_uuid", "area": "calc_area"})
 
     return parquet_outfile, features
 

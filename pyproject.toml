@@ -23,6 +23,8 @@ dependencies = [
     "shapely",
     "tqdm",
     "utm",
+    "duckdb",
+    "tm-api-utils @ git+https://github.com/wri/terramatch-researcher-api.git@develop",
     "gri-shared-library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@main",
 ]
 

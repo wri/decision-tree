@@ -19,6 +19,24 @@ def convert_to_os_path(target_dir, path_str):
 
     return normalized_path
 
+
+def get_gfw_access_token(params):
+    if 'GFW_ACCESS_TOKEN' in os.environ:
+        access_token = os.environ['GFW_ACCESS_TOKEN']
+        auth_headers = {
+            'Authorization': f"Bearer {access_token}"
+        }
+    else:
+        tm_auth_file = params['config']
+        tm_auth_path = os.path.join(get_project_root(), tm_auth_file)
+        with open(tm_auth_path) as auth_file:
+            auth = yaml.safe_load(auth_file)
+        access_token = auth['gfw_api']['access_token']
+        auth_headers = {'Authorization': f"Bearer {access_token}"}
+
+    return auth_headers
+
+
 def load_secrets(secrets_path):
     if os.path.isfile(secrets_path):
         with open(secrets_path, "r") as f:

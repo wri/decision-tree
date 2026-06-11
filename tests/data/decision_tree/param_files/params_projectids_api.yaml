@@ -13,15 +13,15 @@
 #   - 'cohort' refers to the batch of TerraFund projects that will be processed
 # =============================================================================
 
-config: ../secrets.yaml
-mode: full  # options: full, score, projectids
-tm_source: geoparquet # {geoparquet|API}
+config: secrets.yaml
+mode: projectids  # options: full, score, projectids
+tm_source: API # {geoparquet|API}
 
 s3:
   upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
-  geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
+  geoparquet: s3://wri-restoration-geodata/terramatch/tm.geoparquet
 
 asana:
   upload: False

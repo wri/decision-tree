@@ -1,12 +1,12 @@
 
-def has_expected_project_ev_values(poly_results, prj_results,
+def has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
                                    expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,
                                    expected_project_count, expected_project_ev_label, expected_pct_area_scored
                                    ):
     # poly_results
-    actual_poly_baseline_suitability = str(poly_results['baseline_remote_suitability'].values[0])
+    actual_poly_baseline_suitability = str(poly_results[poly_results['poly_id'] == sample_poly_id]['baseline_remote_suitability'].iat[0])
     assert actual_poly_baseline_suitability == str(expected_poly_baseline_suitability),\
-        f"Expected baseline_remote_suitability = {actual_poly_baseline_suitability}, got {expected_poly_baseline_suitability}"
+        f"Expected baseline_remote_suitability = {expected_poly_baseline_suitability}, got {actual_poly_baseline_suitability}"
 
     actual_baseline_total = poly_results["baseline_cost"].sum()
     assert actual_baseline_total == expected_poly_baseline_total,\

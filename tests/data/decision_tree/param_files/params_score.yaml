@@ -15,6 +15,7 @@
 
 config: secrets.yaml
 mode: score  # options: full, score, projectids
+tm_source: geoparquet # {geoparquet|API}
 
 s3:
   upload: false
@@ -40,7 +41,7 @@ criteria:
   slope_thresh: 20
 
 outfile: # file paths are relative to the project root
-  data_version: 04-13-2026 #MM-DD-YYYY
+  data_version: 04-13-2026 #Date in MM-DD-YYYY format
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'tests/data/decision_tree/test_projects/test_results'
@@ -48,6 +49,7 @@ outfile: # file paths are relative to the project root
   portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: geojsons/
   geoparquet: tm_raw/{data_version}_tm.geoparquet
+  tm_response: tm_api_response/{cohort}_{data_version}.json
   slope_stats: slope/slope_statistics_{cohort}_{data_version}.csv
   project_stats: slope/project_statistics/{name}_slope_stats.csv
   feats: feats/tm_feats_{cohort}_{data_version}.csv

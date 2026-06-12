@@ -6,13 +6,13 @@ from datetime import datetime
 import geopandas as gpd
 import pandas as pd
 from shapely import wkb
-from decision_tree.constants import TF_START_YR
+from decision_tree.constants import TF_START_YR, TestProjectHandling
 
 def process_tm_results(params: str,
                        tm_df: pd.DataFrame,
                        geojson_dir: str,
                        project_ids=None,
-                       limit_to_test_projects: bool = False,
+                       test_project_handling: TestProjectHandling = TestProjectHandling.EXCLUDE,
                        save_geojsons: bool = True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
@@ -23,7 +23,7 @@ def process_tm_results(params: str,
         tm_df: Dataframe of TerraMatch polygons.
         geojson_dir: Output string path for polygon geojson file.
         project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
-        limit_to_test_projects: Optional flag to restrict projects to test projects (short_name starts with "TEST_")
+        test_project_handling: Optional flag to include/exclude test projects (short_name starts with "TEST_")
         save_geojsons: Optional flag to save geojson files to geojson_dir
 
     Returns: Cleaned dataframe for downstream decision-tree analysis.
@@ -34,15 +34,17 @@ def process_tm_results(params: str,
     cohort_raw = out['cohort']
     cohort = 'terrafund-cohort-1' if cohort_raw == 'c1' else 'terrafund-cohort-2'
 
-    # Filter for test projects
+    # Filtering for test projects
     test_short_name_prefix = 'TEST_'
-    if limit_to_test_projects:
-        filtered_df = tm_df[tm_df['short_name']
-                         .str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
+    is_test = tm_df['short_name'].str.contains(test_short_name_prefix, case=False, na=False)
+    if test_project_handling is TestProjectHandling.INCLUDE:
+        filtered_df = tm_df.reset_index(drop=True)
+    elif test_project_handling is TestProjectHandling.EXCLUDE:
+        filtered_df = tm_df[~is_test].reset_index(drop=True)
+    elif test_project_handling is TestProjectHandling.ONLY:
+        filtered_df = tm_df[is_test].reset_index(drop=True)
     else:
-        filtered_df = tm_df[~tm_df['short_name']
-                         .str.contains(test_short_name_prefix, case=False, na=False)
-                         | tm_df['short_name'].isna()].reset_index(drop=True)
+        raise ValueError(f"Invalid test_project_handling: {test_project_handling!r}")
 
     # Filter to specified projects for projectid mode
     if project_ids:

@@ -15,7 +15,7 @@ from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.slope import apply_slope_classification
 from decision_tree.tools import convert_to_os_path, load_secrets
-from decision_tree.constants import RULES
+from decision_tree.constants import RULES, TestProjectHandling
 
 class Checkpointer:
     """
@@ -126,7 +126,7 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self, project_ids: list[str] = None, limit_to_test_projects: bool = False):
+    def run_decision_tree(self, project_ids: list[str] = None, test_project_handling = TestProjectHandling.EXCLUDE):
         # if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
         #     raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
         #
@@ -152,7 +152,7 @@ class VerificationDecisionTree:
                                                 tm_response,
                                                 self.geojson_dir,
                                                 project_ids,
-                                                limit_to_test_projects)
+                                                test_project_handling= test_project_handling)
 
             self.checkpoint.save("feats", tm_clean)
             slope_statistics = opentopo_pull_wrapper(self.params, 

@@ -5,7 +5,7 @@ from gri_shared_library.os_tools import create_folder
 
 from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
-from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet
+from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet, TestProjectHandling
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets
 
@@ -24,7 +24,7 @@ def test_tm_features():
 
 
 def test_clean_tm_features():
-    project_ids = [TEST_01_GRI_PROJECT_ID]
+    project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
     parquet_outfile, features = _get_project_tm_features(project_ids)
 
     outfile = PARAMS['outfile']
@@ -32,7 +32,7 @@ def test_clean_tm_features():
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
     cleaned_features = process_tm_results(params=PARAMS, tm_df=features, geojson_dir=geojson_dir,
-                                          project_ids=project_ids, limit_to_test_projects=True)
+                                          project_ids=project_ids, test_project_handling=test_project_handling)
 
     assert len(cleaned_features) == 3
 
@@ -46,9 +46,9 @@ def test_clean_tm_features():
 
 
 def test_slope_statistics(tmp_path):
-    project_ids = [TEST_01_GRI_PROJECT_ID]; limit_to_test_projects = True
+    project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    # project_ids = [TEST_REAL_PROJECT_C1_ID]; limit_to_test_projects = False
+    # project_ids = [TEST_REAL_PROJECT_C1_ID]; test_project_handling = TestProjectHandling.EXCLUDE
     # slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids)
     # REAL PROJECT ABOVE
 
@@ -63,7 +63,7 @@ def test_slope_statistics(tmp_path):
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
     cleaned_features = process_tm_results(params=PARAMS, tm_df=features, geojson_dir=geojson_dir,
-                                          project_ids=project_ids, limit_to_test_projects=limit_to_test_projects)
+                                          project_ids=project_ids, test_project_handling=test_project_handling)
 
     # get slope statistics
     slope_statistics = opentopo_pull_wrapper(PARAMS, SECRETS, geojson_dir, cleaned_features)

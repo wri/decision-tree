@@ -127,11 +127,11 @@ class VerificationDecisionTree:
         }
 
     def run_decision_tree(self, project_ids: list[str] = None, test_project_handling = TestProjectHandling.EXCLUDE):
-        # if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
-        #     raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
-        #
-        # if self.mode == "projectids" and (project_ids is None or project_ids == []):
-        #     raise ValueError("The project_id parameter must be specified for 'projectids' mode")
+        if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
+            raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
+
+        if self.mode == "projectids" and (project_ids is None or project_ids == []):
+            raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
         slope_statistics = None
         if self.mode in ("full", "projectids"):

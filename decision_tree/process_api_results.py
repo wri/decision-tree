@@ -13,7 +13,8 @@ def process_tm_results(params: str,
                        geojson_dir: str,
                        project_ids=None,
                        test_project_handling: TestProjectHandling = TestProjectHandling.EXCLUDE,
-                       save_geojsons: bool = True):
+                       save_geojsons: bool = True,
+                       save_missing: bool = False):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
@@ -25,6 +26,7 @@ def process_tm_results(params: str,
         project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
         test_project_handling: Optional flag to include/exclude test projects (short_name starts with "TEST_")
         save_geojsons: Optional flag to save geojson files to geojson_dir
+        save_missing: Optional flag to save missing tiles to csv
 
     Returns: Cleaned dataframe for downstream decision-tree analysis.
     """
@@ -64,7 +66,7 @@ def process_tm_results(params: str,
 
     clean_df = clean_datetime_column(raw_df, "plantstart")
     clean_df = missing_planting_dates(clean_df, drop_missing)
-    clean_df = missing_features(clean_df, drop_missing)
+    clean_df = missing_features(clean_df, drop_missing, save_missing=save_missing)
     clean_df["practice"] = clean_df["practice"].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
     if save_geojsons:
@@ -556,7 +558,7 @@ def process_tm_api_results(params, results):
     # Clean up start and end dates, missing info, multipractice issues
     clean_df = clean_datetime_column(raw_df, 'plantstart')
     clean_df = missing_planting_dates(clean_df, drop_missing)
-    clean_df = missing_features(clean_df, drop_missing)
+    clean_df = missing_features(clean_df, drop_missing, save_missing=False)
     clean_df['practice'] = clean_df['practice'].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
 

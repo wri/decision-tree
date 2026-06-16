@@ -1,0 +1,24 @@
+from decision_tree.run_decision_tree import VerificationDecisionTree
+
+
+def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False, checkpoint: bool = False):
+    workflow = VerificationDecisionTree(params_file_path, secrets_file_path, checkpoint)
+    if parse_only:
+        return workflow
+    else:
+        workflow.run_decision_tree()
+        return None
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Main entry point for decision tree.')
+    parser.add_argument('--params_yaml_path', metavar='path', required=True,
+                        help='Path to params configuration yaml file')
+    parser.add_argument('--secrets_yaml_path', metavar='path', required=True,
+                        help='Path to secrets configuration yaml file')
+    parser.add_argument('--checkpoint', action='store_true', default=False,
+                        help='Save intermediate outputs to disk')
+    args = parser.parse_args()
+
+    main(args.params_yaml_path, args.secrets_yaml_path, checkpoint=args.checkpoint)

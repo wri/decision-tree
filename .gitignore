@@ -1,6 +1,11 @@
-data/*
+tests/data*
+data*
 *.DS_Store
 .ipynb_checkpoints
 *__pycache__*
 *.pyc
-secrets.yaml
+.idea*
+*scratch_files
+secrets*
+*.egg-info
+local*

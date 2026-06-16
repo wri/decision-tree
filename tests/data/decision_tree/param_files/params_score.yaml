@@ -14,7 +14,7 @@
 # =============================================================================
 
 config: secrets.yaml
-mode: full  # options: full, score, projectids
+mode: score  # options: full, score, projectids
 
 s3:
   upload: false
@@ -43,7 +43,7 @@ outfile: # file paths are relative to the project root
   data_version: 04-13-2026 #MM-DD-YYYY
   experiment_id: exp1
   cohort: c2
-  project_data_folder: 'data'
+  project_data_folder: 'tests/data/decision_tree/test_projects/test_results'
   # file paths are relative to the project_data_folder under the project root
   portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: geojsons/

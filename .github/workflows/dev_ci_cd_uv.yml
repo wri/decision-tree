@@ -1,0 +1,88 @@
+name: Run Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENTOPO_API_KEY: ${{ secrets.OPENTOPO_API_KEY }}
+      KENNC_REPO_PAT: ${{ secrets.KENNC_REPO_PAT }}
+      LAND_ROLE_ARN: ${{ secrets.LAND_ROLE_ARN }}
+
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      max-parallel: 4
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      # Checkout main repo
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Checkout private dependency repo
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: wri/terramatch-researcher-api
+          ref: develop
+          token: ${{ env.KENNC_REPO_PAT }}
+          path: terramatch-researcher-api
+
+      # Install Python + uv
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # System dependencies BEFORE Python deps
+      - name: Install Linux dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y gdal-bin libgdal-dev
+
+      # Configure AWS credentials (OIDC)
+      - name: Configure LAND AWS credentials
+        id: land_creds
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.LAND_ROLE_ARN }}
+          aws-region: us-east-1
+          output-credentials: true
+
+      # Write AWS named profile
+      - name: Write named AWS profiles
+        run: |
+          mkdir -p ~/.aws
+          cat <<EOF > ~/.aws/credentials
+          [LandResearchUser]
+          aws_access_key_id=${{ steps.land_creds.outputs.aws-access-key-id }}
+          aws_secret_access_key=${{ steps.land_creds.outputs.aws-secret-access-key }}
+          aws_session_token=${{ steps.land_creds.outputs.aws-session-token }}
+          EOF
+
+      # Authenticate git+https://github.com/... for uv/pip
+      - name: Configure Git auth for private GitHub deps
+        run: |
+          git config --global \
+            url."https://${{ env.KENNC_REPO_PAT }}:@github.com/".insteadOf \
+            "https://github.com/"
+
+      # Install Python deps
+      - name: Sync dependencies
+        run: uv sync --locked --all-extras --dev
+
+      # Run tests
+      - name: Run Tests
+        run: uv run pytest tests/

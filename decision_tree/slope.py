@@ -1,0 +1,42 @@
+import pandas as pd
+        
+def apply_slope_classification(params, df, slope_stats):
+    '''
+    each polygon already has a pre-computed number identifying the percentage of the polygon's
+    area that has a steep slope (>threshold). this function converts that number into simple 
+    flat/steep label using the threshold
+    
+    - "steep" if the % of area > threshold.
+    - "flat" if the % of area <= threshold.
+    - NaN if slope_area is NaN (no data).
+    
+    Applies to all polygons, but downstream decision tree will filter for "remote" rows.
+    '''
+    n_projects = slope_stats['project_id'].nunique() 
+    n_polys = slope_stats['poly_id'].nunique() 
+    print(f"Analyzing slope for {n_projects} projects and {n_polys} polygons...")
+
+    slope_thresh = params['criteria']['slope_thresh']
+    slope_stats = slope_stats[['project_id', 'poly_id', 'slope_area']].copy()
+
+    def classify_slope(val):
+        if pd.isna(val):
+            return 'missing'
+        elif val > slope_thresh:
+            return 'steep'
+        else:
+            return 'flat'
+
+    # Apply classification
+    slope_stats.loc[:, 'slope'] = slope_stats['slope_area'].apply(classify_slope)
+
+    # Merge into main DataFrame
+    comb = df.merge(
+        slope_stats[['project_id', 'poly_id', 'slope_area', 'slope']], 
+        on=['project_id', 'poly_id'], 
+        how='left' 
+    ) 
+    
+    return comb
+
+

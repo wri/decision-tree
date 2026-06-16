@@ -1,0 +1,107 @@
+canopy,target_sys,practice,img_count,slope,first_decision,final_decision
+open,mangrove,tree-planting,,,mangrove,mangrove
+open,mangrove,tree-planting,,,mangrove,mangrove
+open,mangrove,assisted-natural-regeneration,>=0,,mangrove,mangrove
+open,urban-forest,tree-planting,>1,,remote,strong remote
+open,urban-forest,tree-planting,==1,,remote,weak remote
+open,urban-forest,tree-planting,<1,steep,field,weak field
+open,urban-forest,tree-planting,<1,flat,field,strong field
+open,urban-forest,tree-planting,<1,missing,field,weak field
+open,urban-forest,direct-seeding,>1,,remote,strong remote
+open,urban-forest,direct-seeding,==1,,remote,weak remote
+open,urban-forest,direct-seeding,<1,steep,field,weak field
+open,urban-forest,direct-seeding,<1,flat,field,strong field
+open,urban-forest,direct-seeding,<1,missing,field,weak field
+open,urban-forest,assisted-natural-regeneration,>=0,steep,field,weak field
+open,urban-forest,assisted-natural-regeneration,>=0,flat,field,strong field
+open,urban-forest,assisted-natural-regeneration,>=0,missing,field,weak field
+open,natural-forest,tree-planting,>1,,remote,strong remote
+open,natural-forest,tree-planting,==1,,remote,weak remote
+open,natural-forest,tree-planting,<1,steep,field,weak field
+open,natural-forest,tree-planting,<1,flat,field,strong field
+open,natural-forest,tree-planting,<1,missing,field,weak field
+open,natural-forest,direct-seeding,>1,,remote,strong remote
+open,natural-forest,direct-seeding,==1,,remote,weak remote
+open,natural-forest,direct-seeding,<1,steep,field,weak field
+open,natural-forest,direct-seeding,<1,flat,field,strong field
+open,natural-forest,direct-seeding,<1,missing,field,weak field
+open,natural-forest,assisted-natural-regeneration,>=0,steep,field,weak field
+open,natural-forest,assisted-natural-regeneration,>=0,flat,field,strong field
+open,natural-forest,assisted-natural-regeneration,>=0,missing,field,weak field
+open,woodlot-or-plantation,tree-planting,>1,,remote,strong remote
+open,woodlot-or-plantation,tree-planting,==1,,remote,weak remote
+open,woodlot-or-plantation,tree-planting,<1,steep,field,weak field
+open,woodlot-or-plantation,tree-planting,<1,flat,field,strong field
+open,woodlot-or-plantation,tree-planting,<1,missing,field,weak field
+open,riparian-area-or-wetland,tree-planting,>1,,remote,strong remote
+open,riparian-area-or-wetland,tree-planting,==1,,remote,weak remote
+open,riparian-area-or-wetland,tree-planting,<1,steep,field,weak field
+open,riparian-area-or-wetland,tree-planting,<1,flat,field,strong field
+open,riparian-area-or-wetland,tree-planting,<1,missing,field,weak field
+open,riparian-area-or-wetland,assisted-natural-regeneration,>=0,steep,field,weak field
+open,riparian-area-or-wetland,assisted-natural-regeneration,>=0,flat,field,strong field
+open,riparian-area-or-wetland,assisted-natural-regeneration,>=0,missing,field,weak field
+open,agroforest,tree-planting,>1,,remote,strong remote
+open,agroforest,tree-planting,==1,,remote,weak remote
+open,agroforest,tree-planting,<1,steep,field,weak field
+open,agroforest,tree-planting,<1,flat,field,strong field
+open,agroforest,tree-planting,<1,missing,field,weak field
+open,agroforest,direct-seeding,>1,,remote,strong remote
+open,agroforest,direct-seeding,==1,,remote,weak remote
+open,agroforest,direct-seeding,<1,steep,field,weak field
+open,agroforest,direct-seeding,<1,flat,field,strong field
+open,agroforest,direct-seeding,<1,missing,field,weak field
+open,agroforest,assisted-natural-regeneration,>=0,steep,field,weak field
+open,agroforest,assisted-natural-regeneration,>=0,flat,field,strong field
+open,agroforest,assisted-natural-regeneration,>=0,missing,field,weak field
+open,silviopasture,tree-planting,>1,,remote,strong remote
+open,silviopasture,tree-planting,==1,,remote,weak remote
+open,silviopasture,tree-planting,<1,steep,field,weak field
+open,silviopasture,tree-planting,<1,flat,field,strong field
+open,silviopasture,tree-planting,<1,missing,field,weak field
+open,silviopasture,direct-seeding,>1,,remote,strong remote
+open,silviopasture,direct-seeding,==1,,remote,weak remote
+open,silviopasture,direct-seeding,<1,steep,field,weak field
+open,silviopasture,direct-seeding,<1,flat,field,strong field
+open,silviopasture,direct-seeding,<1,missing,field,weak field
+open,silviopasture,assisted-natural-regeneration,>=0,steep,field,weak field
+open,silviopasture,assisted-natural-regeneration,>=0,flat,field,strong field
+open,silviopasture,assisted-natural-regeneration,>=0,missing,field,weak field
+closed,natural-forest,tree-planting,>=1,,remote,weak remote
+closed,natural-forest,tree-planting,<1,steep,field,weak field
+closed,natural-forest,tree-planting,<1,flat,field,strong field
+closed,natural-forest,tree-planting,<1,missing,field,weak field
+closed,natural-forest,direct-seeding,>=1,,remote,weak remote
+closed,natural-forest,direct-seeding,<1,steep,field,weak field
+closed,natural-forest,direct-seeding,<1,flat,field,strong field
+closed,natural-forest,direct-seeding,<1,missing,field,weak field
+closed,natural-forest,assisted-natural-regeneration,>=0,steep,field,weak field
+closed,natural-forest,assisted-natural-regeneration,>=0,flat,field,strong field
+closed,natural-forest,assisted-natural-regeneration,>=0,missing,field,weak field
+closed,woodlot-or-plantation,tree-planting,>=1,,remote,weak remote
+closed,woodlot-or-plantation,tree-planting,<1,steep,field,weak field
+closed,woodlot-or-plantation,tree-planting,<1,flat,field,strong field
+closed,woodlot-or-plantation,tree-planting,<1,missing,field,weak field
+closed,agroforest,tree-planting,>=1,,remote,weak remote
+closed,agroforest,tree-planting,<1,steep,field,weak field
+closed,agroforest,tree-planting,<1,flat,field,strong field
+closed,agroforest,tree-planting,<1,missing,field,weak field
+closed,agroforest,direct-seeding,>=1,,remote,weak remote
+closed,agroforest,direct-seeding,<1,steep,field,weak field
+closed,agroforest,direct-seeding,<1,flat,field,strong field
+closed,agroforest,direct-seeding,<1,missing,field,weak field
+closed,agroforest,assisted-natural-regeneration,>=0,steep,field,weak field
+closed,agroforest,assisted-natural-regeneration,>=0,flat,field,strong field
+closed,agroforest,assisted-natural-regeneration,>=0,missing,field,weak field
+closed,mangrove,tree-planting,,,mangrove,mangrove
+closed,mangrove,tree-planting,,,mangrove,mangrove
+closed,mangrove,tree-planting,,,mangrove,mangrove
+closed,mangrove,assisted-natural-regeneration,,,mangrove,mangrove
+closed,mangrove,assisted-natural-regeneration,,,mangrove,mangrove
+closed,riparian-area-or-wetland,tree-planting,>=1,,remote,weak remote
+closed,riparian-area-or-wetland,tree-planting,<1,steep,field,weak field
+closed,riparian-area-or-wetland,tree-planting,<1,flat,field,strong field
+closed,riparian-area-or-wetland,tree-planting,<1,missing,field,weak field
+closed,riparian-area-or-wetland,assisted-natural-regeneration,>=0,steep,field,weak field
+closed,riparian-area-or-wetland,assisted-natural-regeneration,>=0,flat,field,strong field
+closed,riparian-area-or-wetland,assisted-natural-regeneration,>=0,missing,field,weak field

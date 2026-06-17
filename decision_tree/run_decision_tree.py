@@ -144,8 +144,8 @@ class VerificationDecisionTree:
                 if self.mode == 'full':
                     project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort)
 
-                tm_auth_header = get_tm_auth()
-                tm_response = get_tm_feats(tm_auth_header=tm_auth_header, project_ids=project_ids)
+                auth_headers = get_tm_auth()
+                tm_response = get_tm_feats(auth_headers=auth_headers, project_ids=project_ids)
                 tm_response['cohort'] = f'["{expanded_cohort}"]'
             else:
                 tm_response = clean._read_geoparquet(self.tm_raw)

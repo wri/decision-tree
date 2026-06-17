@@ -24,7 +24,6 @@ from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
 from rasterio.warp import calculate_default_transform, reproject
 from shapely.geometry import box
-from tqdm import tqdm
 from tm_api_utils import pull_tm_api_data
 
 from decision_tree.s3_utils import upload_to_s3
@@ -71,99 +70,6 @@ def download_geoparquet(params, secrets, tm_raw):
     s3_client = aws_session.client("s3")
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
-
-
-def get_tm_feats(params, secrets, geojson_dir, tm_outfile, expanded_cohort, project_ids):
-    """
-    Wrapper function around the TM API package.
-
-    Iterates over a list of project IDs and aggregates results.
-    Saves GeoJSON locally only if geojson_dir is provided.
-    Uploads GeoJSON to S3 only if geojson_s3_bucket is set.
-    Skips local file creation entirely if only S3 is used
-
-    Parameters:
-        url (str): TerraMatch API endpoint.
-        headers (dict): Auth headers.
-        project_ids (list): List of project UUIDs.
-        outfile (str): Optional path to write output JSON.
-        geojson_dir (str): Optional directory to save project-level GeoJSONs.
-    """
-    url = TM_PROD_URI # TODO assuming prod for now
-    out = params['outfile']
-    data_version = out['data_version']
-
-    access_token = secrets['tm_api']['tm_access_token']
-    auth_headers = {'Authorization': f"Bearer {access_token}"}
-
-    all_results = []
-
-    if geojson_dir:
-        os.makedirs(geojson_dir, exist_ok=True)
-
-    with tqdm(total=len(project_ids), desc="Pulling Projects", unit="project") as progress:
-        for project_id in project_ids:
-
-            api_param_dict = {
-                'projectId[]': project_id,
-                'polygonStatus[]': 'approved',
-                'includeTestProjects': 'false',
-                'page[size]': '100'
-            }
-
-            try:
-                results = pull_tm_api_data(url, auth_headers, api_param_dict, normalize_column_names=False)
-                if results is None:
-                    print(f"No results returned for project: {project_id}")
-                    progress.update(1)
-                    continue
-
-                # Add project_id for traceability
-                for r in results:
-                    r['project_id'] = project_id
-
-                all_results.extend(results)
-
-            except Exception as e:
-                print(f"Error pulling project {project_id}: {e}")
-
-            try:
-                gdf = gpd.GeoDataFrame(
-                    results,
-                    geometry=[shape(feature['geometry']) for feature in results],
-                    crs='EPSG:4326'
-                )
-                project_name = next((r.get('projectShortName') for r in results if r.get('projectShortName')),
-                                    project_id)
-                filename = f"{project_name}_{data_version}.geojson"
-                gdf.to_file(os.path.join(geojson_dir, filename), driver='GeoJSON')
-            except Exception as e:
-                print(f"Geojson creation error for project_id {project_id}: {e}")
-
-            if params['s3']['upload']:
-                upload_to_s3(params, params["config"], project_name, data_version)
-
-            progress.update(1)
-
-    if tm_outfile:
-        dir = os.path.dirname(tm_outfile)
-        create_folder(dir)
-        outfile_path = os.path.join(get_project_root_dir(), tm_outfile)
-        with open(outfile_path, "w") as f:
-            json.dump(all_results, f, indent=4)
-        print(f"Results saved to {outfile_path}")
-
-    results_df = pd.DataFrame(all_results)
-
-    # Hack results to match geoparquet results
-    print(results_df.columns.tolist())
-    results_df['cohort'] = f'["{expanded_cohort}"]'
-    results_df = results_df.rename(columns={'projectShortName': 'short_name', "calcArea": "calc_area",
-                                            "poly_id": "poly_uuid", "siteId": "site_id", "plantStart": "plantstart",
-                                            "targetSys": "target_sys"})
-    results_df['geom'] = results_df['geometry'].apply(lambda g: shape(g).wkb)
-
-    return results_df
 
 
 def calculate_high_slope_area(slope_raster, polygon, threshold=20):

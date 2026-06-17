@@ -4,17 +4,18 @@ import datetime
 import pandas as pd
 import yaml
 from gri_shared_library.os_tools import create_folder, get_project_ids_from_geoparquet
+from tm_api_utils.tm_features import get_tm_feats
 
 import decision_tree.cost_calculator as price
 import decision_tree.polygon_decisions as poly_tree
 import decision_tree.process_api_results as clean
 import decision_tree.project_decisions as proj_tree
 import decision_tree.update_asana as update_asana
-from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet, get_tm_feats
+from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.slope import apply_slope_classification
-from decision_tree.tools import convert_to_os_path, load_secrets
+from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth
 from decision_tree.constants import RULES, TestProjectHandling
 
 class Checkpointer:
@@ -143,8 +144,9 @@ class VerificationDecisionTree:
                 if self.mode == 'full':
                     project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort)
 
-                # pd.Series(project_ids, name="project_id").to_csv(self.portfolio, index=False)
-                tm_response = get_tm_feats(self.params, self.secrets, self.geojson_dir, self.tm_outfile, expanded_cohort, project_ids)
+                tm_auth_header = get_tm_auth()
+                tm_response = get_tm_feats(tm_auth_header=tm_auth_header, project_ids=project_ids)
+                tm_response['cohort'] = f'["{expanded_cohort}"]'
             else:
                 tm_response = clean._read_geoparquet(self.tm_raw)
 

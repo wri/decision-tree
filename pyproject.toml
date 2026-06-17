@@ -29,7 +29,7 @@ dependencies = [
 
 [tool.uv.sources]
 gri-shared-library = { git = "https://github.com/wri/gri-shared-library.git", branch = "main"}
-tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git", branch = "develop"}
+tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git", branch = "new_functionality"}
 gdal = [
   { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
   { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },

@@ -73,3 +73,7 @@ def load_secrets(secrets_path):
 
     return secrets_json
 
+
+def load_yaml(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)

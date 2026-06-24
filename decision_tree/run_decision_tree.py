@@ -15,7 +15,7 @@ from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.slope import apply_slope_classification
-from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth
+from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml
 from decision_tree.constants import RULES, TestProjectHandling
 
 class Checkpointer:
@@ -57,17 +57,12 @@ class Checkpointer:
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml", checkpoint=False):
-        self.params = self._load_yaml(params_path)
+        self.params = load_yaml(params_path)
         self.secrets = load_secrets(secrets_path)
         self.mode = self.params.get("mode", "full")
         self.tm_source = self.params["tm_source"]
         self._resolve_paths()
         self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
-
-    @staticmethod
-    def _load_yaml(path):
-        with open(path, "r") as f:
-            return yaml.safe_load(f)
 
     def _resolve_paths(self):
         outfile = self.params['outfile']

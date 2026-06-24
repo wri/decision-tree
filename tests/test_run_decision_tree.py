@@ -1,20 +1,18 @@
 import os
-import shutil
 
-from gri_shared_library.os_tools import get_project_root_dir
 from numpy import nan
 
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C2_ID
+from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
 from decision_tree.constants import TestProjectHandling
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from decision_tree.tools import load_yaml
+from tests.tools import folder_cleanup
 from tools import has_expected_project_ev_values
 
 
 def test_run_decision_tree_full():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
-    # cleanup before run
-    _test_folder_cleanup(params_path)
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -24,14 +22,14 @@ def test_run_decision_tree_full():
     # verify that a project was returned
     assert len(prj_results) >= 1
 
-    # cleanup after run
-    _test_folder_cleanup(params_path)
+    # post-run cleanup
+    folder_cleanup(params_path)
 
 
 def test_run_decision_tree_projectids():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
-    # cleanup before run
-    _test_folder_cleanup(params_path)
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -70,14 +68,14 @@ def test_run_decision_tree_projectids():
                            expected_project_count, expected_project_ev_label, expected_pct_area_scored
                            )
 
-    # cleanup after run
-    _test_folder_cleanup(params_path)
+    # post-run cleanup
+    folder_cleanup(params_path)
 
 
 def test_run_decision_tree_projectids_api_query():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_api.yaml")
-    # cleanup before run
-    _test_folder_cleanup(params_path)
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -115,14 +113,14 @@ def test_run_decision_tree_projectids_api_query():
                            expected_project_count, expected_project_ev_label, expected_pct_area_scored
                            )
 
-    # cleanup after run
-    _test_folder_cleanup(params_path)
+    # post-run cleanup
+    folder_cleanup(params_path)
 
 
 def test_run_decision_tree_score():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
-    # cleanup before run
-    _test_folder_cleanup(params_path)
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -144,8 +142,8 @@ def test_run_decision_tree_score():
                            expected_project_count, expected_project_ev_label, expected_pct_area_scored
                            )
 
-    # cleanup after run
-    _test_folder_cleanup(params_path)
+    # post-run cleanup
+    folder_cleanup(params_path)
 
 
 def test_run_decision_tree_param_parsing():
@@ -178,19 +176,4 @@ def _has_expected_attributes(obj, expected_attrs):
 
     return all(hasattr(obj, attr) for attr in expected_attrs)
 
-def _get_folders(directory, exclude):
-    exclude = set(exclude)
-    return [
-        entry.name
-        for entry in os.scandir(directory)
-        if entry.is_dir() and entry.name not in exclude
-    ]
 
-def _test_folder_cleanup(params_path):
-    params = load_yaml(params_path)
-    data_dir = os.path.join(get_project_root_dir(), params['outfile']['project_data_folder'])
-    keeper_folders = ["feats", "imagery_availability", "tree_output"]
-    scratch_folders = _get_folders(data_dir, keeper_folders)
-    for folder in scratch_folders:
-        folder_dir = os.path.join(data_dir, folder)
-        shutil.rmtree(folder_dir, ignore_errors=True)

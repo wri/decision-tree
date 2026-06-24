@@ -7,24 +7,33 @@ from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_
 from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet, TestProjectHandling
 from decision_tree.process_api_results import process_tm_results
-from decision_tree.tools import convert_to_os_path, load_secrets
+from decision_tree.tools import convert_to_os_path, load_secrets, load_yaml
+from tests.tools import folder_cleanup
 
 params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
-with open(params_path, 'r') as file:
-    PARAMS = yaml.safe_load(file)
+PARAMS = load_yaml(params_path)
 SECRETS = load_secrets(SECRETS_FILE_PATH)
 
 
 def test_tm_features():
     project_ids = [TEST_01_GRI_PROJECT_ID]
+    # pre-run cleanup
+    folder_cleanup(params_path)
+
     parquet_outfile, features = _get_project_tm_features(project_ids)
 
     # Confirm that the file contains at least one polygon
     assert len(features) == 3
 
+    # post-run cleanup
+    folder_cleanup(params_path)
+
 
 def test_clean_tm_features():
     project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
+    # pre-run cleanup
+    folder_cleanup(params_path)
+
     parquet_outfile, features = _get_project_tm_features(project_ids)
 
     outfile = PARAMS['outfile']
@@ -44,6 +53,9 @@ def test_clean_tm_features():
     all_exist = all(col in cleaned_features.columns for col in expected_columns)
     assert all_exist
 
+    # post-run cleanup
+    folder_cleanup(params_path)
+
 
 def test_slope_statistics(tmp_path):
     project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
@@ -51,6 +63,9 @@ def test_slope_statistics(tmp_path):
     # project_ids = [TEST_REAL_PROJECT_C1_ID]; test_project_handling = TestProjectHandling.EXCLUDE
     # slope_statistics, poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids)
     # REAL PROJECT ABOVE
+
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     parquet_outfile, features = _get_project_tm_features(project_ids)
 
@@ -77,6 +92,9 @@ def test_slope_statistics(tmp_path):
     actual_attribute_count = slope_statistics.shape[1]
     expected_attribute_count = 18
     assert actual_attribute_count == expected_attribute_count
+
+    # post-run cleanup
+    folder_cleanup(params_path)
 
 
 def _get_project_tm_features(project_ids):

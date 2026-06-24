@@ -5,8 +5,7 @@ from numpy import nan
 from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
 from decision_tree.constants import TestProjectHandling
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from tests.tools import folder_cleanup
-from tools import has_expected_project_ev_values
+from tools import has_expected_project_ev_values, folder_cleanup
 
 
 def test_run_decision_tree_full():

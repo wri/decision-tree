@@ -6,25 +6,27 @@ from datetime import datetime
 import geopandas as gpd
 import pandas as pd
 from shapely import wkb
-from decision_tree.constants import TF_START_YR
+from decision_tree.constants import TF_START_YR, TestProjectHandling
 
 def process_tm_results(params: str,
-                       tm_geoparquet_path: str,
+                       tm_df: pd.DataFrame,
                        geojson_dir: str,
                        project_ids=None,
-                       limit_to_test_projects: bool = False,
-                       save_geojsons: bool = True):
+                       test_project_handling: TestProjectHandling = TestProjectHandling.EXCLUDE,
+                       save_geojsons: bool = True,
+                       save_missing: bool = False):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
 
     Args:
         params: String path to params.yaml file.
-        tm_geoparquet_path: String path to geoparquet file of polygons.
+        tm_df: Dataframe of TerraMatch polygons.
         geojson_dir: Output string path for polygon geojson file.
         project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
-        limit_to_test_projects: Optional flag to restrict projects to test projects (short_name starts with "TEST_")
+        test_project_handling: Optional flag to include/exclude test projects (short_name starts with "TEST_")
         save_geojsons: Optional flag to save geojson files to geojson_dir
+        save_missing: Optional flag to save missing tiles to csv
 
     Returns: Cleaned dataframe for downstream decision-tree analysis.
     """
@@ -34,18 +36,17 @@ def process_tm_results(params: str,
     cohort_raw = out['cohort']
     cohort = 'terrafund-cohort-1' if cohort_raw == 'c1' else 'terrafund-cohort-2'
 
-    # Ingest polygon data
-    df = _read_geoparquet(tm_geoparquet_path)
-
-    # Filter for test projects
+    # Filtering for test projects
     test_short_name_prefix = 'TEST_'
-    if limit_to_test_projects:
-        filtered_df = df[df['short_name']
-                         .str.contains(test_short_name_prefix, case=False, na=False)].reset_index(drop=True)
+    is_test = tm_df['short_name'].str.contains(test_short_name_prefix, case=False, na=False)
+    if test_project_handling is TestProjectHandling.INCLUDE:
+        filtered_df = tm_df.reset_index(drop=True)
+    elif test_project_handling is TestProjectHandling.EXCLUDE:
+        filtered_df = tm_df[~is_test].reset_index(drop=True)
+    elif test_project_handling is TestProjectHandling.ONLY:
+        filtered_df = tm_df[is_test].reset_index(drop=True)
     else:
-        filtered_df = df[~df['short_name']
-                         .str.contains(test_short_name_prefix, case=False, na=False)
-                         | df['short_name'].isna()].reset_index(drop=True)
+        raise ValueError(f"Invalid test_project_handling: {test_project_handling!r}")
 
     # Filter to specified projects for projectid mode
     if project_ids:
@@ -65,7 +66,7 @@ def process_tm_results(params: str,
 
     clean_df = clean_datetime_column(raw_df, "plantstart")
     clean_df = missing_planting_dates(clean_df, drop_missing)
-    clean_df = missing_features(clean_df, drop_missing)
+    clean_df = missing_features(clean_df, drop_missing, save_missing=save_missing)
     clean_df["practice"] = clean_df["practice"].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
     if save_geojsons:
@@ -123,7 +124,10 @@ def flatten_tm_geoparquet(results):
             geometry = None
 
         cohort_val = row_dict.get("cohort")
-        cohort = cohort_val.decode("utf-8").strip('[]').strip('"') if cohort_val else None
+        if isinstance(cohort_val, bytes):
+            cohort = cohort_val.decode("utf-8").strip('[]').strip('"') if cohort_val else None
+        else:
+            cohort = cohort_val.strip('[]').strip('"') if cohort_val else None
 
         tree_cover_years = extract_tree_cover_years(row_dict)
 
@@ -485,3 +489,85 @@ def normalize_practice(value):
 
     # Fallback for unexpected types
     return str(value).strip().lower()
+
+
+def process_tm_api_results(params, results):
+    """
+    Processes API results into a clean DataFrame for analysis.
+    results: json response
+    drop_missing: drop rows with missing information
+    outfile: filepath to store cleaned results
+    outfile2: filepath to store cleaned results for maxar metadata request
+
+    Extracting tree cover indicators:
+    **tree_cover_years syntax is a Python dictionary unpacking
+    feature that allows us to dynamically add multiple columns
+    to the DataFrame without explicitly defining them.
+    """
+    drop_missing = params['criteria']['drop_missing']
+    extracted_data = []
+    input_ids = {project.get('project_id') for project in results if project.get('project_id')}
+
+    # Iterate over each project to extract project details & tree cover statistics
+    for project in results:
+        project_id = project.get('project_id')
+        poly_id = project.get('poly_id')
+        site_id = project.get('siteId')
+        project_name = project.get('projectShortName')
+        geom = project.get('geometry')
+        plant_start = project.get('plantStart')
+        practice = project.get('practice')
+        targetsys = project.get('targetSys')
+        dist = project.get('distr')
+        project_phase = project.get('projectPhase', '')  # Ensure a default empty string
+        area = project.get('calcArea')
+
+        # Extract tree cover indicators
+        tree_cover_years = {}
+        indicators = project.get('indicators', [])
+
+        for indicator in indicators:
+            try:
+                year = int(indicator.get('yearOfAnalysis'))
+                if 2017 <= year <= 2024:
+                    tree_cover_years[f'ttc_{year}'] = indicator.get('percentCover')
+            except (TypeError, ValueError):
+                # Skip invalid or missing year values
+                continue
+
+        # Store extracted project details in a structured format
+        extracted_data.append({
+            'project_id': project_id,
+            'poly_id': poly_id,
+            'site_id': site_id,
+            'project_name': project_name,
+            'geometry': geom,
+            'plantstart': plant_start,
+            'practice': practice,
+            'target_sys': targetsys,
+            'dist': dist,
+            'project_phase': project_phase,
+            'area': area,
+            **tree_cover_years
+        })
+
+    raw_df = pd.DataFrame(extracted_data)
+    raw_df.columns = raw_df.columns.str.lower()
+    pre_clean_ids = list(set(raw_df['project_id']))
+
+    # Clean up start and end dates, missing info, multipractice issues
+    clean_df = clean_datetime_column(raw_df, 'plantstart')
+    clean_df = missing_planting_dates(clean_df, drop_missing)
+    clean_df = missing_features(clean_df, drop_missing, save_missing=False)
+    clean_df['practice'] = clean_df['practice'].apply(normalize_practice)
+    clean_df = resolve_multipractice(clean_df)
+
+    # final clean up
+    output_ids = list(set(clean_df['project_id']))
+    assert len(input_ids) == len(pre_clean_ids) == len(output_ids)
+
+    missing_projects = input_ids - set(clean_df['project_id'])
+    if missing_projects:
+        print(f"Missing prj ids: {missing_projects}")
+
+    return clean_df

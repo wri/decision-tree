@@ -3,51 +3,123 @@ import os
 from numpy import nan
 
 from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID
+from decision_tree.constants import TestProjectHandling
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from tools import has_expected_project_ev_values
+from tools import has_expected_project_ev_values, folder_cleanup
 
 
 def test_run_decision_tree_full():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
-    poly_results, prj_results = workflow.run_decision_tree(project_ids=None, limit_to_test_projects=True)
+    test_project_handling = TestProjectHandling.ONLY
+    poly_results, prj_results = workflow.run_decision_tree(project_ids=None, test_project_handling=test_project_handling)
 
     # verify that a project was returned
     assert len(prj_results) >= 1
 
+    # post-run cleanup
+    folder_cleanup(params_path)
+
 
 def test_run_decision_tree_projectids():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
     project_ids = [TEST_01_GRI_PROJECT_ID]
-    poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids, limit_to_test_projects=True)
+    test_project_handling = TestProjectHandling.ONLY
+    poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids,
+                                                           test_project_handling=test_project_handling)
 
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    # project_ids = [TEST_REAL_PROJECT_C1_ID]
+    # project_ids = [TEST_REAL_PROJECT_C2_ID]
     # poly_results, prj_results  = workflow.run_decision_tree(project_ids=project_ids)
     # REAL PROJECT ABOVE
 
     # TODO Determine how to modify the data to get more variation
-    expected_poly_baseline_suitability = 13.3
-    expected_poly_baseline_total = 0
-    expected_poly_ev_total = 0
+    if project_ids == [TEST_01_GRI_PROJECT_ID]:
+        sample_poly_id = 'a09e8e9f-f0f6-438a-95ac-aa5457082d46'
+        expected_poly_baseline_suitability = 33.3
+        expected_poly_baseline_total = 0
+        expected_poly_ev_total = 0
 
-    expected_project_count = 1
-    expected_project_ev_label= 'review required'
-    expected_pct_area_scored = 0
+        expected_project_count = 1
+        expected_project_ev_label= 'review required'
+        expected_pct_area_scored = 0
+    else:
+        sample_poly_id = '51895d1d-0c6b-429d-b18c-06f3ed636f8e'
+        expected_poly_baseline_suitability = 33.3
+        expected_poly_baseline_total = 0
+        expected_poly_ev_total = 0
 
-    has_expected_project_ev_values(poly_results, prj_results,
+        expected_project_count = 1
+        expected_project_ev_label= 'not available'
+        expected_pct_area_scored = 0
+
+    has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
                            expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,
                            expected_project_count, expected_project_ev_label, expected_pct_area_scored
                            )
 
+    # post-run cleanup
+    folder_cleanup(params_path)
+
+
+def test_run_decision_tree_projectids_api_query():
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_api.yaml")
+    # pre-run cleanup
+    folder_cleanup(params_path)
+
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+
+    project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
+    poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids,
+                                                           test_project_handling=test_project_handling)
+
+    # REAL PROJECT BELOW - Only use for examination of an actual project
+    # project_ids = [TEST_REAL_PROJECT_C2_ID]
+    # poly_results, prj_results  = workflow.run_decision_tree(project_ids=project_ids)
+    # REAL PROJECT ABOVE
+
+    # TODO Determine how to modify the data to get more variation
+    if project_ids == [TEST_01_GRI_PROJECT_ID]:
+        sample_poly_id = 'a09e8e9f-f0f6-438a-95ac-aa5457082d46'
+        expected_poly_baseline_suitability = 33.3
+        expected_poly_baseline_total = 0
+        expected_poly_ev_total = 0
+
+        expected_project_count = 1
+        expected_project_ev_label= 'review required'
+        expected_pct_area_scored = 0
+    else:
+        sample_poly_id = '51895d1d-0c6b-429d-b18c-06f3ed636f8e'
+        expected_poly_baseline_suitability = 33.3
+        expected_poly_baseline_total = 0
+        expected_poly_ev_total = 0
+
+        expected_project_count = 1
+        expected_project_ev_label= 'not available'
+        expected_pct_area_scored = 0
+
+    has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
+                           expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,
+                           expected_project_count, expected_project_ev_label, expected_pct_area_scored
+                           )
+
+    # post-run cleanup
+    folder_cleanup(params_path)
+
 
 def test_run_decision_tree_score():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    # pre-run cleanup
+    folder_cleanup(params_path)
 
     workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
 
@@ -55,6 +127,7 @@ def test_run_decision_tree_score():
 
     # TODO Determine how to modify the data to get more variation
     # verify that two projects were returned
+    sample_poly_id = 'a09e8e9f-f0f6-438a-95ac-aa5457082d46'
     expected_poly_baseline_suitability = nan
     expected_poly_baseline_total = 0
     expected_poly_ev_total = 0
@@ -63,10 +136,13 @@ def test_run_decision_tree_score():
     expected_project_ev_label= 'review required'
     expected_pct_area_scored = 0
 
-    has_expected_project_ev_values(poly_results, prj_results,
+    has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
                            expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,
                            expected_project_count, expected_project_ev_label, expected_pct_area_scored
                            )
+
+    # post-run cleanup
+    folder_cleanup(params_path)
 
 
 def test_run_decision_tree_param_parsing():
@@ -98,3 +174,5 @@ def _has_expected_attributes(obj, expected_attrs):
         raise ValueError("All attribute names must be strings")
 
     return all(hasattr(obj, attr) for attr in expected_attrs)
+
+

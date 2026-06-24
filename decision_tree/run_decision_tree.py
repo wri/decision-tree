@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
-
+import datetime
 import pandas as pd
 import yaml
-from gri_shared_library.os_tools import create_folder
+from gri_shared_library.os_tools import create_folder, get_project_ids_from_geoparquet
+from tm_api_utils.tm_features import get_tm_feats
 
 import decision_tree.cost_calculator as price
 import decision_tree.polygon_decisions as poly_tree
@@ -14,8 +15,8 @@ from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.slope import apply_slope_classification
-from decision_tree.tools import convert_to_os_path, load_secrets
-from decision_tree.constants import RULES
+from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml
+from decision_tree.constants import RULES, TestProjectHandling
 
 class Checkpointer:
     """
@@ -56,39 +57,51 @@ class Checkpointer:
 
 class VerificationDecisionTree:
     def __init__(self, params_path="params.yaml", secrets_path="secrets.yaml", checkpoint=False):
-        self.params = self._load_yaml(params_path)
+        self.params = load_yaml(params_path)
         self.secrets = load_secrets(secrets_path)
         self.mode = self.params.get("mode", "full")
+        self.tm_source = self.params["tm_source"]
         self._resolve_paths()
         self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
 
-    @staticmethod
-    def _load_yaml(path):
-        with open(path, "r") as f:
-            return yaml.safe_load(f)
-
     def _resolve_paths(self):
         outfile = self.params['outfile']
-        cohort = outfile["cohort"]
+        self.cohort = outfile["cohort"]
         data_v = outfile["data_version"]
         experiment_id = outfile["experiment_id"]
         project_data_dir = outfile["project_data_folder"]
 
         # decision-tree input files for full or projectids mode
-        self.portfolio = convert_to_os_path(project_data_dir, outfile["portfolio"].format(cohort=cohort, data_version=data_v))
-        self.tm_raw = convert_to_os_path(project_data_dir, outfile['geoparquet'].format(data_version=data_v))
-        self.maxar_meta = convert_to_os_path(project_data_dir, outfile["maxar_meta"].format(cohort=cohort, data_version=data_v))
+        self.portfolio = convert_to_os_path(project_data_dir, outfile["portfolio"].format(cohort=self.cohort, data_version=data_v))
+
+        if self.tm_source.lower() == "geoparquet":
+            tm_data_v = data_v
+        else:
+            now = datetime.datetime.now()
+            tm_data_v = now.strftime("%Y-%m-%d-%H-%M")
+        self.tm_raw = convert_to_os_path(project_data_dir, outfile['geoparquet'].format(data_version=tm_data_v))
+        self.tm_outfile = convert_to_os_path(project_data_dir, outfile['tm_response'].format(cohort=outfile['cohort'],
+                                                                                             data_version=data_v))
+
+        self.maxar_meta = convert_to_os_path(project_data_dir,
+                                             outfile["maxar_meta"].format(cohort=self.cohort, data_version=data_v))
 
         # decision-tree intermediate files
         self.geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
-        self.feats = convert_to_os_path(project_data_dir, outfile["feats"].format(cohort=cohort, data_version=data_v))
-        self.project_feats_maxar = convert_to_os_path(project_data_dir, outfile["feats_maxar"].format(cohort=cohort, data_version=data_v))
-        self.slope_stats = convert_to_os_path(project_data_dir, outfile["slope_stats"].format(cohort=cohort, data_version=data_v))
-        self.tree_results = convert_to_os_path(project_data_dir, outfile["tree_results"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        self.feats = convert_to_os_path(project_data_dir,
+                                        outfile["feats"].format(cohort=self.cohort, data_version=data_v))
+        self.project_feats_maxar = convert_to_os_path(project_data_dir,
+                                                      outfile["feats_maxar"].format(cohort=self.cohort, data_version=data_v))
+        self.slope_stats = convert_to_os_path(project_data_dir,
+                                              outfile["slope_stats"].format(cohort=self.cohort, data_version=data_v))
+        self.tree_results = convert_to_os_path(project_data_dir,
+                                               outfile["tree_results"].format(cohort=self.cohort, data_version=data_v, experiment_id=experiment_id))
         
         # output files
-        self.poly_score = convert_to_os_path(project_data_dir, outfile["poly_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
-        self.prj_score = convert_to_os_path(project_data_dir, outfile["prj_decision"].format(cohort=cohort, data_version=data_v, experiment_id=experiment_id))
+        self.poly_score = convert_to_os_path(project_data_dir,
+                                             outfile["poly_decision"].format(cohort=self.cohort, data_version=data_v, experiment_id=experiment_id))
+        self.prj_score = convert_to_os_path(project_data_dir,
+                                            outfile["prj_decision"].format(cohort=self.cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
         self.rules = convert_to_os_path(project_data_dir, RULES)
@@ -109,7 +122,7 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self, project_ids: list[str] = None, limit_to_test_projects: bool = False):
+    def run_decision_tree(self, project_ids: list[str] = None, test_project_handling = TestProjectHandling.EXCLUDE):
         if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
             raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
 
@@ -120,11 +133,23 @@ class VerificationDecisionTree:
         if self.mode in ("full", "projectids"):
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             download_geoparquet(self.params, self.secrets, self.tm_raw)
-            tm_clean = clean.process_tm_results(self.params, 
-                                                self.tm_raw,
-                                                self.geojson_dir, 
-                                                project_ids, 
-                                                limit_to_test_projects)
+
+            if self.tm_source.lower() == 'api':
+                expanded_cohort = 'terrafund-cohort-1' if self.cohort == 'c1' else 'terrafund-cohort-2'
+                if self.mode == 'full':
+                    project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort)
+
+                auth_headers = get_tm_auth()
+                tm_response = get_tm_feats(auth_headers=auth_headers, project_ids=project_ids)
+                tm_response['cohort'] = f'["{expanded_cohort}"]'
+            else:
+                tm_response = clean._read_geoparquet(self.tm_raw)
+
+            tm_clean = clean.process_tm_results(self.params,
+                                                tm_response,
+                                                self.geojson_dir,
+                                                project_ids,
+                                                test_project_handling= test_project_handling)
 
             self.checkpoint.save("feats", tm_clean)
             slope_statistics = opentopo_pull_wrapper(self.params, 

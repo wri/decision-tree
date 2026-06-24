@@ -1,10 +1,12 @@
 import configparser
+import json
 import math
 import os
 import shutil
 import tempfile
 from contextlib import contextmanager
 from typing import Union
+from shapely.geometry import shape
 from urllib.parse import urlparse
 
 import geopandas as gpd
@@ -15,16 +17,18 @@ import rasterio.mask
 import requests
 import utm
 from exactextract import exact_extract
-from gri_shared_library.os_tools import is_file_recent, create_folder
+from gri_shared_library.os_tools import is_file_recent, create_folder, get_project_root_dir
 from gri_shared_library.s3_tools import get_aws_session
 from pyproj import CRS
 from rasterio.enums import Resampling
 from rasterio.io import MemoryFile
 from rasterio.warp import calculate_default_transform, reproject
 from shapely.geometry import box
+from tm_api_utils import pull_tm_api_data
 
+from decision_tree.s3_utils import upload_to_s3
 from decision_tree.tools import convert_to_os_path
-from decision_tree.constants import OPENTOPO_URI
+from decision_tree.constants import OPENTOPO_URI, TM_PROD_URI
 
 def download_geoparquet(params, secrets, tm_raw):
     """
@@ -37,10 +41,15 @@ def download_geoparquet(params, secrets, tm_raw):
     - tm_outfile is the CSV output path
     - AWS auth through console credentials and profile
     """
-    data_v = params["outfile"].get("data_version")
-    month, day, year = data_v.split("-")
-    data_v_reformat = f"{year}-{month}-{day}"
-    s3_url = params["s3"].get("geoparquet").format(data_version=data_v_reformat)
+    s3_uri = params["s3"].get("geoparquet")
+    if "data_version" in s3_uri:
+        data_v = params["outfile"].get("data_version")
+        month, day, year = data_v.split("-")
+        data_v_reformat = f"{year}-{month}-{day}"
+        s3_url = params["s3"].get("geoparquet").format(data_version=data_v_reformat)
+    else:
+        s3_url = params["s3"].get("geoparquet")
+
     aws_profile = secrets.get("aws", {}).get("aws_profile")
     print(s3_url)
 

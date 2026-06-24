@@ -1,4 +1,5 @@
 from datetime import date
+from enum import Enum
 
 from gri_shared_library.os_tools import get_project_root_dir
 
@@ -36,3 +37,8 @@ COST_FIELD = 20.0
 COST_REMOTE = 0.32
 
 ASANA_GID = 1209713669431043
+
+class TestProjectHandling(Enum):
+    INCLUDE = "include"   # test + non-test
+    EXCLUDE = "exclude"   # non-test only
+    ONLY = "only"         # test only

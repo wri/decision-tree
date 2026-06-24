@@ -4,6 +4,29 @@ import yaml
 from gri_shared_library.os_tools import get_project_root_dir
 
 
+def get_tm_auth_headers_from_secrets():
+    # Set up token access
+    auth_path = os.path.join(get_project_root_dir(), 'secrets.yaml')
+    with open(auth_path) as auth_file:
+        auth = yaml.safe_load(auth_file)
+    headers = {
+        'Authorization': f"Bearer {auth['tm_api']['tm_access_token']}"
+        }
+    return headers
+
+
+def get_tm_auth():
+    if 'TM_ACCESS_TOKEN' in os.environ:
+        tm_access_token = os.environ['TM_ACCESS_TOKEN']
+        auth_headers = {
+            'Authorization': f"Bearer {tm_access_token}"
+        }
+    else:
+        auth_headers = get_tm_auth_headers_from_secrets()
+
+    return auth_headers
+
+
 def convert_to_os_path(target_dir, path_str):
     """
     Convert a given directory path string to a valid path format
@@ -18,6 +41,7 @@ def convert_to_os_path(target_dir, path_str):
     normalized_path = abs_path.replace("\\", os.sep).replace("/", os.sep)
 
     return normalized_path
+
 
 def load_secrets(secrets_path):
     if os.path.isfile(secrets_path):
@@ -49,3 +73,7 @@ def load_secrets(secrets_path):
 
     return secrets_json
 
+
+def load_yaml(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)

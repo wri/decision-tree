@@ -23,8 +23,19 @@ dependencies = [
     "shapely",
     "tqdm",
     "utm",
-    "gri-shared-library @ git+https://${KENNC_REPO_PAT}@github.com/wri/gri-shared-library.git@main",
+    "gri-shared-library",
+    "tm-api-utils",
 ]
+
+[tool.uv.sources]
+gri-shared-library = { git = "https://github.com/wri/gri-shared-library.git", branch = "main"}
+tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git", branch = "develop"}
+gdal = [
+  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
+  { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
+  { index = "gdal-wheels", marker = "sys_platform == 'darwin'" },
+]
+
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -33,13 +44,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["decision_tree*"]
 exclude = ["notebooks*", "docs*", "tests*"]
-
-[tool.uv.sources]
-gdal = [
-  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
-  { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
-  { index = "gdal-wheels", marker = "sys_platform == 'darwin'" },
-]
 
 [[tool.uv.index]]
 name = "geospatial_wheels"

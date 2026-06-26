@@ -10,7 +10,8 @@ dependencies = [
     "exactextract",
     "fastparquet",
     "fiona",
-    "gdal<=3.12",
+    "gdal<=3.12 ; sys_platform != 'darwin'",
+    "gdal==3.13.1 ; sys_platform == 'darwin'",  # match Homebrew libgdal; bump to `gdal-config --version` if brew upgrades
     "matplotlib",
     "geopandas",
     "pandas",

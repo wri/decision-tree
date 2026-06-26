@@ -33,7 +33,6 @@ fastjsonschema==2.20.0
 fiona==1.10.1
 fonttools @ file:///Users/runner/miniforge3/conda-bld/fonttools_1748465546990/work
 fqdn==1.5.1
-GDAL @ file:///Users/runner/miniforge3/conda-bld/libgdal-core_1728291226053/work/build/swig/python
 geopandas==1.0.1
 h11==0.14.0
 h2 @ file:///home/conda/feedstock_root/build_artifacts/h2_1738578511449/work

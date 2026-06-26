@@ -51,7 +51,6 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt update
-          sudo apt install -y gdal-bin libgdal-dev
 
       # Configure AWS credentials (OIDC)
       - name: Configure LAND AWS credentials

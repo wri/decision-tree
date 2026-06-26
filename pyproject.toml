@@ -10,7 +10,6 @@ dependencies = [
     "exactextract",
     "fastparquet",
     "fiona",
-    "gdal<=3.12",
     "matplotlib",
     "geopandas",
     "pandas",
@@ -30,12 +29,6 @@ dependencies = [
 [tool.uv.sources]
 gri-shared-library = { git = "https://github.com/wri/gri-shared-library.git", branch = "GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline"}
 tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git", branch = "GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline"}
-gdal = [
-  { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
-  { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },
-  { index = "gdal-wheels", marker = "sys_platform == 'darwin'" },
-]
-
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -48,11 +41,6 @@ exclude = ["notebooks*", "docs*", "tests*"]
 [[tool.uv.index]]
 name = "geospatial_wheels"
 url = "https://nathanjmcdougall.github.io/geospatial-wheels-index/"
-explicit = true
-
-[[tool.uv.index]]
-name = "gdal-wheels"
-url = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple"
 explicit = true
 
 [tool.poetry.dependencies]

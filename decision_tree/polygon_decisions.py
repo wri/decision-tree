@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from decision_tree.constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
+from decision_tree.tools import resolve_indicator_window_range
 
 # Operator dispatch table — avoids eval() for safe, explicit comparisons
 _OPS = {
@@ -248,7 +248,8 @@ def apply_rules_ev(params, rules_file_path, df):
     ]]
 
     today = datetime.today()
-    ev_days_start, ev_days_end = params['criteria']['ev_range']
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_days_start = ev_range[0]
 
     decisions = []
 
@@ -400,8 +401,10 @@ def apply_scoring(
     # ------------------------------------------------------------------
     base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
 
-    baseline_ttc = _get_ttc_for_year(df, base_years + BASE_OFFSET_YRS)
-    ev_ttc       = _get_ttc_for_year(df, base_years + EI_OFFSET_YRS)
+    baseline_range = resolve_indicator_window_range(params, 'BASELINE')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    baseline_ttc = _get_ttc_for_year(df, base_years + baseline_range[1])
+    ev_ttc       = _get_ttc_for_year(df, base_years + ev_range[1])
 
     canopy_base = (100.0 - pd.to_numeric(baseline_ttc, errors="coerce")).clip(0, 100)
     canopy_ev   = (100.0 - pd.to_numeric(ev_ttc,       errors="coerce")).clip(0, 100)

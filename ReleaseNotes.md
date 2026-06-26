@@ -1,5 +1,8 @@
 # Release notes for decision-tree
 
+## 2026/06/25
+1. Converted indicator-windows to use enum definitions in gri-shared-library
+
 ## 2026/06/10
 1. Re-added option to read TerraMatch polygon data through the TerraMatch API.
 2. Added "tm_source" option to params.yaml files for controlling whether TM data are read from the geoparquet file or the TM API.

@@ -252,7 +252,7 @@ requires-dist = [
     { name = "gdal", marker = "sys_platform == 'linux'", specifier = "<=3.12", index = "https://gitlab.com/api/v4/projects/61637378/packages/pypi/simple" },
     { name = "gdal", marker = "sys_platform == 'win32'", specifier = "<=3.12", index = "https://nathanjmcdougall.github.io/geospatial-wheels-index/" },
     { name = "geopandas" },
-    { name = "gri-shared-library", git = "https://github.com/wri/gri-shared-library.git?branch=main" },
+    { name = "gri-shared-library", git = "https://github.com/wri/gri-shared-library.git?branch=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "pytest" },
@@ -262,7 +262,7 @@ requires-dist = [
     { name = "requests" },
     { name = "seaborn" },
     { name = "shapely" },
-    { name = "tm-api-utils", git = "https://github.com/wri/terramatch-researcher-api.git?branch=develop" },
+    { name = "tm-api-utils", git = "https://github.com/wri/terramatch-researcher-api.git?branch=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline" },
     { name = "tqdm" },
     { name = "utm" },
 ]
@@ -433,7 +433,7 @@ wheels = [
 [[package]]
 name = "gri-shared-library"
 version = "0.1.0"
-source = { git = "https://github.com/wri/gri-shared-library/?rev=main#7475d8a5fc6234aeaccf2b31ed3e2345085110da" }
+source = { git = "https://github.com/wri/gri-shared-library/?rev=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline#25445c28ddb847cd5e699ff7bc6ea240637e8f4b" }
 dependencies = [
     { name = "boto3" },
     { name = "botocore" },
@@ -857,7 +857,7 @@ wheels = [
 [[package]]
 name = "tm-api-utils"
 version = "0.2.0"
-source = { git = "https://github.com/wri/terramatch-researcher-api.git?branch=develop#1511c8e73f89f522830184640d17351b2849d8d5" }
+source = { git = "https://github.com/wri/terramatch-researcher-api.git?branch=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline#9f110ff7d66eb3c92e468024d61f44ca1348a878" }
 dependencies = [
     { name = "geopandas" },
     { name = "gri-shared-library" },

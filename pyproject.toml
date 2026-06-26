@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-gri-shared-library = { git = "https://github.com/wri/gri-shared-library.git", branch = "main"}
-tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git", branch = "develop"}
+gri-shared-library = { git = "https://github.com/wri/gri-shared-library.git", branch = "GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline"}
+tm-api-utils = { git = "https://github.com/wri/terramatch-researcher-api.git", branch = "GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline"}
 gdal = [
   { index = "gdal-wheels", marker = "sys_platform == 'linux'" },
   { index = "geospatial_wheels", marker = "sys_platform == 'win32'" },

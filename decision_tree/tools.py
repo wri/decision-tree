@@ -1,5 +1,7 @@
+import ast
 import os
 import yaml
+from gri_shared_library.constants import TreeCountProjectPhaseDayRange
 
 from gri_shared_library.os_tools import get_project_root_dir
 
@@ -77,3 +79,33 @@ def load_secrets(secrets_path):
 def load_yaml(path):
     with open(path, "r") as f:
         return yaml.safe_load(f)
+
+
+def resolve_indicator_window_range(params, window_name):
+    criteria = params.get('criteria', {})
+    if window_name.lower() == 'baseline':
+        baseline_range = criteria.get('baseline_range')
+        if baseline_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.BASELINE.value
+        elif isinstance(ast.literal_eval(baseline_range), tuple):
+            return ast.literal_eval(baseline_range)
+        else:
+            raise ValueError(f"Invalid baseline_range value in params file.")
+    elif window_name.lower() == 'ext_baseline':
+        ext_baseline_range = criteria.get('ext_baseline_range')
+        if ext_baseline_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.EXT_BASELINE.value
+        elif isinstance(ast.literal_eval(ext_baseline_range), tuple):
+            return ast.literal_eval(ext_baseline_range)
+        else:
+            raise ValueError(f"Invalid ext_baseline_range value in params file.")
+    elif window_name.lower() == 'early_insights':
+        early_insights_range = criteria.get('ev_range')
+        if early_insights_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.EARLY_INSIGHTS.value
+        elif isinstance(ast.literal_eval(early_insights_range), tuple):
+            return ast.literal_eval(early_insights_range)
+        else:
+            raise ValueError(f"Invalid ev_range value in params file.")
+    else:
+        raise ValueError(f"Invalid window_name value in params file.")

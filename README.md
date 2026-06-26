@@ -104,9 +104,10 @@ criteria:
   cloud_thresh: 50                                   
   off_nadir: 30                                               
   sun_elevation: 30
-  img_count: 1                                                 
-  baseline_range: [-365, 0]                                
-  ev_range: [730, 1095]                                        
+  img_count: 1
+  baseline_range: DEFAULT       # baseline window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
+  ext_baseline_range: DEFAULT   # extended window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
+  ev_range: DEFAULT             # early-insights window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
   drop_missing: False
   slope_thresh: 20
   rules: data/rule_template.csv

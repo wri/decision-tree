@@ -2,7 +2,10 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from decision_tree.constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
+from gri_shared_library.constants import TreeCoverProjectPhaseYearRange
+
+from decision_tree.tools import resolve_indicator_window_range
+
 
 def apply_canopy_classification(params, df):
     """
@@ -22,7 +25,7 @@ def apply_canopy_classification(params, df):
     - df (pd.DataFrame): Input DataFrame with ttc columns and a plantstart column.
     - canopy_thresh (float): Threshold for distinguishing open vs closed canopy.
     - baseline_range (tuple): Days relative to plantstart defining the baseline period.
-    - ev_range (tuple): Days relative to plantstart defining the early verification period.
+    - ev_range (tuple): Days relative to plantstart defining the early insights/verification period.
 
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
@@ -33,9 +36,7 @@ def apply_canopy_classification(params, df):
 
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
-    baseline_range = criteria.get("baseline_range")
-    ev_range = criteria.get("ev_range")
-    current_year = datetime.today().year
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
 
     df['plantstart_dt'] = pd.to_datetime(df['plantstart'], errors='coerce')
     df['baseline_year'] = df['plantstart_dt'].dt.year
@@ -55,7 +56,7 @@ def apply_canopy_classification(params, df):
         plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_year = plant_date.year + BASE_OFFSET_YRS
+        baseline_year = plant_date.year + TreeCoverProjectPhaseYearRange.BASELINE.end
         baseline_col = f'ttc_{baseline_year}'
 
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):
@@ -70,7 +71,7 @@ def apply_canopy_classification(params, df):
         if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:  
-            ev_year = plant_date.year + EI_OFFSET_YRS
+            ev_year = plant_date.year + TreeCoverProjectPhaseYearRange.EARLY_INSIGHTS.end
             ev_col = f'ttc_{ev_year}'
             if ev_col in ttc_cols and pd.notna(row[ev_col]):
                 val = row[ev_col]

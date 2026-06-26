@@ -29,14 +29,14 @@ asana:
   dry_run: True
 
 criteria:
-  canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
-  cloud_thresh: 50                                             # threshold for identifying image quality
-  off_nadir: 30                                                # number of degrees that the sensor varies from vertical
+  canopy_threshold: 60          # threshold for identifying open vs closed canopy projects
+  cloud_thresh: 50              # threshold for identifying image quality
+  off_nadir: 30                 # number of degrees that the sensor varies from vertical
   sun_elevation: 20
-  img_count: 1                                                 # threshold for identifying image availability
-  baseline_range: [-365, 60]                                   # baseline window (1 year pre - 2 months post)
-  ext_baseline_range: [-548, 60]                               # extended window (1.5 pre - 2 months post)
-  ev_range: [730, 1095]                                        # EV window (2 years after plant start date)
+  img_count: 1                  # threshold for identifying image availability
+  baseline_range: DEFAULT       # baseline window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
+  ext_baseline_range: DEFAULT   # extended window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
+  ev_range: DEFAULT             # early-insights window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
   drop_missing: False
   slope_thresh: 20
 

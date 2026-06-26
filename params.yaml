@@ -23,11 +23,6 @@ s3:
   folder_prefix: tree_verification/output/project_data
   geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
 
-asana:
-  upload: False
-  section: Remote
-  dry_run: True
-
 criteria:
   canopy_threshold: 60                                         # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50                                             # threshold for identifying image quality

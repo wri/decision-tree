@@ -29,10 +29,6 @@ OPENTOPO_URI = 'https://portal.opentopography.org/API/globaldem'
 
 RULES = 'rule_template.csv'
 
-BASE_OFFSET_YRS = -1
-EI_OFFSET_YRS = 2
-END_OFFSET_YRS = 6
-
 COST_FIELD = 20.0
 COST_REMOTE = 0.32
 

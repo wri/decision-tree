@@ -1,6 +1,10 @@
+
 import pandas as pd
 
-def analyze_image_availability(params, 
+from decision_tree.tools import resolve_indicator_window_range
+
+
+def analyze_image_availability(params,
                                proj_df, 
                                maxar_fp: str):
     """
@@ -19,10 +23,9 @@ def analyze_image_availability(params,
     n_polys = proj_df['poly_id'].nunique() 
     print(f"Analyzing image availability for {n_projects} projects and {n_polys} polygons...")
 
-    criteria = params.get('criteria', {})
-    baseline_range = tuple(criteria.get('baseline_range'))
-    ext_baseline_range = tuple(criteria.get('ext_baseline_range'))
-    ev_range = tuple(criteria.get('ev_range'))
+    baseline_range = resolve_indicator_window_range(params, 'BASELINE')
+    ext_baseline_range = resolve_indicator_window_range(params, 'EXT_BASELINE')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
     
     proj_df.columns = proj_df.columns.str.lower()
     # Create dataFrame containing image observations.
@@ -71,7 +74,7 @@ def analyze_image_availability(params,
 
     ev = merged[
         (merged['date_diff'] >= ev_range[0]) &
-        (merged['date_diff'] <= ev_range[1]) 
+        (merged['date_diff'] <= ev_range[1])
     ]
     ev_summary = (
         ev.groupby(['project_id', 'poly_id'])

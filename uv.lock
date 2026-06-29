@@ -389,7 +389,7 @@ wheels = [
 [[package]]
 name = "gri-shared-library"
 version = "0.1.0"
-source = { git = "https://github.com/wri/gri-shared-library/?rev=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline#f42d71a02ce97849ca1da6b570d7127b47b206ff" }
+source = { git = "https://github.com/wri/gri-shared-library/?rev=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline#4de34ec7bed399f367d81482a064db4e1d54a29a" }
 dependencies = [
     { name = "boto3" },
     { name = "botocore" },

@@ -3,7 +3,8 @@ from pathlib import Path
 import datetime
 import pandas as pd
 import yaml
-from gri_shared_library.os_tools import create_folder, get_project_ids_from_geoparquet
+from gri_shared_library.geoparquet_tools import get_project_ids_from_geoparquet
+from gri_shared_library.os_tools import create_folder
 from tm_api_utils.tm_features import get_tm_feats
 
 import decision_tree.cost_calculator as price

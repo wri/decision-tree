@@ -11,10 +11,10 @@ import decision_tree.polygon_decisions as poly_tree
 import decision_tree.process_api_results as clean
 import decision_tree.project_decisions as proj_tree
 import decision_tree.update_asana as update_asana
-from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
+from decision_tree.api_utils import download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
-from decision_tree.slope import apply_slope_classification
+from decision_tree.slope import  opentopo_pull_wrapper, apply_slope_classification
 from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml
 from decision_tree.constants import RULES, TestProjectHandling
 

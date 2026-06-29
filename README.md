@@ -107,7 +107,7 @@ criteria:
   img_count: 1
   baseline_range: DEFAULT       # baseline window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
   ext_baseline_range: DEFAULT   # extended window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
-  ev_range: DEFAULT             # early-insights window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
+  ev_range: DEFAULT             # early-insight window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
   drop_missing: False
   slope_thresh: 20
   rules: data/rule_template.csv

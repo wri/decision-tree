@@ -25,7 +25,7 @@ def analyze_image_availability(params,
 
     baseline_range = resolve_indicator_window_range(params, 'BASELINE')
     ext_baseline_range = resolve_indicator_window_range(params, 'EXT_BASELINE')
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
     
     proj_df.columns = proj_df.columns.str.lower()
     # Create dataFrame containing image observations.

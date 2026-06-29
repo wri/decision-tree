@@ -99,12 +99,12 @@ def resolve_indicator_window_range(params, window_name):
             return ast.literal_eval(ext_baseline_range)
         else:
             raise ValueError(f"Invalid ext_baseline_range value in params file.")
-    elif window_name.lower() == 'early_insights':
-        early_insights_range = criteria.get('ev_range')
-        if early_insights_range.lower() == 'default':
-            return TreeCountProjectPhaseDayRange.EARLY_INSIGHTS.value
-        elif isinstance(ast.literal_eval(early_insights_range), tuple):
-            return ast.literal_eval(early_insights_range)
+    elif window_name.lower() == 'early_insight':
+        early_insight_range = criteria.get('ev_range')
+        if early_insight_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.EARLY_INSIGHT.value
+        elif isinstance(ast.literal_eval(early_insight_range), tuple):
+            return ast.literal_eval(early_insight_range)
         else:
             raise ValueError(f"Invalid ev_range value in params file.")
     else:

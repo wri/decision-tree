@@ -25,7 +25,7 @@ def apply_canopy_classification(params, df):
     - df (pd.DataFrame): Input DataFrame with ttc columns and a plantstart column.
     - canopy_thresh (float): Threshold for distinguishing open vs closed canopy.
     - baseline_range (tuple): Days relative to plantstart defining the baseline period.
-    - ev_range (tuple): Days relative to plantstart defining the early insights/verification period.
+    - ev_range (tuple): Days relative to plantstart defining the early insight/verification period.
 
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
@@ -36,7 +36,7 @@ def apply_canopy_classification(params, df):
 
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
 
     df['plantstart_dt'] = pd.to_datetime(df['plantstart'], errors='coerce')
     df['baseline_year'] = df['plantstart_dt'].dt.year
@@ -71,7 +71,7 @@ def apply_canopy_classification(params, df):
         if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:  
-            ev_year = plant_date.year + TreeCoverProjectPhaseYearRange.EARLY_INSIGHTS.end
+            ev_year = plant_date.year + TreeCoverProjectPhaseYearRange.EARLY_INSIGHT.end
             ev_col = f'ttc_{ev_year}'
             if ev_col in ttc_cols and pd.notna(row[ev_col]):
                 val = row[ev_col]

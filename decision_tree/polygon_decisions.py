@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
+from decision_tree.constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
 from decision_tree.tools import resolve_indicator_window_range
 from gri_shared_library.constants import TreeCoverProjectPhaseYearRange
 
@@ -402,12 +403,8 @@ def apply_scoring(
     # ------------------------------------------------------------------
     base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
 
-    baseline_offset_years = TreeCoverProjectPhaseYearRange.BASELINE.end
-    ei_offset_years = TreeCoverProjectPhaseYearRange.EARLY_INSIGHT.end
-    endline_offset_year = TreeCoverProjectPhaseYearRange.ENDLINE.end
-
-    baseline_ttc = _get_ttc_for_year(df, base_years + baseline_offset_years)
-    ev_ttc       = _get_ttc_for_year(df, base_years + ei_offset_years)
+    baseline_ttc = _get_ttc_for_year(df, base_years + BASE_OFFSET_YRS)
+    ev_ttc       = _get_ttc_for_year(df, base_years + EI_OFFSET_YRS)
 
     canopy_base = (100.0 - pd.to_numeric(baseline_ttc, errors="coerce")).clip(0, 100)
     canopy_ev   = (100.0 - pd.to_numeric(ev_ttc,       errors="coerce")).clip(0, 100)

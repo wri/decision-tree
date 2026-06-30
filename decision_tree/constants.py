@@ -29,6 +29,10 @@ OPENTOPO_URI = 'https://portal.opentopography.org/API/globaldem'
 
 RULES = 'rule_template.csv'
 
+BASE_OFFSET_YRS = TreeCoverProjectPhaseYearRange.BASELINE.end
+EI_OFFSET_YRS = TreeCoverProjectPhaseYearRange.EARLY_INSIGHT.end
+END_OFFSET_YRS = TreeCoverProjectPhaseYearRange.ENDLINE.end # value is not currently used
+
 COST_FIELD = 20.0
 COST_REMOTE = 0.32
 

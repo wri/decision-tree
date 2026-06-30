@@ -85,27 +85,35 @@ def resolve_indicator_window_range(params, window_name):
     criteria = params.get('criteria', {})
     if window_name.lower() == 'baseline':
         baseline_range = criteria.get('baseline_range')
-        if baseline_range.lower() == 'default':
+        if type(baseline_range) == str and baseline_range.lower() == 'default':
             return TreeCountProjectPhaseDayRange.BASELINE.value
-        elif isinstance(ast.literal_eval(baseline_range), tuple):
+        if type(baseline_range) == str and isinstance(ast.literal_eval(baseline_range), tuple):
             return ast.literal_eval(baseline_range)
         else:
-            raise ValueError(f"Invalid baseline_range value in params file.")
+            raise ValueError(f"Invalid baseline_range specification ({baseline_range}) in params file.")
     elif window_name.lower() == 'ext_baseline':
         ext_baseline_range = criteria.get('ext_baseline_range')
-        if ext_baseline_range.lower() == 'default':
+        if type(ext_baseline_range) == str and ext_baseline_range.lower() == 'default':
             return TreeCountProjectPhaseDayRange.EXT_BASELINE.value
-        elif isinstance(ast.literal_eval(ext_baseline_range), tuple):
+        if type(ext_baseline_range) == str and isinstance(ast.literal_eval(ext_baseline_range), tuple):
             return ast.literal_eval(ext_baseline_range)
         else:
-            raise ValueError(f"Invalid ext_baseline_range value in params file.")
+            raise ValueError(f"Invalid ext_baseline_range specification ({ext_baseline_range}) in params file.")
     elif window_name.lower() == 'early_insight':
         early_insight_range = criteria.get('ev_range')
-        if early_insight_range.lower() == 'default':
+        if type(early_insight_range) == str and early_insight_range.lower() == 'default':
             return TreeCountProjectPhaseDayRange.EARLY_INSIGHT.value
-        elif isinstance(ast.literal_eval(early_insight_range), tuple):
+        if type(early_insight_range) == str and isinstance(ast.literal_eval(early_insight_range), tuple):
             return ast.literal_eval(early_insight_range)
         else:
-            raise ValueError(f"Invalid ev_range value in params file.")
+            raise ValueError(f"Invalid early_insight_range specification ({early_insight_range}) in params file.")
+    elif window_name.lower() == 'endline':
+        endline_range = criteria.get('endline')
+        if type(endline_range) == str and endline_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.ENDLINE.value
+        if type(endline_range) == str and isinstance(ast.literal_eval(endline_range), tuple):
+            return ast.literal_eval(endline_range)
+        else:
+            raise ValueError(f"Invalid endline_range specification ({endline_range}) in params file.")
     else:
-        raise ValueError(f"Invalid window_name value in params file.")
+        raise ValueError(f"Invalid window_name specification in params file.")

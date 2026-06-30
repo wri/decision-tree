@@ -1,6 +1,6 @@
 from datetime import date
 from enum import Enum
-
+import os
 from gri_shared_library.os_tools import get_project_root_dir
 
 
@@ -22,10 +22,15 @@ fixed_cols = [
 
 DESIRED_COLS = fixed_cols + ttc_years
 
-TM_STAGING_URI = 'https://api-staging.terramatch.org/research/v3/sitePolygons?' # not currently used
-TM_PROD_URI = 'https://api.terramatch.org/research/v3/sitePolygons?'
-PROJECT_ROOT = get_project_root_dir()
-OPENTOPO_URI = 'https://portal.opentopography.org/API/globaldem'
+TM_PROD_URI         = 'https://api.terramatch.org/research/v3/sitePolygons?'
+PROJECT_ROOT        = get_project_root_dir()
+OPENTOPO_URI        = 'https://portal.opentopography.org/API/globaldem'
+DEM_COLLECTION      = "cop-dem-glo-30"
+EARTH_SEARCH_V1     = "https://earth-search.aws.element84.com/v1"
+DEFAULT_TILEDB_PATH = os.environ.get(
+                        "TILEDB_PATH",
+                        "s3://wri-restoration-geodata-ttc/tiledb.parquet",
+                    )
 
 RULES = 'rule_template.csv'
 
@@ -38,3 +43,7 @@ class TestProjectHandling(Enum):
     INCLUDE = "include"   # test + non-test
     EXCLUDE = "exclude"   # non-test only
     ONLY = "only"         # test only
+
+# slope
+NODATA = -9999.0
+HALF_TILE_DEG = 1 / 36          # 0.0278° — half of 1/18° tile width

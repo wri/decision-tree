@@ -22,6 +22,7 @@ s3:
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
   geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
+  slope: s3://wri-restoration-geodata-ttc/slope
 
 asana:
   upload: False
@@ -42,7 +43,7 @@ criteria:
 
 outfile: # file paths are relative to the project root
   data_version: 04-13-2026 #Date in MM-DD-YYYY format
-  experiment_id: exp1
+  experiment_id: exp5
   cohort: c2
   project_data_folder: 'data'
   # file paths are relative to the project_data_folder under the project root
@@ -50,7 +51,7 @@ outfile: # file paths are relative to the project root
   geojsons: geojsons/
   geoparquet: tm_raw/{data_version}_tm.geoparquet
   tm_response: tm_api_response/{cohort}_{data_version}.json
-  slope_stats: slope/slope_statistics_{cohort}_{data_version}.csv
+  slope_stats: slope/slope-copernicus/slope_statistics_{cohort}_{data_version}.csv
   project_stats: slope/project_statistics/{name}_slope_stats.csv
   feats: feats/tm_feats_{cohort}_{data_version}.csv
   feats_maxar: tm_project_feats/tm_api_{cohort}_{data_version}.csv # confirm this

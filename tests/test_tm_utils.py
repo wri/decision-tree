@@ -3,11 +3,12 @@ import os
 import yaml
 from gri_shared_library.os_tools import create_folder
 
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH, TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
+from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
 from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet, TestProjectHandling
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets, load_yaml
+from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID
 from tools import folder_cleanup
 
 params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")

@@ -2,9 +2,8 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from gri_shared_library.constants import TreeCoverProjectPhaseYearRange
 
-from decision_tree.constants import BASE_OFFSET_YRS, EI_OFFSET_YRS
+from gri_shared_library.constants import TCC_BASELINE_OFFSET_YEARS, TCC_EI_OFFSET_YEARS
 from decision_tree.tools import resolve_indicator_window_range
 
 
@@ -57,7 +56,7 @@ def apply_canopy_classification(params, df):
         plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_year = plant_date.year + BASE_OFFSET_YRS
+        baseline_year = plant_date.year + TCC_BASELINE_OFFSET_YEARS
         baseline_col = f'ttc_{baseline_year}'
 
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):
@@ -72,7 +71,7 @@ def apply_canopy_classification(params, df):
         if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:  
-            ev_year = plant_date.year + EI_OFFSET_YRS
+            ev_year = plant_date.year + TCC_EI_OFFSET_YEARS
             ev_col = f'ttc_{ev_year}'
             if ev_col in ttc_cols and pd.notna(row[ev_col]):
                 val = row[ev_col]

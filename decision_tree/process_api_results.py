@@ -159,8 +159,13 @@ def extract_tree_cover_years(row_dict):
     ttc_values = row_dict.get("ttc", [])
     if isinstance(ttc_values, dict):
         ttc_values = list(ttc_values.items())
-    if not isinstance(ttc_values, list):
+
+    if ttc_values is None:
         return out
+
+    # Confirm that object is a list of tuples
+    if not (isinstance(ttc_values, list) and all(isinstance(x, tuple) for x in ttc_values)):
+        raise TypeError(f"Expected a list of tuples fpr TTC, got {type(ttc_values)}")
 
     current_year = datetime.today().year
     for item in ttc_values:
@@ -171,6 +176,7 @@ def extract_tree_cover_years(row_dict):
                 out[f"ttc_{year}"] = percent_cover
 
     return out
+
 
 def save_project_geojsons(df, geojson_dir, data_version):
     """

@@ -30,7 +30,7 @@ def has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
 
     actual_project_ev_label = prj_results['ev_label'].values[0]
     assert actual_project_ev_label == expected_project_ev_label, \
-        f"Expected ev_label = {actual_project_ev_label}, got {expected_project_ev_label}"
+        f"Expected ev_label = {expected_project_ev_label}, got {actual_project_ev_label}"
 
     actual_pct_area_scored = prj_results['ev_pct_area_scored'].values[0]
     assert actual_pct_area_scored == expected_pct_area_scored,\

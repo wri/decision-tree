@@ -157,15 +157,18 @@ def extract_tree_cover_years(row_dict):
     """
     out = {}
     ttc_values = row_dict.get("ttc", [])
+    if isinstance(ttc_values, dict):
+        ttc_values = list(ttc_values.items())
     if not isinstance(ttc_values, list):
         return out
 
     current_year = datetime.today().year
     for item in ttc_values:
         year, percent_cover = item
-        year = int(year)
-        if TF_START_YR <= year <= current_year:
-            out[f"ttc_{year}"] = percent_cover
+        if percent_cover is not None:
+            year = int(year)
+            if TF_START_YR <= year <= current_year:
+                out[f"ttc_{year}"] = percent_cover
 
     return out
 

@@ -150,24 +150,23 @@ def flatten_tm_geoparquet(results):
 
 def extract_tree_cover_years(row_dict):
     """
-    Extract tree cover values from the `ttc` field and convert them into
-    flat columns like `ttc_2021`, `ttc_2022`, etc.
-    row_dict["ttc"] is a list of tuples, where first value is the year
-    and second value is the tree cover percent
+    Extract tree cover values from the `ttc` field into flat columns like
+    `ttc_2021`, `ttc_2022`, etc. `ttc` is a dict whose keys are years and
+    values are the tree cover percent.
     """
+    ttc_values = row_dict.get("ttc") or {}
+    if not isinstance(ttc_values, dict):
+        raise TypeError(f"Expected a dictionary of TTC, got {type(ttc_values)}")
+
     out = {}
-    ttc_values = row_dict.get("ttc", [])
-    if not isinstance(ttc_values, list):
-        return out
-
     current_year = datetime.today().year
-    for item in ttc_values:
-        year, percent_cover = item
-        year = int(year)
-        if TF_START_YR <= year <= current_year:
-            out[f"ttc_{year}"] = percent_cover
-
+    for year, percent_cover in ttc_values.items():
+        if percent_cover is not None:
+            year = int(year)
+            if TF_START_YR <= year <= current_year:
+                out[f"ttc_{year}"] = percent_cover
     return out
+
 
 def save_project_geojsons(df, geojson_dir, data_version):
     """

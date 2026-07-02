@@ -41,7 +41,7 @@ criteria:
   slope_thresh: 20
 
 outfile: # file paths are relative to the project root
-  data_version: 04-13-2026 #Date in MM-DD-YYYY format
+  data_version: 06-30-2026 #Date in MM-DD-YYYY format
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'tests/data/decision_tree/test_projects'

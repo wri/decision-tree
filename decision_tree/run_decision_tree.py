@@ -152,6 +152,11 @@ class VerificationDecisionTree:
                                                 project_ids,
                                                 test_project_handling= test_project_handling)
 
+            # verify that results contain ttc columns
+            ttc_cols = [c for c in tm_clean.columns if c.startswith('ttc_')]
+            if len(ttc_cols) == 0:
+                raise ValueError(f"The tm_clean does not contain any 'ttc_' column.")
+
             self.checkpoint.save("feats", tm_clean)
             slope_statistics = opentopo_pull_wrapper(self.params, 
                                                      self.secrets, 

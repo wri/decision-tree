@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
+from gri_shared_library.constants import TCC_BASELINE_OFFSET_YEARS, TCC_EI_OFFSET_YEARS
 from decision_tree.tools import resolve_indicator_window_range
 
 # Operator dispatch table — avoids eval() for safe, explicit comparisons
@@ -401,10 +402,8 @@ def apply_scoring(
     # ------------------------------------------------------------------
     base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
 
-    baseline_range = resolve_indicator_window_range(params, 'BASELINE')
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
-    baseline_ttc = _get_ttc_for_year(df, base_years + baseline_range[1])
-    ev_ttc       = _get_ttc_for_year(df, base_years + ev_range[1])
+    baseline_ttc = _get_ttc_for_year(df, base_years + TCC_BASELINE_OFFSET_YEARS)
+    ev_ttc       = _get_ttc_for_year(df, base_years + TCC_EI_OFFSET_YEARS)
 
     canopy_base = (100.0 - pd.to_numeric(baseline_ttc, errors="coerce")).clip(0, 100)
     canopy_ev   = (100.0 - pd.to_numeric(ev_ttc,       errors="coerce")).clip(0, 100)

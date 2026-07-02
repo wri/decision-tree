@@ -811,7 +811,7 @@ wheels = [
 [[package]]
 name = "tm-api-utils"
 version = "0.2.0"
-source = { git = "https://github.com/wri/terramatch-researcher-api.git?branch=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline#83acef32dfb9f2e18cc9bc6fa47446014c8041e1" }
+source = { git = "https://github.com/wri/terramatch-researcher-api.git?branch=GDP-116-Standardize-definition-of-indicator-windows-and-implement-across-the-pipeline#22b134f1547dadf07081845d91c63be12c4f669f" }
 dependencies = [
     { name = "geopandas" },
     { name = "gri-shared-library" },

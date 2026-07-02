@@ -35,7 +35,7 @@ def test_run_decision_tree_projectids():
 
     project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    # project_ids = [TEST_REAL_PROJECT_C1_ID]; test_project_handling = TestProjectHandling.EXCLUDE
+    project_ids = [TEST_REAL_PROJECT_C1_ID]; test_project_handling = TestProjectHandling.EXCLUDE
     # REAL PROJECT ABOVE
 
     poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids,
@@ -52,14 +52,13 @@ def test_run_decision_tree_projectids():
         expected_project_ev_label= 'weak field'
         expected_pct_area_scored = 1.0
     else:
-        sample_poly_id = '51895d1d-0c6b-429d-b18c-06f3ed636f8e'
-        expected_poly_baseline_suitability = 33.3
-        expected_poly_baseline_total = 0
-        expected_poly_ev_total = 0
-
+        sample_poly_id = 'b25a7139-6597-44ab-9765-b626745c97bc'
+        expected_poly_baseline_suitability = 21.1
+        expected_poly_baseline_total = 3033.6
+        expected_poly_ev_total = 964.4
         expected_project_count = 1
-        expected_project_ev_label= 'not available'
-        expected_pct_area_scored = 0
+        expected_project_ev_label = 'not available'
+        expected_pct_area_scored = 0.318
 
     has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
                            expected_poly_baseline_suitability, expected_poly_baseline_total, expected_poly_ev_total,

@@ -35,7 +35,7 @@ def test_run_decision_tree_projectids():
 
     project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
     # REAL PROJECT BELOW - Only use for examination of an actual project
-    project_ids = [TEST_REAL_PROJECT_C1_ID]; test_project_handling = TestProjectHandling.EXCLUDE
+    # project_ids = [TEST_REAL_PROJECT_C1_ID]; test_project_handling = TestProjectHandling.EXCLUDE
     # REAL PROJECT ABOVE
 
     poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids,

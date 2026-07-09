@@ -51,7 +51,7 @@ def _get_folders(directory, exclude):
 def folder_cleanup(params_path):
     params = load_yaml(params_path)
     data_dir = os.path.join(get_project_root_dir(), params['outfile']['project_data_folder'])
-    keeper_folders = ["feats", "geojsons", "imagery_availability", "tree_output"]
+    keeper_folders = ["imagery_availability", "tree_output"]
     scratch_folders = _get_folders(data_dir, keeper_folders)
     for folder in scratch_folders:
         folder_dir = os.path.join(data_dir, folder)

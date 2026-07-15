@@ -151,16 +151,27 @@ def flatten_tm_geoparquet(results):
 def extract_tree_cover_years(row_dict):
     """
     Extract tree cover values from the `ttc` field into flat columns like
-    `ttc_2021`, `ttc_2022`, etc. `ttc` is a dict whose keys are years and
-    values are the tree cover percent.
+    `ttc_2021`, `ttc_2022`, etc.
+
+    `ttc` is normally a dict whose keys are years and values are the tree
+    cover percent, but it's not guaranteed to arrive as a dict: JSONB source
+    data (e.g. `properties->'ttc'`) represents it as a list of [year, pct]
+    pairs, and a `pyarrow`-backed parquet engine would return MAP columns as
+    a list of tuples rather than a dict. Accept both shapes rather than
+    hard-raising, since this runs on every `process_tm_results` call, not
+    just the geoparquet path.
     """
     ttc_values = row_dict.get("ttc") or {}
-    if not isinstance(ttc_values, dict):
-        raise TypeError(f"Expected a dictionary of TTC, got {type(ttc_values)}")
+    if isinstance(ttc_values, dict):
+        items = ttc_values.items()
+    elif isinstance(ttc_values, (list, tuple)):
+        items = ttc_values
+    else:
+        raise TypeError(f"Expected a dict or list of TTC pairs, got {type(ttc_values)}")
 
     out = {}
     current_year = datetime.today().year
-    for year, percent_cover in ttc_values.items():
+    for year, percent_cover in items:
         if percent_cover is not None:
             year = int(year)
             if TF_START_YR <= year <= current_year:

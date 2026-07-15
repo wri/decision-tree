@@ -2,7 +2,6 @@ from datetime import date
 from enum import Enum
 
 from gri_shared_library.os_tools import get_project_root_dir
-from gri_shared_library.constants import TreeCoverProjectPhaseYearRange
 
 
 # Construct list of desired columns

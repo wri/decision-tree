@@ -105,7 +105,7 @@ class VerificationDecisionTree:
                                             outfile["prj_decision"].format(cohort=self.cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
-        self.rules = convert_to_os_path(project_data_dir, RULES)
+        self.rules = convert_to_os_path("", RULES)
 
     def _checkpoint_paths(self) -> dict:
         """

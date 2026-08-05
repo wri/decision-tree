@@ -560,6 +560,7 @@ def apply_slope_classification(params, df, slope_stats):
 
     # Apply classification
     slope_stats.loc[:, 'slope'] = slope_stats['slope_area'].apply(classify_slope)
+    df = df.drop(columns=[c for c in ('slope', 'slope_area') if c in df.columns])
 
     # Merge into main DataFrame
     comb = df.merge(

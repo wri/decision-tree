@@ -4,12 +4,6 @@ Downloads Copernicus DEM GLO-30 (same source as the TTC canopy-cover step) via
 the Earth Search STAC API, computes slope using a gradient operator, and returns
 one row of slope statistics per polygon.
 
-This module is the Copernicus-DEM counterpart to ``opentopo_pull_wrapper`` in
-``slope.py``. It is intended for side-by-side comparison with the existing
-OpenTopo/NASADEM methodology, so the public entrypoint
-(:func:`copernicus_pull_wrapper`) mirrors that wrapper's signature and returns a
-``feats_df`` merged on ``(project_id, poly_id)``.
-
 NOTE: This pass aligns *schema and I/O only*. The methodological steps (tile
 identification, COP-DEM download, the gradient-based slope operator, and the
 zonal-stats precision modes) are intentionally left unchanged from the original
@@ -119,10 +113,13 @@ def _s3_exists(bucket: str, key: str) -> bool:
         return False
 
 
-def _compute_slope_for_tile(tile: dict, dest: str) -> tuple[int, int, bool]:
+def _compute_slope_for_tile(tile: dict, dest: str, overwrite: bool = False) -> tuple[int, int, bool]:
     """Download COP-DEM for one tile, compute slope, upload as GeoTIFF.
 
     Returns (X_tile, Y_tile, skipped) where skipped=True if output already existed.
+
+    If ``overwrite`` is True, the cached tile is recomputed and re-uploaded even
+    if it already exists.
     """
     X_tile = int(tile["X_tile"])
     Y_tile = int(tile["Y_tile"])
@@ -133,7 +130,7 @@ def _compute_slope_for_tile(tile: dict, dest: str) -> tuple[int, int, bool]:
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     key = f"{prefix.rstrip('/')}/{_tile_key(X_tile, Y_tile)}"
 
-    if _s3_exists(bucket, key):
+    if not overwrite and _s3_exists(bucket, key):
         return X_tile, Y_tile, True
 
     # Bounds of the tile — slight expansion avoids edge effects in slope computation
@@ -187,17 +184,23 @@ def _compute_slope_for_tile(tile: dict, dest: str) -> tuple[int, int, bool]:
     return X_tile, Y_tile, False
 
 
-def download_and_compute_slope(tiles: list[dict], dest: str, max_workers: int = 8) -> None:
-    """Parallel per-tile DEM download + slope computation. Skips cached tiles."""
+def download_and_compute_slope(tiles: list[dict], dest: str, max_workers: int = 8,
+                               overwrite: bool = False) -> None:
+    """Parallel per-tile DEM download + slope computation.
+
+    Skips tiles already cached at ``dest`` unless ``overwrite`` is True, in which
+    case every tile is recomputed and re-uploaded.
+    """
     if not tiles:
         print("No tiles to process.")
         return
 
-    print(f"Starting slope compute for {len(tiles)} tiles (max_workers={max_workers})")
+    print(f"Starting slope compute for {len(tiles)} tiles "
+          f"(max_workers={max_workers}, overwrite={overwrite})")
     done, skipped, failed = 0, 0, 0
     first_error: str | None = None
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futures = {ex.submit(_compute_slope_for_tile, t, dest): t for t in tiles}
+        futures = {ex.submit(_compute_slope_for_tile, t, dest, overwrite): t for t in tiles}
         for fut in as_completed(futures):
             tile = futures[fut]
             try:
@@ -431,10 +434,10 @@ def copernicus_pull_wrapper(
     precision: str = "numpy",
     max_workers: int = 8,
 ):
-    """Copernicus-DEM slope statistics, returned as a feats_df merge.
+    """
+    Copernicus-DEM slope statistics, returned as a feats_df merge.
 
-    Drop-in counterpart to ``slope.opentopo_pull_wrapper``: iterates the
-    projects in ``feats_df``, reads each project's polygons from
+    iterates through the projects in ``feats_df``, reads each project's polygons from
     ``geojson_dir``, computes per-polygon slope statistics from the Copernicus
     DEM, and merges the results back into ``feats_df`` on
     ``(project_id, poly_id)``.
@@ -450,6 +453,10 @@ def copernicus_pull_wrapper(
         precision: ``"numpy"`` (default) or ``"exactextract"``.
         max_workers: Tile-download concurrency.
 
+    Cache behaviour is controlled by the optional ``params['s3']['overwrite_slope_cache']``
+    flag (default False). Set it to True to recompute and re-upload every tile,
+    e.g. after changing the slope methodology so stale cached tiles aren't reused.
+
     Returns:
         ``feats_df`` left-merged with columns: mean_slope, max_slope,
         median_slope, slope_area. Polygons with no slope data are NaN.
@@ -457,6 +464,7 @@ def copernicus_pull_wrapper(
     slope_thresh = params['criteria']['slope_thresh']
     data_version = params['outfile']['data_version']
     dest = params['s3']['slope']
+    overwrite_cache = params['s3'].get('overwrite_slope_cache', False)
 
     out_cols = ['mean_slope', 'max_slope', 'median_slope', 'slope_area']
     project_names = feats_df['project_name'].unique()
@@ -478,7 +486,8 @@ def copernicus_pull_wrapper(
             print(f"No DEM tiles for {name}, skipping.")
             continue
 
-        download_and_compute_slope(tiles, dest, max_workers=max_workers)
+        download_and_compute_slope(tiles, dest, max_workers=max_workers,
+                                   overwrite=overwrite_cache)
         stats = compute_polygon_slope_stats(
             project_polygons, dest, slope_thresh, precision=precision
         )

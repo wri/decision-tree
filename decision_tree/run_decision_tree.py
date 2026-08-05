@@ -14,8 +14,7 @@ import decision_tree.update_asana as update_asana
 from decision_tree.api_utils import download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
-#from decision_tree.slope import  opentopo_pull_wrapper, apply_slope_classification
-from decision_tree.slope_new import copernicus_pull_wrapper, apply_slope_classification
+from decision_tree.slope_copernicus import copernicus_pull_wrapper, apply_slope_classification
 from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml
 from decision_tree.constants import RULES, TestProjectHandling
 
@@ -153,11 +152,6 @@ class VerificationDecisionTree:
                                                 test_project_handling= test_project_handling)
 
             self.checkpoint.save("feats", tm_clean)
-            # slope_statistics = opentopo_pull_wrapper(self.params, 
-            #                                          self.secrets, 
-            #                                          self.geojson_dir, 
-            #                                          tm_clean, 
-            #                                          process_in_utm_coordinates=True)
 
             slope_statistics = copernicus_pull_wrapper(self.params,
                                                        self.geojson_dir,

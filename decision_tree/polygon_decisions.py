@@ -248,7 +248,7 @@ def apply_rules_ev(params, rules_file_path, df):
     ]]
 
     today = datetime.today()
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
     ev_days_start = ev_range[0]
 
     decisions = []
@@ -402,7 +402,7 @@ def apply_scoring(
     base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
 
     baseline_range = resolve_indicator_window_range(params, 'BASELINE')
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
     baseline_ttc = _get_ttc_for_year(df, base_years + baseline_range[1])
     ev_ttc       = _get_ttc_for_year(df, base_years + ev_range[1])
 

@@ -19,7 +19,6 @@ import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import boto3
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -88,37 +87,6 @@ def identify_polygon_tiles(
     )
 
     tiles_gdf = gpd.GeoDataFrame(tiledb, geometry=geoms, crs="EPSG:4326")
-
-    # import numpy as np
-    # import pandas as pd
-    #
-    # # 1) Prefilter tiles to gdf's extent before doing anything expensive
-    # minx, miny, maxx, maxy = gdf.total_bounds
-    # candidate_tiles = tiles_gdf.cx[minx:maxx, miny:maxy]
-    #
-    # # 2) Query the spatial index with gdf's individual geometries (not unioned —
-    # #    we need to know *which* gdf row each tile matched, since lon/lat comes
-    # #    from that site's geometry)
-    # gdf_idx, tile_idx = candidate_tiles.sindex.query(gdf.geometry, predicate="intersects")
-    #
-    # # 3) Keep only the first matching gdf row per tile
-    # pairs = pd.DataFrame({"tile_pos": tile_idx, "gdf_pos": gdf_idx})
-    # first_match = pairs.drop_duplicates(subset="tile_pos", keep="first")
-    #
-    # matched_tiles = candidate_tiles.iloc[first_match["tile_pos"]]
-    # matched_sites = gdf.iloc[first_match["gdf_pos"]]
-    #
-    # # 4) Derive lon/lat from each matched site polygon's representative point —
-    # #    guaranteed to fall inside the polygon, unlike centroid
-    # points = matched_sites.geometry.representative_point()
-    #
-    # unique_tiles = [
-    #     {"X_tile": xt, "Y_tile": yt, "lon": lon, "lat": lat}
-    #     for xt, yt, lon, lat in zip(
-    #         matched_tiles["X_tile"], matched_tiles["Y_tile"],
-    #         points.x, points.y,
-    #     )
-    # ]
 
     # Spatial join: which tiles does each polygon touch
     joined = gpd.sjoin(tiles_gdf, gdf, how="inner", predicate="intersects")

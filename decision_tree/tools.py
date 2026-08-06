@@ -50,10 +50,6 @@ def load_secrets(secrets_path):
         with open(secrets_path, "r") as f:
             secrets_json = yaml.safe_load(f)
     else:
-        # Open Topology
-        opentopo_api_key = os.environ['OPENTOPO_API_KEY'] if 'OPENTOPO_API_KEY' in os.environ else 'not_defined'
-        open_topo = {"opentopo_api_key": opentopo_api_key}
-
         # AWS
         aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID'] if 'AWS_ACCESS_KEY_ID' in os.environ else 'not_defined'
         aws_secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY'] if 'AWS_SECRET_ACCESS_KEY' in os.environ else 'not_defined'
@@ -67,7 +63,6 @@ def load_secrets(secrets_path):
         tm_token = {"tm_access_token": tm_access_token}
 
         secrets_json = {
-            "opentopo" : open_topo,
             "aws" : aws,
             "asana" : asana,
             "tm_api" : tm_token

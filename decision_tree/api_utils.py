@@ -26,7 +26,7 @@ def download_geoparquet(params, secrets, tm_raw):
     else:
         s3_url = params["s3"].get("geoparquet")
 
-    aws_profile = secrets.get("aws", {}).get("aws_profile")
+    land_aws_profile = secrets.get("aws", {}).get("land_aws_profile")
     print(s3_url)
 
     # Parse s3:// url to get bucket/key
@@ -42,7 +42,7 @@ def download_geoparquet(params, secrets, tm_raw):
     create_folder(target_folder)
 
     # Retrieve parquet file from S3
-    aws_session = get_aws_session(profile_name=aws_profile)
+    aws_session = get_aws_session(profile_name=land_aws_profile)
     s3_client = aws_session.client("s3")
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")

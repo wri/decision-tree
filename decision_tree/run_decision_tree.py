@@ -3,7 +3,8 @@ from pathlib import Path
 import datetime
 import pandas as pd
 import yaml
-from gri_shared_library.os_tools import create_folder, get_project_ids_from_geoparquet
+from gri_shared_library.geoparquet_tools import get_project_ids_from_geoparquet
+from gri_shared_library.os_tools import create_folder
 from tm_api_utils.tm_features import get_tm_feats
 
 import decision_tree.cost_calculator as price
@@ -103,7 +104,7 @@ class VerificationDecisionTree:
         self.prj_score = convert_to_os_path(project_data_dir,
                                             outfile["prj_decision"].format(cohort=self.cohort, data_version=data_v, experiment_id=experiment_id))
 
-        # rules template
+        # rules
         self.rules = convert_to_os_path("", RULES)
 
     def _checkpoint_paths(self) -> dict:
@@ -150,6 +151,11 @@ class VerificationDecisionTree:
                                                 self.geojson_dir,
                                                 project_ids,
                                                 test_project_handling= test_project_handling)
+
+            # verify that results contain ttc columns
+            ttc_cols = [c for c in tm_clean.columns if c.startswith('ttc_')]
+            if len(ttc_cols) == 0:
+                raise ValueError(f"The tm_clean does not contain any 'ttc_' column.")
 
             self.checkpoint.save("feats", tm_clean)
 

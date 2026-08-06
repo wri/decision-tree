@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import yaml
 from gri_shared_library.os_tools import create_folder
@@ -8,6 +9,7 @@ from decision_tree.api_utils import download_geoparquet
 from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet, TestProjectHandling
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets, load_yaml
+from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID
 from tools import folder_cleanup
 
 params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
@@ -17,7 +19,7 @@ SECRETS = load_secrets(SECRETS_FILE_PATH)
 
 def test_tm_features():
     project_ids = [TEST_01_GRI_PROJECT_ID]
-    # pre-run cleanup
+    # pre-run setup
     folder_cleanup(params_path)
 
     parquet_outfile, features = _get_project_tm_features(project_ids)
@@ -31,7 +33,7 @@ def test_tm_features():
 
 def test_clean_tm_features():
     project_ids = [TEST_01_GRI_PROJECT_ID]; test_project_handling = TestProjectHandling.ONLY
-    # pre-run cleanup
+    # pre-run setup
     folder_cleanup(params_path)
 
     parquet_outfile, features = _get_project_tm_features(project_ids)
@@ -40,21 +42,23 @@ def test_clean_tm_features():
     project_data_dir = outfile["project_data_folder"]
     geojson_dir = convert_to_os_path(project_data_dir, outfile['geojsons'])
 
-    cleaned_features = process_tm_results(params=PARAMS, tm_df=features, geojson_dir=geojson_dir,
-                                          project_ids=project_ids, test_project_handling=test_project_handling)
+    try:
+        cleaned_features = process_tm_results(params=PARAMS, tm_df=features, geojson_dir=geojson_dir,
+                                              project_ids=project_ids, test_project_handling=test_project_handling)
 
-    assert len(cleaned_features) == 3
+        assert len(cleaned_features) == 3
 
-    actual_attribute_count = cleaned_features.shape[1]
-    expected_column_count = 11
-    assert actual_attribute_count == expected_column_count
+        actual_attribute_count = cleaned_features.shape[1]
+        expected_column_count = 11
+        assert actual_attribute_count == expected_column_count
 
-    expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes']
-    all_exist = all(col in cleaned_features.columns for col in expected_columns)
-    assert all_exist
+        expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes']
+        all_exist = all(col in cleaned_features.columns for col in expected_columns)
+        assert all_exist
 
-    # post-run cleanup
-    folder_cleanup(params_path)
+    finally:
+        # post-run cleanup
+        folder_cleanup(params_path)
 
 
 def _get_project_tm_features(project_ids):

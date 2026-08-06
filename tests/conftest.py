@@ -26,7 +26,3 @@ DT_TEST_DATA_SUB_PATH = os.path.join('tests', 'data', 'decision_tree')
 DT_TEST_DATA_DIR = os.path.join(PROJECT_ROOT, DT_TEST_DATA_SUB_PATH)
 DT_TEST_PROJECTS = os.path.join(DT_TEST_DATA_DIR, "test_projects")
 DT_TEST_PARAMS_DIR = os.path.join(DT_TEST_DATA_DIR, "param_files")
-
-TEST_01_GRI_PROJECT_ID = '1826cc5f-0d4d-4427-b5b3-fe244deba919'
-TEST_REAL_PROJECT_C1_ID = '7414340a-986e-4d5f-a614-249f91c3b9d0' # 'GHA_23_INEC'
-TEST_REAL_PROJECT_C2_ID = 'cd46fa33-a5c1-40b4-a9ca-4793b6248157' # RWA_23_ARDE - 3700+ polygons

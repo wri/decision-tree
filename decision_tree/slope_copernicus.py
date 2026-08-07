@@ -34,8 +34,12 @@ from rasterio.transform import from_bounds
 from shapely.geometry import box
 from decision_tree.constants import NODATA, COP_DEM_RES_M, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
 
-def _load_tiledb(secrets, path: str):
-    """Load tiledb parquet from S3 or local filesystem."""
+def _load_tiledb(secrets: dict, path: str):
+    """Load tiledb parquet from S3 or local filesystem.
+    Args:
+      secrets: Parsed secrets.yaml file for AWS access.
+      path: AWS S3 path to Restoration tiles geoparquet file
+    """
     if path.startswith("s3://"):
         bucket, _, key = path.removeprefix("s3://").partition("/")
 
@@ -53,7 +57,7 @@ def _load_tiledb(secrets, path: str):
 # ---------------------------------------------------------------------------
 
 def identify_polygon_tiles(
-    secrets,
+    secrets: dict,
     gdf: gpd.GeoDataFrame,
     tiledb_path: str = DEFAULT_TILEDB_PATH,
 ) -> list[dict]:
@@ -63,6 +67,7 @@ def identify_polygon_tiles(
     larger than one tile will generate multiple rows.
 
     Args:
+        secrets: Parsed secrets.yaml file for AWS access.
         gdf: Polygon geometries (with a ``geometry`` column) in any CRS;
             reprojected to EPSG:4326 internally for the tile-grid join.
         tiledb_path: Path to tiledb.parquet (S3 or local).
@@ -109,7 +114,7 @@ def _tile_key(X_tile: int, Y_tile: int) -> str:
     return f"tiles/{X_tile}/{Y_tile}/slope_{X_tile}X{Y_tile}Y.tif"
 
 
-def _s3_exists(secrets, bucket: str, key: str) -> bool:
+def _s3_exists(secrets: dict, bucket: str, key: str) -> bool:
     aws_profile = secrets.get("aws", {}).get("land_aws_profile")
     aws_session = get_aws_session(profile_name=aws_profile)
     s3_client = aws_session.client("s3")
@@ -121,8 +126,14 @@ def _s3_exists(secrets, bucket: str, key: str) -> bool:
         return False
 
 
-def _compute_slope_for_tile(secrets, tile: dict, dest: str, overwrite: bool = False) -> tuple[int, int, bool]:
+def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: bool = False) -> tuple[int, int, bool]:
     """Download COP-DEM for one tile, compute slope, upload as GeoTIFF.
+
+    Args:
+        secrets: Parsed secrets.yaml file for AWS access.
+        tile: Restoration tile used for computing slope
+        dest: AWS S3 location of tile file
+        overwrite: force overwrite of existing tiles file in AWS S3
 
     Returns (X_tile, Y_tile, skipped) where skipped=True if output already existed.
 
@@ -196,12 +207,19 @@ def _compute_slope_for_tile(secrets, tile: dict, dest: str, overwrite: bool = Fa
     s3_client = aws_session.client("s3")
     s3_client.upload_file(local, bucket, key)
     os.unlink(local)
+
     return X_tile, Y_tile, False
 
 
-def download_and_compute_slope(secrets, tiles: list[dict], dest: str, max_workers: int = 8,
+def download_and_compute_slope(secrets: dict, tiles: list[dict], dest: str, max_workers: int = 8,
                                overwrite: bool = False) -> None:
     """Parallel per-tile DEM download + slope computation.
+
+    Args:
+        secrets: Parsed secrets.yaml file for AWS access.
+        tiles: list of Restoration tiles for computation of slope
+        dest: AWS S3 location of tile file
+        max_workers: maximum number of workers for thread pool
 
     Skips tiles already cached at ``dest`` unless ``overwrite`` is True, in which
     case every tile is recomputed and re-uploaded.
@@ -257,7 +275,7 @@ def _stats_from_values(vals: np.ndarray, steep_threshold: float) -> dict:
     }
 
 
-def _compute_stats_numpy(gdf, mosaic, transform, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_numpy(gdf: pd.DataFrame, mosaic, transform, steep_threshold: float) -> dict[str, dict]:
     """Binary rasterized polygon mask. Fast; small edge error at polygon boundaries."""
     arr = mosaic[0]
     results: dict[str, dict] = {}
@@ -275,7 +293,7 @@ def _compute_stats_numpy(gdf, mosaic, transform, steep_threshold: float) -> dict
     return results
 
 
-def _compute_stats_exactextract(gdf, mosaic, transform, crs, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_exactextract(gdf: pd.DataFrame, mosaic, transform, crs, steep_threshold: float) -> dict[str, dict]:
     """Fractional-coverage weighting at polygon edges (higher precision).
 
     Writes two in-memory rasters to temp GeoTIFFs:
@@ -356,7 +374,7 @@ def _compute_stats_exactextract(gdf, mosaic, transform, crs, steep_threshold: fl
 
 
 def compute_polygon_slope_stats(
-    secrets: str,
+    secrets: dict,
     gdf: gpd.GeoDataFrame,
     dest: str,
     steep_threshold: float,
@@ -364,7 +382,8 @@ def compute_polygon_slope_stats(
 ) -> dict[str, dict]:
     """Zonal slope statistics per polygon.
 
-    Args:
+   Args:
+        secrets: Parsed secrets.yaml file for AWS access.
         gdf: Polygon geometries with a ``poly_id`` column. Reprojected to
             EPSG:4326 internally to match the cached slope tiles.
         dest: S3 prefix where per-tile slope GeoTIFFs are cached.
@@ -412,8 +431,14 @@ def compute_polygon_slope_stats(
     return results
 
 
-def _download_slope_tiles_for_polygons(secrets, gdf, dest: str) -> list[str]:
-    """Look up which tiles cover the polygons, download each slope GeoTIFF locally."""
+def _download_slope_tiles_for_polygons(secrets: dict, gdf:gpd.GeoDataFrame, dest: str) -> list[str]:
+    """Look up which tiles cover the polygons, download each slope GeoTIFF locally.
+
+       Args:
+        secrets: Parsed secrets.yaml file for AWS access.
+        gdf: gdf of project polygons
+        dest: AWS S3 location of Restoration tiles
+    """
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     prefix = prefix.rstrip("/")
 
@@ -447,25 +472,24 @@ def _download_slope_tiles_for_polygons(secrets, gdf, dest: str) -> list[str]:
 
 
 def copernicus_pull_wrapper(
-    params,
-    secrets,
-    geojson_dir,
-    feats_df,
+    params: dict,
+    secrets: dict,
+    geojson_dir: str,
+    feats_df: pd.DataFrame,
     precision: str = "numpy",
     max_workers: int = 8,
 ):
     """
     Copernicus-DEM slope statistics, returned as a feats_df merge.
 
-    iterates through the projects in ``feats_df``, reads each project's polygons from
+    Iterates through the projects in ``feats_df``, reads each project's polygons from
     ``geojson_dir``, computes per-polygon slope statistics from the Copernicus
-    DEM, and merges the results back into ``feats_df`` on
-    ``(project_id, poly_id)``.
+    DEM, and merges the results back into ``feats_df`` on ``(project_id, poly_id)``.
+
 
     Args:
         params: Parsed params.yaml.
-        secrets: Parsed secrets (currently unused; kept for signature parity
-            with opentopo_pull_wrapper. COP-DEM access does not require credentials).
+        secrets: Parsed secrets.yaml file for AWS access. Note that COP-DEM access does not require credentials.
         geojson_dir: Directory of per-project ``{name}_{data_version}.geojson``.
         feats_df: Feature table with project_name, project_id, poly_id.
         dest: S3 prefix for cached slope GeoTIFF tiles (shared across projects).
@@ -550,7 +574,7 @@ def copernicus_pull_wrapper(
     return comb
 
 
-def apply_slope_classification(params, df, slope_stats):
+def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats):
     '''
     each polygon already has a pre-computed number identifying the percentage of the polygon's
     area that has a steep slope (>threshold). this function converts that number into simple

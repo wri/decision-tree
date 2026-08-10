@@ -127,7 +127,7 @@ def _s3_exists(secrets: dict, bucket: str, key: str) -> bool:
 
 
 def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: bool = False) -> tuple[int, int, bool]:
-    """Download COP-DEM for one tile, compute slope, upload as GeoTIFF.
+    """Download COP-DEM for one tile, compute slope per grid cell, upload as GeoTIFF.
 
     Args:
         secrets: Parsed secrets.yaml file for AWS access.
@@ -149,8 +149,8 @@ def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: boo
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     key = f"{prefix.rstrip('/')}/{_tile_key(X_tile, Y_tile)}"
 
-    if not overwrite and _s3_exists(secrets, bucket, key):
-        return X_tile, Y_tile, True
+    # if not overwrite and _s3_exists(secrets, bucket, key):
+    #     return X_tile, Y_tile, True
 
     # Bounds of the tile — slight expansion avoids edge effects in slope computation
     pad = HALF_TILE_DEG * 0.1

@@ -19,12 +19,13 @@ import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import boto3
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+import shapely
 from exactextract import exact_extract
+from gri_shared_library.s3_tools import get_aws_session
 from odc.stac import configure_rio, stac_load
 from pystac_client import Client
 from rasterio.features import geometry_mask
@@ -33,11 +34,20 @@ from rasterio.transform import from_bounds
 from shapely.geometry import box
 from decision_tree.constants import NODATA, COP_DEM_RES_M, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
 
-def _load_tiledb(path: str):
-    """Load tiledb parquet from S3 or local filesystem."""
+def _load_tiledb(secrets: dict, path: str):
+    """Load tiledb parquet from S3 or local filesystem.
+    Args:
+      secrets: Parsed secrets.yaml file for AWS access.
+      path: AWS S3 path to Restoration tiles geoparquet file
+    """
     if path.startswith("s3://"):
         bucket, _, key = path.removeprefix("s3://").partition("/")
-        body = boto3.client("s3").get_object(Bucket=bucket, Key=key)["Body"].read()
+
+        aws_profile = secrets.get("aws", {}).get("land_aws_profile")
+        aws_session = get_aws_session(profile_name=aws_profile)
+        s3_client = aws_session.client("s3")
+        body = s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
+
         return pd.read_parquet(io.BytesIO(body), columns=["X_tile", "Y_tile", "X", "Y"])
     return pd.read_parquet(path, columns=["X_tile", "Y_tile", "X", "Y"])
 
@@ -47,6 +57,7 @@ def _load_tiledb(path: str):
 # ---------------------------------------------------------------------------
 
 def identify_polygon_tiles(
+    secrets: dict,
     gdf: gpd.GeoDataFrame,
     tiledb_path: str = DEFAULT_TILEDB_PATH,
 ) -> list[dict]:
@@ -56,6 +67,7 @@ def identify_polygon_tiles(
     larger than one tile will generate multiple rows.
 
     Args:
+        secrets: Parsed secrets.yaml file for AWS access.
         gdf: Polygon geometries (with a ``geometry`` column) in any CRS;
             reprojected to EPSG:4326 internally for the tile-grid join.
         tiledb_path: Path to tiledb.parquet (S3 or local).
@@ -69,16 +81,17 @@ def identify_polygon_tiles(
     gdf = gdf.to_crs("EPSG:4326")
 
     # Load tiledb and build bbox geometry per tile
-    tiledb = _load_tiledb(tiledb_path)
-    tiles_gdf = gpd.GeoDataFrame(
-        tiledb,
-        geometry=[
-            box(r.X - HALF_TILE_DEG, r.Y - HALF_TILE_DEG,
-                r.X + HALF_TILE_DEG, r.Y + HALF_TILE_DEG)
-            for r in tiledb.itertuples()
-        ],
-        crs="EPSG:4326",
+    tiledb = _load_tiledb(secrets, tiledb_path)
+
+    x = tiledb["X"].to_numpy()
+    y = tiledb["Y"].to_numpy()
+
+    geoms = shapely.box(
+        x - HALF_TILE_DEG, y - HALF_TILE_DEG,
+        x + HALF_TILE_DEG, y + HALF_TILE_DEG,
     )
+
+    tiles_gdf = gpd.GeoDataFrame(tiledb, geometry=geoms, crs="EPSG:4326")
 
     # Spatial join: which tiles does each polygon touch
     joined = gpd.sjoin(tiles_gdf, gdf, how="inner", predicate="intersects")
@@ -101,17 +114,26 @@ def _tile_key(X_tile: int, Y_tile: int) -> str:
     return f"tiles/{X_tile}/{Y_tile}/slope_{X_tile}X{Y_tile}Y.tif"
 
 
-def _s3_exists(bucket: str, key: str) -> bool:
-    s3 = boto3.client("s3")
+def _s3_exists(secrets: dict, bucket: str, key: str) -> bool:
+    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
+    aws_session = get_aws_session(profile_name=aws_profile)
+    s3_client = aws_session.client("s3")
+
     try:
-        s3.head_object(Bucket=bucket, Key=key)
+        s3_client.head_object(Bucket=bucket, Key=key)
         return True
     except Exception:
         return False
 
 
-def _compute_slope_for_tile(tile: dict, dest: str, overwrite: bool = False) -> tuple[int, int, bool]:
+def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: bool = False) -> tuple[int, int, bool]:
     """Download COP-DEM for one tile, compute slope, upload as GeoTIFF.
+
+    Args:
+        secrets: Parsed secrets.yaml file for AWS access.
+        tile: Restoration tile used for computing slope
+        dest: AWS S3 location of tile file
+        overwrite: force overwrite of existing tiles file in AWS S3
 
     Returns (X_tile, Y_tile, skipped) where skipped=True if output already existed.
 
@@ -127,7 +149,7 @@ def _compute_slope_for_tile(tile: dict, dest: str, overwrite: bool = False) -> t
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     key = f"{prefix.rstrip('/')}/{_tile_key(X_tile, Y_tile)}"
 
-    if not overwrite and _s3_exists(bucket, key):
+    if not overwrite and _s3_exists(secrets, bucket, key):
         return X_tile, Y_tile, True
 
     # Bounds of the tile — slight expansion avoids edge effects in slope computation
@@ -135,10 +157,11 @@ def _compute_slope_for_tile(tile: dict, dest: str, overwrite: bool = False) -> t
     bbox = [lon - HALF_TILE_DEG - pad, lat - HALF_TILE_DEG - pad,
             lon + HALF_TILE_DEG + pad, lat + HALF_TILE_DEG + pad]
 
-    configure_rio(cloud_defaults=True, 
-                  aws={"requester_pays": True, 
-                       "region_name": "eu-central-1"}
-                       )
+    # Copernicus DEM GLO‑30 data is fully public so there is no need to specify an account.
+    configure_rio(cloud_defaults=True,
+                  aws={"aws_unsigned": True,
+                       "region_name": "eu-central-1"})
+
     client = Client.open(EARTH_SEARCH_V1)
     items  = client.search(collections=[DEM_COLLECTION], bbox=bbox).item_collection()
     if not items:
@@ -179,14 +202,24 @@ def _compute_slope_for_tile(tile: dict, dest: str, overwrite: bool = False) -> t
     ) as dst:
         dst.write(slope_pct.astype("float32"), 1)
 
-    boto3.client("s3").upload_file(local, bucket, key)
+    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
+    aws_session = get_aws_session(profile_name=aws_profile)
+    s3_client = aws_session.client("s3")
+    s3_client.upload_file(local, bucket, key)
     os.unlink(local)
+
     return X_tile, Y_tile, False
 
 
-def download_and_compute_slope(tiles: list[dict], dest: str, max_workers: int = 8,
+def download_and_compute_slope(secrets: dict, tiles: list[dict], dest: str, max_workers: int = 8,
                                overwrite: bool = False) -> None:
     """Parallel per-tile DEM download + slope computation.
+
+    Args:
+        secrets: Parsed secrets.yaml file for AWS access.
+        tiles: list of Restoration tiles for computation of slope
+        dest: AWS S3 location of tile file
+        max_workers: maximum number of workers for thread pool
 
     Skips tiles already cached at ``dest`` unless ``overwrite`` is True, in which
     case every tile is recomputed and re-uploaded.
@@ -200,7 +233,7 @@ def download_and_compute_slope(tiles: list[dict], dest: str, max_workers: int = 
     done, skipped, failed = 0, 0, 0
     first_error: str | None = None
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futures = {ex.submit(_compute_slope_for_tile, t, dest, overwrite): t for t in tiles}
+        futures = {ex.submit(_compute_slope_for_tile, secrets, t, dest, overwrite): t for t in tiles}
         for fut in as_completed(futures):
             tile = futures[fut]
             try:
@@ -242,7 +275,7 @@ def _stats_from_values(vals: np.ndarray, steep_threshold: float) -> dict:
     }
 
 
-def _compute_stats_numpy(gdf, mosaic, transform, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_numpy(gdf: pd.DataFrame, mosaic, transform, steep_threshold: float) -> dict[str, dict]:
     """Binary rasterized polygon mask. Fast; small edge error at polygon boundaries."""
     arr = mosaic[0]
     results: dict[str, dict] = {}
@@ -260,7 +293,7 @@ def _compute_stats_numpy(gdf, mosaic, transform, steep_threshold: float) -> dict
     return results
 
 
-def _compute_stats_exactextract(gdf, mosaic, transform, crs, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_exactextract(gdf: pd.DataFrame, mosaic, transform, crs, steep_threshold: float) -> dict[str, dict]:
     """Fractional-coverage weighting at polygon edges (higher precision).
 
     Writes two in-memory rasters to temp GeoTIFFs:
@@ -341,6 +374,7 @@ def _compute_stats_exactextract(gdf, mosaic, transform, crs, steep_threshold: fl
 
 
 def compute_polygon_slope_stats(
+    secrets: dict,
     gdf: gpd.GeoDataFrame,
     dest: str,
     steep_threshold: float,
@@ -348,7 +382,8 @@ def compute_polygon_slope_stats(
 ) -> dict[str, dict]:
     """Zonal slope statistics per polygon.
 
-    Args:
+   Args:
+        secrets: Parsed secrets.yaml file for AWS access.
         gdf: Polygon geometries with a ``poly_id`` column. Reprojected to
             EPSG:4326 internally to match the cached slope tiles.
         dest: S3 prefix where per-tile slope GeoTIFFs are cached.
@@ -367,7 +402,7 @@ def compute_polygon_slope_stats(
 
     gdf = gdf.to_crs("EPSG:4326")
 
-    tile_paths = _download_slope_tiles_for_polygons(gdf, dest)
+    tile_paths = _download_slope_tiles_for_polygons(secrets, gdf, dest)
     if not tile_paths:
         return {}
 
@@ -396,12 +431,18 @@ def compute_polygon_slope_stats(
     return results
 
 
-def _download_slope_tiles_for_polygons(gdf, dest: str) -> list[str]:
-    """Look up which tiles cover the polygons, download each slope GeoTIFF locally."""
+def _download_slope_tiles_for_polygons(secrets: dict, gdf:gpd.GeoDataFrame, dest: str) -> list[str]:
+    """Look up which tiles cover the polygons, download each slope GeoTIFF locally.
+
+       Args:
+        secrets: Parsed secrets.yaml file for AWS access.
+        gdf: gdf of project polygons
+        dest: AWS S3 location of Restoration tiles
+    """
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     prefix = prefix.rstrip("/")
 
-    tiledb = _load_tiledb(DEFAULT_TILEDB_PATH)
+    tiledb = _load_tiledb(secrets, DEFAULT_TILEDB_PATH)
     tiles_gdf = gpd.GeoDataFrame(
         tiledb,
         geometry=[box(r.X - HALF_TILE_DEG, r.Y - HALF_TILE_DEG,
@@ -412,14 +453,17 @@ def _download_slope_tiles_for_polygons(gdf, dest: str) -> list[str]:
     joined = gpd.sjoin(tiles_gdf, gdf, how="inner", predicate="intersects")
     unique = joined[["X_tile", "Y_tile"]].drop_duplicates()
 
-    s3 = boto3.client("s3")
+    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
+    aws_session = get_aws_session(profile_name=aws_profile)
+    s3_client = aws_session.client("s3")
+
     local_paths: list[str] = []
     tmp_dir = tempfile.mkdtemp(prefix="slope_tiles_")
     for row in unique.itertuples():
         key = f"{prefix}/{_tile_key(int(row.X_tile), int(row.Y_tile))}"
         local = os.path.join(tmp_dir, f"slope_{row.X_tile}X{row.Y_tile}Y.tif")
         try:
-            s3.download_file(bucket, key, local)
+            s3_client.download_file(bucket, key, local)
             local_paths.append(local)
         except Exception as exc:
             print(f"WARNING: Could not download {key}: {exc}")
@@ -428,25 +472,24 @@ def _download_slope_tiles_for_polygons(gdf, dest: str) -> list[str]:
 
 
 def copernicus_pull_wrapper(
-    params,
-    geojson_dir,
-    feats_df,
+    params: dict,
+    secrets: dict,
+    geojson_dir: str,
+    feats_df: pd.DataFrame,
     precision: str = "numpy",
     max_workers: int = 8,
 ):
     """
     Copernicus-DEM slope statistics, returned as a feats_df merge.
 
-    iterates through the projects in ``feats_df``, reads each project's polygons from
+    Iterates through the projects in ``feats_df``, reads each project's polygons from
     ``geojson_dir``, computes per-polygon slope statistics from the Copernicus
-    DEM, and merges the results back into ``feats_df`` on
-    ``(project_id, poly_id)``.
+    DEM, and merges the results back into ``feats_df`` on ``(project_id, poly_id)``.
+
 
     Args:
         params: Parsed params.yaml.
-        secrets: Parsed secrets (currently unused; kept for signature parity
-            with opentopo_pull_wrapper. COP-DEM access uses default boto3
-            credentials / requester-pays).
+        secrets: Parsed secrets.yaml file for AWS access. Note that COP-DEM access does not require credentials.
         geojson_dir: Directory of per-project ``{name}_{data_version}.geojson``.
         feats_df: Feature table with project_name, project_id, poly_id.
         dest: S3 prefix for cached slope GeoTIFF tiles (shared across projects).
@@ -481,14 +524,14 @@ def copernicus_pull_wrapper(
         project_polygons = gpd.read_file(geojson_path)
         print(f"Processing {name} ({len(project_polygons)} polygons)")
 
-        tiles = identify_polygon_tiles(project_polygons)
+        tiles = identify_polygon_tiles(secrets, project_polygons)
         if not tiles:
             print(f"No DEM tiles for {name}, skipping.")
             continue
 
-        download_and_compute_slope(tiles, dest, max_workers=max_workers,
+        download_and_compute_slope(secrets, tiles, dest, max_workers=max_workers,
                                    overwrite=overwrite_cache)
-        stats = compute_polygon_slope_stats(
+        stats = compute_polygon_slope_stats(secrets,
             project_polygons, dest, slope_thresh, precision=precision
         )
         if not stats:
@@ -531,7 +574,7 @@ def copernicus_pull_wrapper(
     return comb
 
 
-def apply_slope_classification(params, df, slope_stats):
+def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats):
     '''
     each polygon already has a pre-computed number identifying the percentage of the polygon's
     area that has a steep slope (>threshold). this function converts that number into simple

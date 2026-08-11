@@ -24,7 +24,6 @@ DESIRED_COLS = fixed_cols + ttc_years
 
 TM_PROD_URI         = 'https://api.terramatch.org/research/v3/sitePolygons?'
 PROJECT_ROOT        = get_project_root_dir()
-OPENTOPO_URI        = 'https://portal.opentopography.org/API/globaldem'
 DEM_COLLECTION      = "cop-dem-glo-30"
 EARTH_SEARCH_V1     = "https://earth-search.aws.element84.com/v1"
 DEFAULT_TILEDB_PATH = os.environ.get(

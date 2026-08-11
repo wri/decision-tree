@@ -160,6 +160,7 @@ class VerificationDecisionTree:
             self.checkpoint.save("feats", tm_clean)
 
             slope_statistics = copernicus_pull_wrapper(self.params,
+                                                       self.secrets,
                                                        self.geojson_dir,
                                                        tm_clean,
                                                        )

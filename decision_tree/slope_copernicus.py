@@ -149,8 +149,8 @@ def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: boo
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     key = f"{prefix.rstrip('/')}/{_tile_key(X_tile, Y_tile)}"
 
-    # if not overwrite and _s3_exists(secrets, bucket, key):
-    #     return X_tile, Y_tile, True
+    if not overwrite and _s3_exists(secrets, bucket, key):
+        return X_tile, Y_tile, True
 
     # Bounds of the tile — slight expansion avoids edge effects in slope computation
     pad = HALF_TILE_DEG * 0.1
@@ -174,9 +174,17 @@ def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: boo
 
     # Gradient operator — slope in percent
     dz_dy, dz_dx = np.gradient(elev)
-    # Approximate pixel size in metres (COP-DEM 30m at tile latitude)
-    dx_m = COP_DEM_RES_M * np.cos(np.deg2rad(lat))
-    dy_m = COP_DEM_RES_M
+    # Pixel size in metres, derived from the DEM's *actual* lon/lat spacing
+    # (not a fixed nominal resolution). COP-DEM widens its longitude spacing
+    # above 50 deg latitude to keep ~30m ground resolution, so assuming a
+    # fixed COP_DEM_RES_M and multiplying by cos(lat) double-counts that
+    # correction and gets increasingly wrong at higher latitudes. Measuring
+    # the real spacing here avoids that regardless of latitude band.
+    M_PER_DEG = 111_320.0
+    dlat_deg = abs(float(ds.latitude[1] - ds.latitude[0]))
+    dlon_deg = abs(float(ds.longitude[1] - ds.longitude[0]))
+    dy_m = dlat_deg * M_PER_DEG
+    dx_m = dlon_deg * M_PER_DEG * np.cos(np.deg2rad(lat))
     slope_pct = np.sqrt((dz_dx / dx_m) ** 2 + (dz_dy / dy_m) ** 2) * 100.0
 
     # Crop back to original tile (unpad)

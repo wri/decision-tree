@@ -54,7 +54,7 @@ def test_run_decision_tree_projectids():
             expected_pct_area_scored = 1.0
         else:
             sample_poly_id = 'b25a7139-6597-44ab-9765-b626745c97bc'
-            expected_poly_baseline_suitability = 21.1
+            expected_poly_baseline_suitability = 14.4
             expected_poly_baseline_total = 3033.6
             expected_poly_ev_total = 964.4
             expected_project_count = 1

@@ -32,7 +32,7 @@ from rasterio.features import geometry_mask
 from rasterio.merge import merge
 from rasterio.transform import from_bounds
 from shapely.geometry import box
-from decision_tree.constants import NODATA, COP_DEM_RES_M, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
+from decision_tree.constants import NODATA, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
 
 def _load_tiledb(secrets: dict, path: str):
     """Load tiledb parquet from S3 or local filesystem.
@@ -177,7 +177,7 @@ def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: boo
     # Pixel size in metres, derived from the DEM's *actual* lon/lat spacing
     # (not a fixed nominal resolution). COP-DEM widens its longitude spacing
     # above 50 deg latitude to keep ~30m ground resolution, so assuming a
-    # fixed COP_DEM_RES_M and multiplying by cos(lat) double-counts that
+    # fixed DEM resolution and multiplying by cos(lat) double-counts that
     # correction and gets increasingly wrong at higher latitudes. Measuring
     # the real spacing here avoids that regardless of latitude band.
     M_PER_DEG = 111_320.0

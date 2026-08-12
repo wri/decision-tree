@@ -135,81 +135,138 @@ def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: boo
         dest: AWS S3 location of tile file
         overwrite: force overwrite of existing tiles file in AWS S3
 
-    Returns (X_tile, Y_tile, skipped) where skipped=True if output already existed.
+    Returns:
+        (X_tile, Y_tile, skipped) where skipped=True if output already existed.
 
     If ``overwrite`` is True, the cached tile is recomputed and re-uploaded even
     if it already exists.
     """
     X_tile = int(tile["X_tile"])
     Y_tile = int(tile["Y_tile"])
-    lon    = float(tile["lon"])
-    lat    = float(tile["lat"])
+    lon = float(tile["lon"])
+    lat = float(tile["lat"])
 
-    # Parse dest into bucket/prefix
+    # Parse destination into bucket/prefix
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     key = f"{prefix.rstrip('/')}/{_tile_key(X_tile, Y_tile)}"
 
     if not overwrite and _s3_exists(secrets, bucket, key):
         return X_tile, Y_tile, True
 
-    # Bounds of the tile — slight expansion avoids edge effects in slope computation
+    # Slight expansion avoids edge effects during gradient calculation
     pad = HALF_TILE_DEG * 0.1
-    bbox = [lon - HALF_TILE_DEG - pad, lat - HALF_TILE_DEG - pad,
-            lon + HALF_TILE_DEG + pad, lat + HALF_TILE_DEG + pad]
+    bbox = [
+        lon - HALF_TILE_DEG - pad,
+        lat - HALF_TILE_DEG - pad,
+        lon + HALF_TILE_DEG + pad,
+        lat + HALF_TILE_DEG + pad,
+    ]
 
-    # Copernicus DEM GLO‑30 data is fully public so there is no need to specify an account.
-    configure_rio(cloud_defaults=True,
-                  aws={"aws_unsigned": True,
-                       "region_name": "eu-central-1"})
+    # Copernicus DEM GLO-30 is public so there is no need to specify an account.
+    configure_rio(
+        cloud_defaults=True,
+        aws={
+            "aws_unsigned": True,
+            "region_name": "eu-central-1",
+        },
+    )
 
     client = Client.open(EARTH_SEARCH_V1)
-    items  = client.search(collections=[DEM_COLLECTION], bbox=bbox).item_collection()
+    items = client.search(
+        collections=[DEM_COLLECTION],
+        bbox=bbox,
+    ).item_collection()
+
     if not items:
-        raise RuntimeError(f"No COP-DEM items for tile {X_tile}X{Y_tile}Y bbox={bbox}")
+        raise RuntimeError(
+            f"No COP-DEM items for tile {X_tile}X{Y_tile}Y bbox={bbox}"
+        )
 
-    ds = stac_load(items, bands=["data"], bbox=bbox, resampling="bilinear", chunks={})
-    elev = ds["data"].isel(time=0).transpose("latitude", "longitude").values.astype("float32")
+    ds = stac_load(
+        items,
+        bands=["data"],
+        bbox=bbox,
+        resampling="bilinear",
+        chunks={},
+    )
+
+    elev = (
+        ds["data"]
+        .isel(time=0)
+        .transpose("latitude", "longitude")
+        .values
+        .astype("float32")
+    )
+
     if not np.isfinite(elev).all():
-        raise ValueError(f"Non-finite values in DEM for tile {X_tile}X{Y_tile}Y")
+        raise ValueError(
+            f"Non-finite values in DEM for tile {X_tile}X{Y_tile}Y"
+        )
 
-    # Gradient operator — slope in percent
-    dz_dy, dz_dx = np.gradient(elev)
-    # Pixel size in metres, derived from the DEM's *actual* lon/lat spacing
-    # (not a fixed nominal resolution). COP-DEM widens its longitude spacing
-    # above 50 deg latitude to keep ~30m ground resolution, so assuming a
-    # fixed DEM resolution and multiplying by cos(lat) double-counts that
-    # correction and gets increasingly wrong at higher latitudes. Measuring
-    # the real spacing here avoids that regardless of latitude band.
+    # Pixel spacing derived from actual DEM coordinates
     M_PER_DEG = 111_320.0
+
     dlat_deg = abs(float(ds.latitude[1] - ds.latitude[0]))
     dlon_deg = abs(float(ds.longitude[1] - ds.longitude[0]))
-    dy_m = dlat_deg * M_PER_DEG
-    dx_m = dlon_deg * M_PER_DEG * np.cos(np.deg2rad(lat))
-    slope_pct = np.sqrt((dz_dx / dx_m) ** 2 + (dz_dy / dy_m) ** 2) * 100.0
 
-    # Crop back to original tile (unpad)
-    h, w = slope_pct.shape
-    pad_h = int(h * (pad / (HALF_TILE_DEG * 2 + 2 * pad)))
-    pad_w = int(w * (pad / (HALF_TILE_DEG * 2 + 2 * pad)))
+    mean_lat = float(np.mean(ds.latitude.values))
+
+    dy_m = dlat_deg * M_PER_DEG
+    dx_m = dlon_deg * M_PER_DEG * np.cos(np.deg2rad(mean_lat))
+
+    # Gradient directly in metres
+    dz_dy, dz_dx = np.gradient(elev, dy_m, dx_m)
+
+    # Percent slope
+    slope_pct = np.hypot(dz_dx, dz_dy) * 100.0
+
+    # Crop padding using actual DEM resolution
+    pad_h = int(round(pad / dlat_deg))
+    pad_w = int(round(pad / dlon_deg))
+
     if pad_h > 0 and pad_w > 0:
-        slope_pct = slope_pct[pad_h:h - pad_h, pad_w:w - pad_w]
+        slope_pct = slope_pct[
+            pad_h:-pad_h,
+            pad_w:-pad_w,
+        ]
 
     h2, w2 = slope_pct.shape
-    tile_bounds = (
-        lon - HALF_TILE_DEG, lat - HALF_TILE_DEG,
-        lon + HALF_TILE_DEG, lat + HALF_TILE_DEG,
-    )
-    transform = from_bounds(*tile_bounds, width=w2, height=h2)
 
-    with tempfile.NamedTemporaryFile(suffix=".tif", delete=False) as tmp:
+    tile_bounds = (
+        lon - HALF_TILE_DEG,
+        lat - HALF_TILE_DEG,
+        lon + HALF_TILE_DEG,
+        lat + HALF_TILE_DEG,
+    )
+
+    transform = from_bounds(
+        *tile_bounds,
+        width=w2,
+        height=h2,
+    )
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".tif",
+        delete=False,
+    ) as tmp:
         local = tmp.name
+
     with rasterio.open(
-        local, "w", driver="GTiff",
-        width=w2, height=h2, count=1, dtype="float32",
-        crs="EPSG:4326", transform=transform, compress="lzw", nodata=NODATA,
+        local,
+        "w",
+        driver="GTiff",
+        width=w2,
+        height=h2,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        compress="lzw",
+        nodata=NODATA,
     ) as dst:
         dst.write(slope_pct.astype("float32"), 1)
 
+    # Write slope TIFF to aws
     aws_profile = secrets.get("aws", {}).get("land_aws_profile")
     aws_session = get_aws_session(profile_name=aws_profile)
     s3_client = aws_session.client("s3")

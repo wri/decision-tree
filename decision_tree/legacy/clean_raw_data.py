@@ -46,13 +46,12 @@ def classify_canopy(project: pd.DataFrame, thresh: int):
         return 'unknown'
 
 def clean_ttc_csv(csv: str, canopy_thresh: int):
-    
-    '''
+    """
     Performs cleaning steps on tree cover stats.
-    "Open" or "closed" canopy is defined at the project scale. Some polygons may meet 
+    "Open" or "closed" canopy is defined at the project scale. Some polygons may meet
     the closed definition, but if the majority of polygons in a project are open canopy,
     it will be classified as open. Each project will have a single designation.
-    '''
+    """
 
     ttc_raw = pd.read_csv(csv)
     ttc = ttc_raw[['tree_cover', 'project_name', 'site_name', 'poly_name']]
@@ -80,11 +79,11 @@ def clean_ttc_csv(csv: str, canopy_thresh: int):
 ### Cleans the polygon features csv ###
 
 def clean_polygon_csv(original_csv, new_csv):
-    '''
+    """
     Merges shp and ft_poly to use the updated target sys and practice values
     to create a single csv file with polyon features
     Performs cleaning steps and returns comb df
-    '''
+    """
     shp = gpd.read_file(new_csv)
     ft_poly = pd.read_csv(original_csv)
 
@@ -133,9 +132,9 @@ def clean_combine_inputs(ttc_csv,
                          new_feats_csv,
                          canopy_thresh,
                          outpath='../data/decision_tree_data_clean.csv'):
-    '''
+    """
     cleans ttc and polygon csvs
-    '''
+    """
 
     ttc = clean_ttc_csv(ttc_csv, canopy_thresh)
     feats = clean_polygon_csv(original_feats_csv, new_feats_csv)

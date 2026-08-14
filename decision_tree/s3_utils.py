@@ -6,9 +6,9 @@ from botocore.exceptions import ClientError
 
 
 def upload_to_s3(params, config_path, project_name, today):
-    '''
+    """
     s3://restoration-monitoring/tree_verification/output/project_data/project_shortname/geojson
-    '''
+    """
     with open(config_path) as conf_file:
         config = yaml.safe_load(conf_file)
 

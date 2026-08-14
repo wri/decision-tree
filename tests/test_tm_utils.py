@@ -1,7 +1,4 @@
 import os
-import shutil
-
-import yaml
 from gri_shared_library.os_tools import create_folder
 
 from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH

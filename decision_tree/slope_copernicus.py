@@ -285,6 +285,7 @@ def download_and_compute_slope(secrets: dict, tiles: list[dict], dest: str, max_
         tiles: list of Restoration tiles for computation of slope
         dest: AWS S3 location of tile file
         max_workers: maximum number of workers for thread pool
+        overwrite: force overwrite of existing file in AWS S3
 
     Skips tiles already cached at ``dest`` unless ``overwrite`` is True, in which
     case every tile is recomputed and re-uploaded.
@@ -557,7 +558,6 @@ def copernicus_pull_wrapper(
         secrets: Parsed secrets.yaml file for AWS access. Note that COP-DEM access does not require credentials.
         geojson_dir: Directory of per-project ``{name}_{data_version}.geojson``.
         feats_df: Feature table with project_name, project_id, poly_id.
-        dest: S3 prefix for cached slope GeoTIFF tiles (shared across projects).
         precision: ``"numpy"`` (default) or ``"exactextract"``.
         max_workers: Tile-download concurrency.
 
@@ -640,7 +640,7 @@ def copernicus_pull_wrapper(
 
 
 def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats):
-    '''
+    """
     each polygon already has a pre-computed number identifying the percentage of the polygon's
     area that has a steep slope (>threshold). this function converts that number into simple
     flat/steep label using the threshold
@@ -650,7 +650,7 @@ def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats):
     - NaN if slope_area is NaN (no data).
 
     Applies to all polygons, but downstream decision tree will filter for "remote" rows.
-    '''
+    """
     n_projects = slope_stats['project_id'].nunique()
     n_polys = slope_stats['poly_id'].nunique()
     print(f"Analyzing slope for {n_projects} projects and {n_polys} polygons...")

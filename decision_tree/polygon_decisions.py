@@ -73,7 +73,7 @@ def _image_timing_tier(row):
         return 'none'
 
 
-def apply_rules_baseline(rules_file_path, df):
+def apply_rules_baseline(rules_file_path: str, df: pd.DataFrame):
     """
     Decision tree for baseline classification.
 

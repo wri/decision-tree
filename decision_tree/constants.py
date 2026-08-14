@@ -46,4 +46,3 @@ class TestProjectHandling(Enum):
 # slope
 NODATA = -9999.0
 HALF_TILE_DEG = 1 / 36          # 0.0278° — half of 1/18° tile width
-COP_DEM_RES_M = 30.0

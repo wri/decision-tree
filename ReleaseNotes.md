@@ -1,5 +1,10 @@
 # Release notes for decision-tree
 
+## 2026/08/06
+1. Removed OpenTopo references
+2. Improved performance of slope computation
+3. Updated S3 credential handling to use AWS-profile specified in secrets.yaml
+
 ## 2026/06/25
 1. Converted indicator-windows to use enum definitions in gri-shared-library
 

@@ -9,7 +9,7 @@ This repository contains the code for running a rule-based decision process to i
 The primary functions of this code are located within `run_decision_tree.py`.
 
 **Data Gathering & Cleaning**
-- Query the TerraMatch API, Maxar API, and OpenTopo API to gather input data for the decision tree  
+- Query the TerraMatch API, Maxar API, and AWS Marketplace API to gather input data for the decision tree  
 - Process, validate, and clean the API response into the various "branches" of the tree  
 
 **Apply Logic**
@@ -45,9 +45,9 @@ The primary functions of this code are located within `run_decision_tree.py`.
 
 ### External Data Sources
 
-| Source | Type (API/S3/etc.) | Endpoint/Path | Auth | Data Format | Schema Link |
-|--------|-------------------|-----------------|-----|-------| ----|
-| OpenTopography | API | ------------- | API key | geotiff | ----------- |
+| Source                         | Type (API/S3/etc.) | Endpoint/Path | Auth | Data Format | Schema Link |
+|--------------------------------|-------------------|-----------------|------|-------| ----|
+| AWS Merketplace Copernicus DEM | API | ------------- | None | geotiff | ----------- |
 
 ### Expected Input Formats
 

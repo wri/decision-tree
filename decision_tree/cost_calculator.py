@@ -5,7 +5,7 @@ from decision_tree.constants import COST_FIELD, COST_REMOTE
 
 
 def calc_cost_to_verify(df, decimals=1):
-    '''
+    """
     Using the remote vs field verification assignment and the polygon area,
     calculate the baseline and EV verification costs for the project.
 
@@ -14,7 +14,7 @@ def calc_cost_to_verify(df, decimals=1):
       - If the decision is "mangrove", "not available" or "review required" cost is $0.
       - Costs are rounded to `decimals` (default 1 = nearest tenth).
       - If `save_path` is provided, the updated df is saved to CSV.
-    '''
+    """
     # normalize decisions and area
     base_dec = df["baseline_decision"].astype(str).str.strip().str.lower()
     ev_dec   = df["ev_decision"].astype(str).str.strip().str.lower()

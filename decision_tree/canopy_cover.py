@@ -50,7 +50,7 @@ def apply_canopy_classification(params, df):
     df.loc[null_mask, ['baseline_canopy', 'ev_canopy']] = np.nan
 
     # Eligible rows to process further
-    eligible = ~(null_mask)
+    eligible = ~null_mask
 
     for idx, row in df[eligible].iterrows():
         plant_date = row['plantstart_dt']

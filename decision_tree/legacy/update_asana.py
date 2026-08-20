@@ -73,7 +73,7 @@ def update_asana_status_by_gid(params: dict,
                 return scored[0][0]
         return None
 
-    def _enum_or_value(field_gid: str, desired: str):
+    def _enum_or_value(field_gid: str, desired: str) -> str:
         meta = custom_api.get_custom_field(
             field_gid, {"opt_fields": "resource_subtype,enum_options.name,enum_options.gid"}
         )
@@ -89,7 +89,7 @@ def update_asana_status_by_gid(params: dict,
             return name2gid[desired]
         return desired  # text/number
 
-    def _update_two_fields(task: dict, baseline_val: str, ev_val: str):
+    def _update_two_fields(task: dict, baseline_val: str, ev_val: str) -> tuple[bool, dict]:
         name2cf = {cf["name"]: cf for cf in (task.get("custom_fields") or []) if "name" in cf}
         missing = [n for n in ("Dtree Baseline", "Dtree EV") if n not in name2cf]
         if missing:

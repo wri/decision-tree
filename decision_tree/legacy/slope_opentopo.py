@@ -1,5 +1,6 @@
 import pandas as pd
 import geopandas as gpd
+import shapely.geometry
 import numpy as np
 import rasterio as rs
 import rasterio.mask
@@ -22,7 +23,7 @@ from typing import Union
 from decision_tree.tools import convert_to_os_path
 from decision_tree.constants import OPENTOPO_URI, TM_PROD_URI
 
-def calculate_high_slope_area(slope_raster, polygon, threshold=20):
+def calculate_high_slope_area(slope_raster: rs.io.DatasetReader, polygon: shapely.geometry.Polygon, threshold: float = 20) -> float | None:
     '''
     Masks the slope raster with the polygon to determine the
     percentage of polygon area with steep slope.
@@ -51,7 +52,7 @@ def calculate_high_slope_area(slope_raster, polygon, threshold=20):
     return round(percentage, 1)
 
 
-def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm_coordinates: bool = True):
+def opentopo_pull_wrapper(params: dict, secrets: dict, geojson_dir: str, feats_df: pd.DataFrame, process_in_utm_coordinates: bool = True) -> pd.DataFrame:
     '''
     Checks for existing outputs to reduce API requests.
     Downloads DEM data using the project bounding box + buffer, then calculates
@@ -187,7 +188,7 @@ def opentopo_pull_wrapper(params, secrets, geojson_dir, feats_df, process_in_utm
     return comb
 
 
-def _prepare_latlon_features(total_bounds, dem_path):
+def _prepare_latlon_features(total_bounds: list[float], dem_path: str) -> rs.io.DatasetReader:
     # convert degrees to meters
     latitude = (total_bounds[1] + total_bounds[3]) / 2
     meters_per_degree = 111320 * math.cos(math.radians(latitude))
@@ -208,7 +209,7 @@ def _prepare_latlon_features(total_bounds, dem_path):
     return slope_raster
 
 
-def _prepare_utm_features(project_polygons, dem_path):
+def _prepare_utm_features(project_polygons: gpd.GeoDataFrame, dem_path: str) -> tuple[gpd.GeoDataFrame, rs.io.DatasetReader]:
     z_factor = 1
 
     # determine best utm projection
@@ -236,7 +237,7 @@ def _prepare_utm_features(project_polygons, dem_path):
     return projected_project_polygons, slope_raster
 
 
-def _load_dem_to_memoryfile(dem_path: str):
+def _load_dem_to_memoryfile(dem_path: str) -> MemoryFile:
     """
     Reads a DEM file from disk into a rasterio MemoryFile and returns the MemoryFile.
     The caller is responsible for closing the returned MemoryFile.
@@ -283,7 +284,7 @@ def _compute_slope_percent_from_memory(
     """
 
     @contextmanager
-    def _ensure_reader(src_obj):
+    def _ensure_reader(src_obj: Union[MemoryFile, rasterio.io.DatasetReader]) -> rasterio.io.DatasetReader:
         """
         Context manager that yields a DatasetReader from either a MemoryFile or
         an existing DatasetReader. If src_obj is a MemoryFile, opens it here.
@@ -369,7 +370,7 @@ def _compute_slope_percent_from_memory(
     return memfile.open()
 
 
-def _get_utm_zone_epsg(bbox):
+def _get_utm_zone_epsg(bbox: tuple[float, float, float, float]) -> CRS:
     """
     Get the UTM zone projection for given a bounding box.
 
@@ -389,13 +390,13 @@ def _get_utm_zone_epsg(bbox):
     return CRS.from_string(f"EPSG:{epsg}")
 
 
-def _reproject_raster_in_memory(input_memfile, dst_crs):
+def _reproject_raster_in_memory(input_memfile: MemoryFile, dst_crs: CRS) -> MemoryFile:
     """
     Reproject a raster stored in a rasterio MemoryFile into another projection.
 
     Parameters:
         input_memfile (MemoryFile): MemoryFile containing the source raster.
-        dst_crs (str or dict): Target CRS (e.g., 'EPSG:3857').
+        dst_crs (CRS): Target CRS (e.g., 'EPSG:3857').
 
     Returns:
         MemoryFile: A new MemoryFile containing the reprojected raster.
@@ -453,7 +454,7 @@ def apply_slope_classification(params, df, slope_stats):
     slope_thresh = params['criteria']['slope_thresh']
     slope_stats = slope_stats[['project_id', 'poly_id', 'slope_area']].copy()
 
-    def classify_slope(val):
+    def classify_slope(val: float) -> str:
         if pd.isna(val):
             return 'missing'
         elif val > slope_thresh:

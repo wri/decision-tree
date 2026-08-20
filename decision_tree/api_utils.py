@@ -5,7 +5,7 @@ from gri_shared_library.os_tools import create_folder
 from gri_shared_library.s3_tools import get_aws_session
 
 
-def download_geoparquet(params, secrets, tm_raw):
+def download_geoparquet(params: dict, secrets: dict, tm_raw: str) -> None:
     """
     Download a geoparquet file from S3 with boto3, load it with GeoPandas,
     and save it as a CSV.

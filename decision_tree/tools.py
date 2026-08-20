@@ -6,7 +6,7 @@ from gri_shared_library.constants import TreeCountProjectPhaseDayRange
 from gri_shared_library.os_tools import get_project_root_dir
 
 
-def get_tm_auth_headers_from_secrets():
+def get_tm_auth_headers_from_secrets() -> dict:
     # Set up token access
     auth_path = os.path.join(get_project_root_dir(), 'secrets.yaml')
     with open(auth_path) as auth_file:
@@ -17,7 +17,7 @@ def get_tm_auth_headers_from_secrets():
     return headers
 
 
-def get_tm_auth():
+def get_tm_auth() -> dict:
     if 'TM_ACCESS_TOKEN' in os.environ:
         tm_access_token = os.environ['TM_ACCESS_TOKEN']
         auth_headers = {
@@ -29,7 +29,7 @@ def get_tm_auth():
     return auth_headers
 
 
-def convert_to_os_path(target_dir, path_str):
+def convert_to_os_path(target_dir: str, path_str: str) -> str:
     """
     Convert a given directory path string to a valid path format
     for the current operating system.
@@ -45,8 +45,8 @@ def convert_to_os_path(target_dir, path_str):
     return normalized_path
 
 
-def load_secrets(secrets_path):
-    if os.path.isfile(secrets_path):
+def load_secrets(secrets_path: str = None) -> dict:
+    if secrets_path and os.path.isfile(secrets_path):
         with open(secrets_path, "r") as f:
             secrets_json = yaml.safe_load(f)
     else:
@@ -71,12 +71,12 @@ def load_secrets(secrets_path):
     return secrets_json
 
 
-def load_yaml(path):
+def load_yaml(path: str) -> dict:
     with open(path, "r") as f:
         return yaml.safe_load(f)
 
 
-def resolve_indicator_window_range(params, window_name):
+def resolve_indicator_window_range(params: dict, window_name: str) -> tuple[int, int] | None:
     criteria = params.get('criteria', {})
     if window_name.lower() == 'baseline':
         baseline_range = criteria.get('baseline_range')

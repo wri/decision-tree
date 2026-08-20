@@ -4,9 +4,9 @@ import pandas as pd
 from decision_tree.tools import resolve_indicator_window_range
 
 
-def analyze_image_availability(params,
-                               proj_df, 
-                               maxar_fp: str):
+def analyze_image_availability(params: str,
+                               proj_df: pd.DataFrame, 
+                               maxar_fp: str) -> pd.DataFrame:
     """
     Assesses image availability for baseline & early verification per 
     project/polygon based on user defined windows.

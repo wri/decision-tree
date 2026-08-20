@@ -4,7 +4,7 @@ import geopandas as gpd
 import pandas as pd
 
 
-def summarize_results(df):
+def summarize_results(df: pd.DataFrame) -> pd.DataFrame:
     total_projects = df['project_id'].nunique()
     print(f"{total_projects} total projects")
     
@@ -23,7 +23,7 @@ def summarize_results(df):
 
 ### Cleans the tropical tree cover statistics for polygons ###
 
-def classify_canopy(project: pd.DataFrame, thresh: int):
+def classify_canopy(project: pd.DataFrame, thresh: int) -> str:
     """
     Determines the canopy classification ('open', 'closed', or 'unknown') 
     for a project.
@@ -45,7 +45,7 @@ def classify_canopy(project: pd.DataFrame, thresh: int):
     else:
         return 'unknown'
 
-def clean_ttc_csv(csv: str, canopy_thresh: int):
+def clean_ttc_csv(csv: str, canopy_thresh: int) -> pd.DataFrame:
     """
     Performs cleaning steps on tree cover stats.
     "Open" or "closed" canopy is defined at the project scale. Some polygons may meet
@@ -78,7 +78,7 @@ def clean_ttc_csv(csv: str, canopy_thresh: int):
 
 ### Cleans the polygon features csv ###
 
-def clean_polygon_csv(original_csv, new_csv):
+def clean_polygon_csv(original_csv: str, new_csv: str) -> pd.DataFrame:
     """
     Merges shp and ft_poly to use the updated target sys and practice values
     to create a single csv file with polyon features
@@ -127,11 +127,11 @@ def clean_polygon_csv(original_csv, new_csv):
     print(f"{len(lcs)} target systems: {lcs}\n")
     return feats
 
-def clean_combine_inputs(ttc_csv, 
-                         original_feats_csv, 
-                         new_feats_csv,
-                         canopy_thresh,
-                         outpath='../data/decision_tree_data_clean.csv'):
+def clean_combine_inputs(ttc_csv: str, 
+                         original_feats_csv: str, 
+                         new_feats_csv: str,
+                         canopy_thresh: int,
+                         outpath: str='../data/decision_tree_data_clean.csv') -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     cleans ttc and polygon csvs
     """

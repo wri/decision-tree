@@ -5,9 +5,11 @@ import os
 from botocore.exceptions import ClientError
 
 
-def upload_to_s3(params, config_path, project_name, today):
+def upload_to_s3(params: dict, config_path: str, project_name: str, today: str) -> None:
     """
     s3://restoration-monitoring/tree_verification/output/project_data/project_shortname/geojson
+    Uploads a GeoJSON file to S3 using boto3.
+    Assumes AWS credentials are set in the environment or through the AWS CLI.
     """
     with open(config_path) as conf_file:
         config = yaml.safe_load(conf_file)

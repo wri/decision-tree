@@ -30,13 +30,15 @@ import rasterio
 from exactextract import exact_extract
 from odc.stac import configure_rio, stac_load
 from pystac_client import Client
+from affine import Affine
+from pyproj import CRS
 from rasterio.features import geometry_mask
 from rasterio.merge import merge
 from rasterio.transform import from_bounds
 from shapely.geometry import box
 from decision_tree.constants import NODATA, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
 
-def _load_tiledb(path: str):
+def _load_tiledb(path: str) -> pd.DataFrame:
     """Load tiledb parquet from S3 or local filesystem."""
     if path.startswith("s3://"):
         bucket, _, key = path.removeprefix("s3://").partition("/")
@@ -242,7 +244,7 @@ def _stats_from_values(vals: np.ndarray, steep_threshold: float) -> dict:
     }
 
 
-def _compute_stats_numpy(gdf, mosaic, transform, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_numpy(gdf: pd.DataFrame, mosaic: np.ndarray, transform: Affine, steep_threshold: float) -> dict[str, dict]:
     """Binary rasterized polygon mask. Fast; small edge error at polygon boundaries."""
     arr = mosaic[0]
     results: dict[str, dict] = {}
@@ -260,7 +262,7 @@ def _compute_stats_numpy(gdf, mosaic, transform, steep_threshold: float) -> dict
     return results
 
 
-def _compute_stats_exactextract(gdf, mosaic, transform, crs, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_exactextract(gdf: pd.DataFrame, mosaic: np.ndarray, transform: Affine, crs: CRS, steep_threshold: float) -> dict[str, dict]:
     """Fractional-coverage weighting at polygon edges (higher precision).
 
     Writes two in-memory rasters to temp GeoTIFFs:
@@ -396,7 +398,7 @@ def compute_polygon_slope_stats(
     return results
 
 
-def _download_slope_tiles_for_polygons(gdf, dest: str) -> list[str]:
+def _download_slope_tiles_for_polygons(gdf: gpd.GeoDataFrame, dest: str) -> list[str]:
     """Look up which tiles cover the polygons, download each slope GeoTIFF locally."""
     bucket, _, prefix = dest.removeprefix("s3://").partition("/")
     prefix = prefix.rstrip("/")
@@ -428,12 +430,12 @@ def _download_slope_tiles_for_polygons(gdf, dest: str) -> list[str]:
 
 
 def copernicus_pull_wrapper(
-    params,
-    geojson_dir,
-    feats_df,
+    params: dict,
+    geojson_dir: str,
+    feats_df: pd.DataFrame,
     precision: str = "numpy",
     max_workers: int = 8,
-):
+) -> pd.DataFrame:
     """
     Copernicus-DEM slope statistics, returned as a feats_df merge.
 
@@ -531,7 +533,7 @@ def copernicus_pull_wrapper(
     return comb
 
 
-def apply_slope_classification(params, df, slope_stats):
+def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats: pd.DataFrame) -> pd.DataFrame:
     """
     each polygon already has a pre-computed number identifying the percentage of the polygon's
     area that has a steep slope (>threshold). this function converts that number into simple

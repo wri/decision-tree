@@ -33,7 +33,7 @@ class Checkpointer:
         self.enabled = enabled
         self.paths = paths
 
-    def save(self, key: str, df: pd.DataFrame, always: bool = False):
+    def save(self, key: str, df: pd.DataFrame, always: bool = False) -> None:
         if self.enabled or always:
             path = self.paths[key]
 
@@ -64,7 +64,7 @@ class VerificationDecisionTree:
         self._resolve_paths()
         self.checkpoint = Checkpointer(enabled=checkpoint, paths=self._checkpoint_paths())
 
-    def _resolve_paths(self):
+    def _resolve_paths(self) -> None:
         outfile = self.params['outfile']
         self.cohort = outfile["cohort"]
         data_v = outfile["data_version"]
@@ -194,7 +194,7 @@ class VerificationDecisionTree:
         return poly_results, prj_results 
 
 
-def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statistics):
+def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: pd.DataFrame, slope_statistics: pd.DataFrame) -> pd.DataFrame:
     """Run decision tree branch logic."""
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
@@ -203,14 +203,14 @@ def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statis
     ev = poly_tree.apply_rules_ev(params, rules_file_path, baseline)
     return ev
 
-def compute_project_results(params, ev):
+def compute_project_results(params: dict, ev: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Run decision scoring."""
     scored = poly_tree.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(scored)
     prj_results = proj_tree.aggregate_project_score(params, scored)
     return poly_results, prj_results
 
-def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):
+def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False) -> VerificationDecisionTree | None:
     workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
     if parse_only:
         return workflow

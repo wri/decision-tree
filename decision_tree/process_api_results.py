@@ -14,7 +14,7 @@ def process_tm_results(params: dict,
                        project_ids=None,
                        test_project_handling: TestProjectHandling = TestProjectHandling.EXCLUDE,
                        save_geojsons: bool = True,
-                       save_missing: bool = False):
+                       save_missing: bool = False) -> pd.DataFrame:
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
@@ -92,7 +92,7 @@ def process_tm_results(params: dict,
     return clean_df
 
 
-def _read_geoparquet(results_path):
+def _read_geoparquet(results_path: str) -> pd.DataFrame:
     """
     Read parquet with pandas and standardize column names.
     """
@@ -101,7 +101,7 @@ def _read_geoparquet(results_path):
     return df
 
 
-def flatten_tm_geoparquet(results: pd.DataFrame):
+def flatten_tm_geoparquet(results: pd.DataFrame) -> pd.DataFrame:
     """
     Flatten GeoParquet rows into the tabular schema expected by the pipeline.
 
@@ -148,7 +148,7 @@ def flatten_tm_geoparquet(results: pd.DataFrame):
     return pd.DataFrame(records)
 
 
-def extract_tree_cover_years(row_dict):
+def extract_tree_cover_years(row_dict: dict) -> dict:
     """
     Extract tree cover values from the `ttc` field into flat columns like
     `ttc_2021`, `ttc_2022`, etc.
@@ -179,7 +179,7 @@ def extract_tree_cover_years(row_dict):
     return out
 
 
-def save_project_geojsons(df, geojson_dir, data_version):
+def save_project_geojsons(df: pd.DataFrame, geojson_dir: str, data_version: str) -> None:
     """
     Save one GeoJSON per project.
  
@@ -450,7 +450,7 @@ def resolve_multipractice(df):
 
     return df
 
-def normalize_practice(value):
+def normalize_practice(value: str) -> str:
     """
     Normalize practice values so they match scalar values in the rule template.
 
@@ -501,7 +501,7 @@ def normalize_practice(value):
     return str(value).strip().lower()
 
 
-def process_tm_api_results(params, results):
+def process_tm_api_results(params: dict, results: list[dict]) -> pd.DataFrame:
     """
     Processes API results into a clean DataFrame for analysis.
     results: json response

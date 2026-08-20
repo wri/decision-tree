@@ -7,7 +7,7 @@ from gri_shared_library.constants import TCC_BASELINE_OFFSET_YEARS, TCC_EI_OFFSE
 from decision_tree.tools import resolve_indicator_window_range
 
 
-def apply_canopy_classification(params, df):
+def apply_canopy_classification(params: dict, df: pd.DataFrame) -> pd.DataFrame:
     """
     Assigns canopy classification for baseline and early verification
     based on the available ttc values and plantstart year.

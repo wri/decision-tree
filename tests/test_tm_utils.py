@@ -1,9 +1,11 @@
 import os
+
+import pandas as pd
 from gri_shared_library.os_tools import create_folder
 
 from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
 from decision_tree.api_utils import download_geoparquet
-from decision_tree.process_api_results import _read_geoparquet, flatten_tm_geoparquet, TestProjectHandling
+from decision_tree.process_api_results import TestProjectHandling
 from decision_tree.process_api_results import process_tm_results
 from decision_tree.tools import convert_to_os_path, load_secrets, load_yaml
 from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID
@@ -46,7 +48,7 @@ def test_clean_tm_features():
         assert len(cleaned_features) == 3
 
         actual_attribute_count = cleaned_features.shape[1]
-        expected_column_count = 12
+        expected_column_count = 14
         assert actual_attribute_count == expected_column_count
 
         expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes_base', 'notes_ev']
@@ -69,14 +71,12 @@ def _get_project_tm_features(project_ids):
     create_folder(tm_raw_dir)
 
     download_geoparquet(PARAMS, SECRETS, parquet_outfile)
-    df = _read_geoparquet(parquet_outfile)
-    raw_df = flatten_tm_geoparquet(df)
+    # Read parquet with pandas and standardize column names.
+    df = pd.read_parquet(parquet_outfile)
+    df.columns = df.columns.str.lower()
 
     # Thin to projects
-    features = raw_df[raw_df['project_id'].isin(project_ids)].reset_index(drop=True)
-
-    # standardize column names
-    features = features.rename(columns={'project_name': 'short_name', "poly_id": "poly_uuid", "area": "calc_area"})
+    features = df[df['project_id'].isin(project_ids)].reset_index(drop=True)
 
     return parquet_outfile, features
 

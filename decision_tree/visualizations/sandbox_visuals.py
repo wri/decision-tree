@@ -56,7 +56,7 @@ def _classify(series: pd.Series) -> pd.Series:
     )
 
 def _ensure_categories(df: pd.DataFrame) -> pd.DataFrame:
-    '''Creates general remote/field/other category for each poly based on string search'''
+    """Creates general remote/field/other category for each poly based on string search"""
     d = df.copy()
     if 'baseline_category' not in d.columns:
         d['baseline_category'] = _classify(d['baseline_decision'])
@@ -117,7 +117,7 @@ def plot_portfolio_share(df: pd.DataFrame,
     def share(col: str):
         v = d[d[col].isin(['field','remote'])][col].value_counts().reindex(['field','remote']).fillna(0)
         tot = v.sum()
-        return (v['field']/tot if tot>0 else np.nan, v['remote']/tot if tot>0 else np.nan)
+        return v['field'] / tot if tot > 0 else np.nan, v['remote'] / tot if tot > 0 else np.nan
 
     f_b, r_b = share('baseline_category')
     f_e, r_e = share('ev_category')

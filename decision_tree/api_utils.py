@@ -1,9 +1,8 @@
 import configparser
 import os
 from urllib.parse import urlparse
-from gri_shared_library.os_tools import is_file_recent, create_folder, get_project_root_dir
+from gri_shared_library.os_tools import create_folder
 from gri_shared_library.s3_tools import get_aws_session
-from tm_api_utils import pull_tm_api_data
 
 
 def download_geoparquet(params, secrets, tm_raw):

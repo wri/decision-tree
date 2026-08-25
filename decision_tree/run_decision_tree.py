@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 import datetime
 import pandas as pd
-import yaml
 from gri_shared_library.geoparquet_tools import get_project_ids_from_geoparquet
 from gri_shared_library.os_tools import create_folder
 from tm_api_utils.tm_features import get_tm_feats
@@ -130,7 +129,6 @@ class VerificationDecisionTree:
         if self.mode == "projectids" and (project_ids is None or project_ids == []):
             raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
-        slope_statistics = None
         if self.mode in ("full", "projectids"):
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             download_geoparquet(self.params, self.secrets, self.tm_raw)
@@ -138,7 +136,7 @@ class VerificationDecisionTree:
             if self.tm_source.lower() == 'api':
                 expanded_cohort = 'terrafund-cohort-1' if self.cohort == 'c1' else 'terrafund-cohort-2'
                 if self.mode == 'full':
-                    project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort)
+                    project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort= expanded_cohort)
 
                 auth_headers = get_tm_auth()
                 tm_response = get_tm_feats(auth_headers=auth_headers, project_ids=project_ids)

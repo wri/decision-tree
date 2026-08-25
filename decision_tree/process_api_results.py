@@ -9,7 +9,7 @@ from shapely import wkb
 from decision_tree.constants import TF_START_YR, TestProjectHandling
 from decision_tree.tools import append_note
 
-def process_tm_results(params: str,
+def process_tm_results(params: dict,
                        tm_df: pd.DataFrame,
                        geojson_dir: str,
                        project_ids=None,
@@ -20,7 +20,7 @@ def process_tm_results(params: str,
     run cleaning steps, and optionally save project-level GeoJSONs.
 
     Args:
-        params: String path to params.yaml file.
+        params: Dictionary extracted from params.yaml file.
         tm_df: Dataframe of TerraMatch polygons.
         geojson_dir: Output string path for polygon geojson file.
         project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
@@ -304,11 +304,11 @@ def clean_datetime_column(df, column_name):
 
 
 def missing_planting_dates(df, drop=False):
-    '''
-    Identifies where there are missing planting dates for 
+    """
+    Identifies where there are missing planting dates for
     a polygon, hindering maxar metadata retrieval
     Option to drop rows with missing dates
-    '''
+    """
 
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
@@ -352,15 +352,15 @@ def missing_planting_dates(df, drop=False):
     return final_df
 
 def missing_features(df, drop=False):
-    '''
+    """
     Identifies rows where ttc is only NaN values.
     Identifies rows where practice or targetsys is NaN.
-    Optionally drops these rows based on the drop argument 
+    Optionally drops these rows based on the drop argument
     and prints a statement about the count of rows affected.
 
-    ** assumption: should have a tree cover stat for all approved polygons 
+    ** assumption: should have a tree cover stat for all approved polygons
     on TM that started planting before 2024
-    '''
+    """
     starting = len(df)
     ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
     

@@ -1,5 +1,7 @@
 import ast
 import os
+
+import pandas as pd
 import yaml
 from gri_shared_library.constants import TreeCountProjectPhaseDayRange
 
@@ -112,3 +114,47 @@ def resolve_indicator_window_range(params, window_name):
             raise ValueError(f"Invalid endline_range specification ({endline_range}) in params file.")
     else:
         raise ValueError(f"Invalid window_name specification in params file.")
+
+
+def append_note(df, idx, label, col='notes'):
+    """
+    Append `label` to the given notes column instead of overwriting whatever
+    is already there. Notes accumulate as a list (e.g. 'missing-plantstart; 
+    ttc-bad-year'); existing labels are not duplicated.
+
+    Parameters:
+    - df (pd.DataFrame): DataFrame with the target notes column.
+    - idx: either a single row index (updates df.at[idx, col]) or a
+      boolean mask aligned to df.index (vectorized update for many rows).
+    - label (str): note label to append, e.g. 'missing-ttc', 'ttc-bad-year'.
+    - col (str): which notes column to update, e.g. 'notes_base', 'notes_ev'.
+      Defaults to 'notes' for backward compatibility.
+    """
+    def _merge(current):
+        if pd.isna(current) or current == '':
+            return label
+        parts = [p.strip() for p in str(current).split(';')]
+        return current if label in parts else f"{current}; {label}"
+
+    if isinstance(idx, pd.Series):
+        # boolean mask - vectorized update across matching rows
+        if not idx.any():
+            return
+        df.loc[idx, col] = df.loc[idx, col].apply(_merge)
+    else:
+        # single row index
+        df.at[idx, col] = _merge(df.at[idx, col])
+
+
+def place_column_after(df, col, anchor):
+    """
+    Move `col` to sit immediately after `anchor` in df's column order.
+    No-op if either column is missing (e.g. an intermediate/test df that
+    doesn't have the column yet).
+    """
+    if col not in df.columns or anchor not in df.columns:
+        return df
+    series = df.pop(col)
+    loc = df.columns.get_loc(anchor) + 1
+    df.insert(loc, col, series)
+    return df

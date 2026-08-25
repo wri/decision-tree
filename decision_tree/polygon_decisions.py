@@ -76,9 +76,6 @@ def _image_timing_tier(row):
 def apply_rules_baseline(rules_file_path, df):
     """
     Decision tree for baseline classification.
-
-    * If a polygon was already flagged as problematic during cleaning, 
-    carry that flag through as its decision by ref 'notes' column
     
     PHASE 1:
       • assign first_decision {mangrove, remote, field}  
@@ -121,11 +118,6 @@ def apply_rules_baseline(rules_file_path, df):
 
     decisions = []
     for _, row in df.iterrows():
-
-        # check notes column before assigning decision
-        if pd.notna(row['notes']):
-            decisions.append(row['notes'])
-            continue
 
         # PHASE 1: first_decision — assign 'mangrove', 'remote' or 'field'
         if row['target_sys'] == 'mangrove':

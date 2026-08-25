@@ -49,10 +49,10 @@ def test_clean_tm_features():
         assert len(cleaned_features) == 3
 
         actual_attribute_count = cleaned_features.shape[1]
-        expected_column_count = 11
+        expected_column_count = 12
         assert actual_attribute_count == expected_column_count
 
-        expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes']
+        expected_columns = ['cohort', 'project_id', 'poly_id', 'site_id', 'project_name', 'geometry', 'plantstart', 'practice', 'target_sys', 'area', 'notes_base', 'notes_ev']
         all_exist = all(col in cleaned_features.columns for col in expected_columns)
         assert all_exist
 

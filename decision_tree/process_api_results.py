@@ -88,22 +88,13 @@ def process_tm_results(params: str,
         f"output: {len(output_ids)}"
     )
     print(
-        f"\nRunning forecast for {cohort} cohort\n"
+        f"\nRunning forecast for {cohort}\n"
         f"{cohort} has a total of:\n"
         f"  {len(output_ids)} total projects\n"
         f"  {len(poly_ids)} total polygons\n" 
         f"  {total_area:,.2f} total hectares"
     )
     return clean_df
-
-
-def _read_geoparquet(results_path):
-    """
-    Read parquet with pandas and standardize column names.
-    """
-    df = pd.read_parquet(results_path)
-    df.columns = df.columns.str.lower()
-    return df
 
 
 def flatten_tm_geoparquet(results):

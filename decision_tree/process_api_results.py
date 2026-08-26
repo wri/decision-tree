@@ -144,6 +144,15 @@ def flatten_tm_geoparquet(results):
     return pd.DataFrame(records)
 
 
+def _read_geoparquet(results_path):
+    """
+    Read parquet with pandas and standardize column names.
+    """
+    df = pd.read_parquet(results_path)
+    df.columns = df.columns.str.lower()
+    return df
+
+
 def extract_tree_cover_years(row_dict):
     """
     Extract tree cover values from the `ttc` field into flat columns like

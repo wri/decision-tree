@@ -19,6 +19,7 @@ The primary functions of this code are located within `run_decision_tree.py`.
 - Apply the weighted scoring approach at the polygon level  
 - Calculate the cost to monitor the project  
 - Aggregate polygon scores to derive project score  
+- The notes_base and notes_ev columns on the poly_results dataframe record context as to why decisions were made such as whether a polygon was missing information.
 
 **Upload**
 - Push results to Asana  

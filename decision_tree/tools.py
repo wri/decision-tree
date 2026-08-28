@@ -1,5 +1,7 @@
 import ast
 import os
+
+import pandas as pd
 import yaml
 from gri_shared_library.constants import TreeCountProjectPhaseDayRange
 
@@ -50,26 +52,17 @@ def load_secrets(secrets_path):
         with open(secrets_path, "r") as f:
             secrets_json = yaml.safe_load(f)
     else:
-        # Open Topology
-        opentopo_api_key = os.environ['OPENTOPO_API_KEY'] if 'OPENTOPO_API_KEY' in os.environ else 'not_defined'
-        open_topo = {"opentopo_api_key": opentopo_api_key}
-
         # AWS
         aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID'] if 'AWS_ACCESS_KEY_ID' in os.environ else 'not_defined'
         aws_secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY'] if 'AWS_SECRET_ACCESS_KEY' in os.environ else 'not_defined'
         aws_region = os.environ['AWS_REGION'] if 'AWS_REGION' in os.environ else 'us-east-1'
         aws = {"aws_access_key_id": aws_access_key_id, "aws_secret_access_key": aws_secret_access_key, "aws_region": aws_region}
 
-        asana_pat = os.environ['ASANA_PAT'] if 'ASANA_PAT' in os.environ else 'not_defined'
-        asana = {"asana_pat": asana_pat}
-
         tm_access_token = os.environ['TM_ACCESS_TOKEN'] if 'TM_ACCESS_TOKEN' in os.environ else 'not_defined'
         tm_token = {"tm_access_token": tm_access_token}
 
         secrets_json = {
-            "opentopo" : open_topo,
             "aws" : aws,
-            "asana" : asana,
             "tm_api" : tm_token
         }
 
@@ -85,27 +78,79 @@ def resolve_indicator_window_range(params, window_name):
     criteria = params.get('criteria', {})
     if window_name.lower() == 'baseline':
         baseline_range = criteria.get('baseline_range')
-        if baseline_range.lower() == 'default':
+        if type(baseline_range) == str and baseline_range.lower() == 'default':
             return TreeCountProjectPhaseDayRange.BASELINE.value
-        elif isinstance(ast.literal_eval(baseline_range), tuple):
+        if type(baseline_range) == str and isinstance(ast.literal_eval(baseline_range), tuple):
             return ast.literal_eval(baseline_range)
         else:
-            raise ValueError(f"Invalid baseline_range value in params file.")
+            raise ValueError(f"Invalid baseline_range specification ({baseline_range}) in params file.")
     elif window_name.lower() == 'ext_baseline':
         ext_baseline_range = criteria.get('ext_baseline_range')
-        if ext_baseline_range.lower() == 'default':
+        if type(ext_baseline_range) == str and ext_baseline_range.lower() == 'default':
             return TreeCountProjectPhaseDayRange.EXT_BASELINE.value
-        elif isinstance(ast.literal_eval(ext_baseline_range), tuple):
+        if type(ext_baseline_range) == str and isinstance(ast.literal_eval(ext_baseline_range), tuple):
             return ast.literal_eval(ext_baseline_range)
         else:
-            raise ValueError(f"Invalid ext_baseline_range value in params file.")
-    elif window_name.lower() == 'early_insights':
-        early_insights_range = criteria.get('ev_range')
-        if early_insights_range.lower() == 'default':
-            return TreeCountProjectPhaseDayRange.EARLY_INSIGHTS.value
-        elif isinstance(ast.literal_eval(early_insights_range), tuple):
-            return ast.literal_eval(early_insights_range)
+            raise ValueError(f"Invalid ext_baseline_range specification ({ext_baseline_range}) in params file.")
+    elif window_name.lower() == 'early_insight':
+        early_insight_range = criteria.get('ev_range')
+        if type(early_insight_range) == str and early_insight_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.EARLY_INSIGHT.value
+        if type(early_insight_range) == str and isinstance(ast.literal_eval(early_insight_range), tuple):
+            return ast.literal_eval(early_insight_range)
         else:
-            raise ValueError(f"Invalid ev_range value in params file.")
+            raise ValueError(f"Invalid early_insight_range specification ({early_insight_range}) in params file.")
+    elif window_name.lower() == 'endline':
+        endline_range = criteria.get('endline')
+        if type(endline_range) == str and endline_range.lower() == 'default':
+            return TreeCountProjectPhaseDayRange.ENDLINE.value
+        if type(endline_range) == str and isinstance(ast.literal_eval(endline_range), tuple):
+            return ast.literal_eval(endline_range)
+        else:
+            raise ValueError(f"Invalid endline_range specification ({endline_range}) in params file.")
     else:
-        raise ValueError(f"Invalid window_name value in params file.")
+        raise ValueError(f"Invalid window_name specification in params file.")
+
+
+def append_note(df, idx, label, col='notes'):
+    """
+    Append `label` to the given notes column instead of overwriting whatever
+    is already there. Notes accumulate as a list (e.g. 'missing-plantstart; 
+    ttc-bad-year'); existing labels are not duplicated.
+
+    Parameters:
+    - df (pd.DataFrame): DataFrame with the target notes column.
+    - idx: either a single row index (updates df.at[idx, col]) or a
+      boolean mask aligned to df.index (vectorized update for many rows).
+    - label (str): note label to append, e.g. 'missing-ttc', 'ttc-bad-year'.
+    - col (str): which notes column to update, e.g. 'notes_base', 'notes_ev'.
+      Defaults to 'notes' for backward compatibility.
+    """
+    def _merge(current):
+        if pd.isna(current) or current == '':
+            return label
+        parts = [p.strip() for p in str(current).split(';')]
+        return current if label in parts else f"{current}; {label}"
+
+    if isinstance(idx, pd.Series):
+        # boolean mask - vectorized update across matching rows
+        if not idx.any():
+            return
+        df.loc[idx, col] = df.loc[idx, col].apply(_merge)
+    else:
+        # single row index
+        df.at[idx, col] = _merge(df.at[idx, col])
+
+
+def place_column_after(df, col, anchor):
+    """
+    Move `col` to sit immediately after `anchor` in df's column order.
+    No-op if either column is missing (e.g. an intermediate/test df that
+    doesn't have the column yet).
+    """
+    if col not in df.columns or anchor not in df.columns:
+        return df
+    series = df.pop(col)
+    loc = df.columns.get_loc(anchor) + 1
+    df.insert(loc, col, series)
+    return df

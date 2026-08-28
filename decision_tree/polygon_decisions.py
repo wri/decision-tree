@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
+from gri_shared_library.constants import TCC_BASELINE_OFFSET_YEARS, TCC_EI_OFFSET_YEARS
 from decision_tree.tools import resolve_indicator_window_range
 
 # Operator dispatch table — avoids eval() for safe, explicit comparisons
@@ -72,12 +73,9 @@ def _image_timing_tier(row):
         return 'none'
 
 
-def apply_rules_baseline(rules_file_path, df):
+def apply_rules_baseline(rules_file_path: str, df: pd.DataFrame):
     """
     Decision tree for baseline classification.
-
-    * If a polygon was already flagged as problematic during cleaning, 
-    carry that flag through as its decision by ref 'notes' column
     
     PHASE 1:
       • assign first_decision {mangrove, remote, field}  
@@ -120,11 +118,6 @@ def apply_rules_baseline(rules_file_path, df):
 
     decisions = []
     for _, row in df.iterrows():
-
-        # check notes column before assigning decision
-        if pd.notna(row['notes']):
-            decisions.append(row['notes'])
-            continue
 
         # PHASE 1: first_decision — assign 'mangrove', 'remote' or 'field'
         if row['target_sys'] == 'mangrove':
@@ -248,7 +241,7 @@ def apply_rules_ev(params, rules_file_path, df):
     ]]
 
     today = datetime.today()
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
     ev_days_start = ev_range[0]
 
     decisions = []
@@ -401,10 +394,8 @@ def apply_scoring(
     # ------------------------------------------------------------------
     base_years = pd.to_numeric(df.get("baseline_year", np.nan), errors="coerce")
 
-    baseline_range = resolve_indicator_window_range(params, 'BASELINE')
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
-    baseline_ttc = _get_ttc_for_year(df, base_years + baseline_range[1])
-    ev_ttc       = _get_ttc_for_year(df, base_years + ev_range[1])
+    baseline_ttc = _get_ttc_for_year(df, base_years + TCC_BASELINE_OFFSET_YEARS)
+    ev_ttc       = _get_ttc_for_year(df, base_years + TCC_EI_OFFSET_YEARS)
 
     canopy_base = (100.0 - pd.to_numeric(baseline_ttc, errors="coerce")).clip(0, 100)
     canopy_ev   = (100.0 - pd.to_numeric(ev_ttc,       errors="coerce")).clip(0, 100)

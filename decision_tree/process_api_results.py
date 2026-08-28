@@ -7,26 +7,25 @@ import geopandas as gpd
 import pandas as pd
 from shapely import wkb
 from decision_tree.constants import TF_START_YR, TestProjectHandling
+from decision_tree.tools import append_note
 
-def process_tm_results(params: str,
+def process_tm_results(params: dict,
                        tm_df: pd.DataFrame,
                        geojson_dir: str,
                        project_ids=None,
                        test_project_handling: TestProjectHandling = TestProjectHandling.EXCLUDE,
-                       save_geojsons: bool = True,
-                       save_missing: bool = False):
+                       save_geojsons: bool = True):
     """
     Read GeoParquet file, flatten it into a tabular dataframe,
     run cleaning steps, and optionally save project-level GeoJSONs.
 
     Args:
-        params: String path to params.yaml file.
+        params: Dictionary extracted from params.yaml file.
         tm_df: Dataframe of TerraMatch polygons.
         geojson_dir: Output string path for polygon geojson file.
         project_ids: Optional list of project IDs which is specifically used by the "projectids" mode
         test_project_handling: Optional flag to include/exclude test projects (short_name starts with "TEST_")
         save_geojsons: Optional flag to save geojson files to geojson_dir
-        save_missing: Optional flag to save missing tiles to csv
 
     Returns: Cleaned dataframe for downstream decision-tree analysis.
     """
@@ -62,16 +61,22 @@ def process_tm_results(params: str,
     raw_df.columns = raw_df.columns.str.lower()
     input_ids = set(raw_df["project_id"].dropna().unique())
     pre_clean_ids = set(raw_df["project_id"].dropna().unique())
-    raw_df['notes'] = None
+    raw_df['notes_base'] = None
+    raw_df['notes_ev'] = None
 
     clean_df = clean_datetime_column(raw_df, "plantstart")
     clean_df = missing_planting_dates(clean_df, drop_missing)
-    clean_df = missing_features(clean_df, drop_missing, save_missing=save_missing)
+    clean_df = missing_features(clean_df, drop_missing)
     clean_df["practice"] = clean_df["practice"].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
     if save_geojsons:
         data_version = out.get("data_version")
         save_project_geojsons(clean_df, geojson_dir, data_version)
+
+    # verify that results contain ttc columns
+    ttc_cols = [c for c in clean_df.columns if c.startswith('ttc_')]
+    if len(ttc_cols) == 0:
+        raise ValueError(f"The df does not contain any 'ttc_' column.")
 
     output_ids = set(clean_df["project_id"].dropna().unique())
     poly_ids = set(clean_df["poly_id"].dropna().unique())
@@ -83,22 +88,13 @@ def process_tm_results(params: str,
         f"output: {len(output_ids)}"
     )
     print(
-        f"\nRunning forecast for {cohort} cohort\n"
+        f"\nRunning forecast for {cohort}\n"
         f"{cohort} has a total of:\n"
         f"  {len(output_ids)} total projects\n"
         f"  {len(poly_ids)} total polygons\n" 
         f"  {total_area:,.2f} total hectares"
     )
     return clean_df
-
-
-def _read_geoparquet(results_path):
-    """
-    Read parquet with pandas and standardize column names.
-    """
-    df = pd.read_parquet(results_path)
-    df.columns = df.columns.str.lower()
-    return df
 
 
 def flatten_tm_geoparquet(results):
@@ -148,26 +144,45 @@ def flatten_tm_geoparquet(results):
     return pd.DataFrame(records)
 
 
+def _read_geoparquet(results_path):
+    """
+    Read parquet with pandas and standardize column names.
+    """
+    df = pd.read_parquet(results_path)
+    df.columns = df.columns.str.lower()
+    return df
+
+
 def extract_tree_cover_years(row_dict):
     """
-    Extract tree cover values from the `ttc` field and convert them into
-    flat columns like `ttc_2021`, `ttc_2022`, etc.
-    row_dict["ttc"] is a list of tuples, where first value is the year
-    and second value is the tree cover percent
+    Extract tree cover values from the `ttc` field into flat columns like
+    `ttc_2021`, `ttc_2022`, etc.
+
+    `ttc` is normally a dict whose keys are years and values are the tree
+    cover percent, but it's not guaranteed to arrive as a dict: JSONB source
+    data (e.g. `properties->'ttc'`) represents it as a list of [year, pct]
+    pairs, and a `pyarrow`-backed parquet engine would return MAP columns as
+    a list of tuples rather than a dict. Accept both shapes rather than
+    hard-raising, since this runs on every `process_tm_results` call, not
+    just the geoparquet path.
     """
+    ttc_values = row_dict.get("ttc") or {}
+    if isinstance(ttc_values, dict):
+        items = ttc_values.items()
+    elif isinstance(ttc_values, (list, tuple)):
+        items = ttc_values
+    else:
+        raise TypeError(f"Expected a dict or list of TTC pairs, got {type(ttc_values)}")
+
     out = {}
-    ttc_values = row_dict.get("ttc", [])
-    if not isinstance(ttc_values, list):
-        return out
-
     current_year = datetime.today().year
-    for item in ttc_values:
-        year, percent_cover = item
-        year = int(year)
-        if TF_START_YR <= year <= current_year:
-            out[f"ttc_{year}"] = percent_cover
-
+    for year, percent_cover in items:
+        if percent_cover is not None:
+            year = int(year)
+            if TF_START_YR <= year <= current_year:
+                out[f"ttc_{year}"] = percent_cover
     return out
+
 
 def save_project_geojsons(df, geojson_dir, data_version):
     """
@@ -234,7 +249,8 @@ def save_project_geojsons(df, geojson_dir, data_version):
                     f"⚠️ Skipping polygon: project={project_name}, "
                     f"project_id={project_id}, poly_id={poly_id}, reason={reason}"
                 )
-                df.loc[df['poly_id'] == poly_id, 'notes'] = 'invalid-geometry'
+                append_note(df, df['poly_id'] == poly_id, 'invalid-geometry', col='notes_base')
+                append_note(df, df['poly_id'] == poly_id, 'invalid-geometry', col='notes_ev')
  
         if not valid_rows:
             print(f"⚠️ No valid polygons for {project_name} ({project_id}); skipping GeoJSON.")
@@ -297,22 +313,24 @@ def clean_datetime_column(df, column_name):
 
 
 def missing_planting_dates(df, drop=False):
-    '''
-    Identifies where there are missing planting dates for 
+    """
+    Identifies where there are missing planting dates for
     a polygon, hindering maxar metadata retrieval
     Option to drop rows with missing dates
-    '''
+    """
 
     # Count total polygons per project before filtering
     project_poly_counts = df.groupby('project_id')['poly_id'].nunique() # count of polys per prj
     missing_start = df[df['plantstart'].isna()]
-    df.loc[missing_start.index, 'notes'] = 'missing-plantstart'
+    append_note(df, df['plantstart'].isna(), 'missing-plantstart', col='notes_base')
+    append_note(df, df['plantstart'].isna(), 'missing-plantstart', col='notes_ev')
 
     # invalid plantstart
     current_year = datetime.today().year
     plantstart_year = pd.to_datetime(df['plantstart'], errors='coerce').dt.year
     invalid_year_mask = (plantstart_year < 2020) | (plantstart_year > current_year)
-    df.loc[invalid_year_mask, 'notes'] = 'invalid-plantstart'
+    append_note(df, invalid_year_mask, 'invalid-plantstart', col='notes_base')
+    append_note(df, invalid_year_mask, 'invalid-plantstart', col='notes_ev')
 
     for _, row in missing_start[['project_name', 'project_id', 'poly_id']].drop_duplicates().iterrows():
         print(f"{row['project_name']} | {row['project_id']} | {row['poly_id']}")
@@ -342,16 +360,16 @@ def missing_planting_dates(df, drop=False):
 
     return final_df
 
-def missing_features(df, drop=False, save_missing=True):
-    '''
+def missing_features(df, drop=False):
+    """
     Identifies rows where ttc is only NaN values.
     Identifies rows where practice or targetsys is NaN.
-    Optionally drops these rows based on the drop argument 
+    Optionally drops these rows based on the drop argument
     and prints a statement about the count of rows affected.
 
-    ** assumption: should have a tree cover stat for all approved polygons 
+    ** assumption: should have a tree cover stat for all approved polygons
     on TM that started planting before 2024
-    '''
+    """
     starting = len(df)
     ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit()]
     
@@ -363,12 +381,11 @@ def missing_features(df, drop=False, save_missing=True):
     null_rows = df[eligible_ttc_mask & df[ttc_cols].isna().all(axis=1)]
     # placeholder for notes label missing-ttc - currently in canopy_cover.py
     missing_practice = df[df['practice'].isna()]
-    df.loc[missing_practice.index, 'notes'] = 'missing-practice'
+    append_note(df, df['practice'].isna(), 'missing-practice', col='notes_base')
+    append_note(df, df['practice'].isna(), 'missing-practice', col='notes_ev')
     missing_targetsys = df[df['target_sys'].isna()]
-    df.loc[missing_targetsys.index, 'notes'] = 'missing-target-sys'
-    if save_missing and not null_rows.empty:
-        print("TTC NaNs saved to file.")
-        null_rows.to_csv('ttc_nans.csv', index=False)
+    append_note(df, df['target_sys'].isna(), 'missing-target-sys', col='notes_base')
+    append_note(df, df['target_sys'].isna(), 'missing-target-sys', col='notes_ev')
 
     print(f"⚠️ Polygons missing 'ttc': {len(null_rows)}")
     print(f"⚠️ Polygons missing 'practice': {len(missing_practice)}")
@@ -436,7 +453,8 @@ def resolve_multipractice(df):
         print("No single-row multi-practice projects were updated.")
 
     still_multi = df['practice'].astype(str).str.contains(r'\|', na=False)
-    df.loc[still_multi, 'notes'] = 'multi-practice'
+    append_note(df, still_multi, 'multi-practice', col='notes_base')
+    append_note(df, still_multi, 'multi-practice', col='notes_ev')
 
     return df
 
@@ -558,7 +576,7 @@ def process_tm_api_results(params, results):
     # Clean up start and end dates, missing info, multipractice issues
     clean_df = clean_datetime_column(raw_df, 'plantstart')
     clean_df = missing_planting_dates(clean_df, drop_missing)
-    clean_df = missing_features(clean_df, drop_missing, save_missing=False)
+    clean_df = missing_features(clean_df, drop_missing)
     clean_df['practice'] = clean_df['practice'].apply(normalize_practice)
     clean_df = resolve_multipractice(clean_df)
 

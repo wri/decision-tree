@@ -9,7 +9,7 @@ This repository contains the code for running a rule-based decision process to i
 The primary functions of this code are located within `run_decision_tree.py`.
 
 **Data Gathering & Cleaning**
-- Query the TerraMatch API, Maxar API, and OpenTopo API to gather input data for the decision tree  
+- Query the TerraMatch API, Maxar API, and AWS Marketplace API to gather input data for the decision tree  
 - Process, validate, and clean the API response into the various "branches" of the tree  
 
 **Apply Logic**
@@ -19,11 +19,10 @@ The primary functions of this code are located within `run_decision_tree.py`.
 - Apply the weighted scoring approach at the polygon level  
 - Calculate the cost to monitor the project  
 - Aggregate polygon scores to derive project score  
+- The notes_base and notes_ev columns on the poly_results dataframe record context as to why decisions were made such as whether a polygon was missing information.
 
 **Upload**
-- Push results to Asana  
 - Push results to S3  
-
 
 
 ## 🎯 Goals & Non-Goals
@@ -45,9 +44,9 @@ The primary functions of this code are located within `run_decision_tree.py`.
 
 ### External Data Sources
 
-| Source | Type (API/S3/etc.) | Endpoint/Path | Auth | Data Format | Schema Link |
-|--------|-------------------|-----------------|-----|-------| ----|
-| OpenTopography | API | ------------- | API key | geotiff | ----------- |
+| Source                         | Type (API/S3/etc.) | Endpoint/Path | Auth | Data Format | Schema Link |
+|--------------------------------|-------------------|-----------------|------|-------| ----|
+| AWS Merketplace Copernicus DEM | API | ------------- | None | geotiff | ----------- |
 
 ### Expected Input Formats
 
@@ -107,7 +106,7 @@ criteria:
   img_count: 1
   baseline_range: DEFAULT       # baseline window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
   ext_baseline_range: DEFAULT   # extended window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
-  ev_range: DEFAULT             # early-insights window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
+  ev_range: DEFAULT             # early-insight window {DEFAULT=range defined in gri_shared_library | (x,y)=custom range
   drop_missing: False
   slope_thresh: 20
   rules: data/rule_template.csv
@@ -126,13 +125,10 @@ Don't actually list the config keys in plain text but describe what is needed.
 
 ```yaml
 access_token:
-opentopo_key: 
 aws:
   aws_access_key_id: 
   aws_secret_access_key:
   aws_region:
-asana:
-  pat: 
 ```
 
 

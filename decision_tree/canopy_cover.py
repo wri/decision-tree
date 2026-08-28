@@ -2,9 +2,9 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from gri_shared_library.constants import TreeCoverProjectPhaseYearRange
 
-from decision_tree.tools import resolve_indicator_window_range
+from gri_shared_library.constants import TCC_BASELINE_OFFSET_YEARS, TCC_EI_OFFSET_YEARS
+from decision_tree.tools import resolve_indicator_window_range, append_note
 
 
 def apply_canopy_classification(params, df):
@@ -16,8 +16,8 @@ def apply_canopy_classification(params, df):
     - Calculates the baseline year - calendar year prior to plant start and references 
     `ttc_{year}` for baseline statistics.
     - If all TTC values are NaN, flags as 'NaN'.
-    - If the TTC column for the expected baseline year is missing or has no data
-      for that polygon, flags as 'investigate'.
+    - If the TTC column for the expected baseline year is missing or has no data,
+      flags as 'investigate' and appends 'ttc-bad-year' to notes.
     - If planting occurred too recently for EV, sets 'ev_canopy' as 'not available'.
     - Otherwise, classifies as 'open' or 'closed' using the `canopy_thresh`.
 
@@ -25,7 +25,7 @@ def apply_canopy_classification(params, df):
     - df (pd.DataFrame): Input DataFrame with ttc columns and a plantstart column.
     - canopy_thresh (float): Threshold for distinguishing open vs closed canopy.
     - baseline_range (tuple): Days relative to plantstart defining the baseline period.
-    - ev_range (tuple): Days relative to plantstart defining the early insights/verification period.
+    - ev_range (tuple): Days relative to plantstart defining the early insight/verification period.
 
     Returns:
     - pd.DataFrame: Original dataframe with two new columns: `baseline_canopy` and `ev_canopy`.
@@ -36,27 +36,28 @@ def apply_canopy_classification(params, df):
 
     criteria = params.get('criteria', {})
     canopy_thresh = criteria.get('canopy_threshold')
-    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHTS')
+    ev_range = resolve_indicator_window_range(params, 'EARLY_INSIGHT')
 
     df['plantstart_dt'] = pd.to_datetime(df['plantstart'], errors='coerce')
     df['baseline_year'] = df['plantstart_dt'].dt.year
     df.loc[:, 'baseline_canopy'] = 'unknown'
     df.loc[:, 'ev_canopy'] = 'unknown'
 
-    #label missing ttc - TODO: this will move to an earlier step once the TTC package is finished
+    # identify any missing ttc, flag in notes and assign class to NaN
     ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit() and len(col[4:]) == 4]
     null_mask = df[ttc_cols].isna().all(axis=1)  
-    df.loc[null_mask, 'notes'] = 'missing-ttc' # this part moves, rest stays
+    append_note(df, null_mask, 'missing-ttc', col='notes_base')  
+    append_note(df, null_mask, 'missing-ttc', col='notes_ev')
     df.loc[null_mask, ['baseline_canopy', 'ev_canopy']] = np.nan
 
     # Eligible rows to process further
-    eligible = ~(null_mask)
+    eligible = ~null_mask
 
     for idx, row in df[eligible].iterrows():
         plant_date = row['plantstart_dt']
 
         # Baseline classification
-        baseline_year = plant_date.year + TreeCoverProjectPhaseYearRange.BASELINE.end
+        baseline_year = plant_date.year + TCC_BASELINE_OFFSET_YEARS
         baseline_col = f'ttc_{baseline_year}'
 
         if baseline_col in ttc_cols and pd.notna(row[baseline_col]):
@@ -64,6 +65,7 @@ def apply_canopy_classification(params, df):
             df.at[idx, 'baseline_canopy'] = 'closed' if val > canopy_thresh else 'open'
         else:
             df.at[idx, 'baseline_canopy'] = 'investigate'
+            append_note(df, idx, 'ttc-bad-year', col='notes_base')
 
         # EV classification
         days_since_planting = (datetime.today() - plant_date).days
@@ -71,11 +73,12 @@ def apply_canopy_classification(params, df):
         if days_since_planting < ev_range[0]:
             df.at[idx, 'ev_canopy'] = 'not available'
         else:  
-            ev_year = plant_date.year + TreeCoverProjectPhaseYearRange.EARLY_INSIGHTS.end
+            ev_year = plant_date.year + TCC_EI_OFFSET_YEARS
             ev_col = f'ttc_{ev_year}'
             if ev_col in ttc_cols and pd.notna(row[ev_col]):
                 val = row[ev_col]
                 df.at[idx, 'ev_canopy'] = 'closed' if val > canopy_thresh else 'open'
             else:
                 df.at[idx, 'ev_canopy'] = 'investigate'
+                append_note(df, idx, 'ttc-bad-year', col='notes_ev')
     return df

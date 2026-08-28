@@ -2,19 +2,19 @@ import os
 from pathlib import Path
 import datetime
 import pandas as pd
-import yaml
-from gri_shared_library.os_tools import create_folder, get_project_ids_from_geoparquet
+from gri_shared_library.geoparquet_tools import get_project_ids_from_geoparquet
+from gri_shared_library.os_tools import create_folder
 from tm_api_utils.tm_features import get_tm_feats
 
 import decision_tree.cost_calculator as price
 import decision_tree.polygon_decisions as poly_tree
 import decision_tree.process_api_results as clean
 import decision_tree.project_decisions as proj_tree
-from decision_tree.api_utils import opentopo_pull_wrapper, download_geoparquet
+from decision_tree.api_utils import download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
-from decision_tree.slope import apply_slope_classification
-from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml
+from decision_tree.slope_copernicus import copernicus_pull_wrapper, apply_slope_classification
+from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml, place_column_after
 from decision_tree.constants import RULES, TestProjectHandling
 
 class Checkpointer:
@@ -103,7 +103,7 @@ class VerificationDecisionTree:
                                             outfile["prj_decision"].format(cohort=self.cohort, data_version=data_v, experiment_id=experiment_id))
 
         # rules
-        self.rules = convert_to_os_path(project_data_dir, RULES)
+        self.rules = convert_to_os_path("", RULES)
 
     def _checkpoint_paths(self) -> dict:
         """
@@ -128,7 +128,6 @@ class VerificationDecisionTree:
         if self.mode == "projectids" and (project_ids is None or project_ids == []):
             raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
-        slope_statistics = None
         if self.mode in ("full", "projectids"):
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             download_geoparquet(self.params, self.secrets, self.tm_raw)
@@ -136,7 +135,7 @@ class VerificationDecisionTree:
             if self.tm_source.lower() == 'api':
                 expanded_cohort = 'terrafund-cohort-1' if self.cohort == 'c1' else 'terrafund-cohort-2'
                 if self.mode == 'full':
-                    project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort)
+                    project_ids = get_project_ids_from_geoparquet(self.tm_raw, expanded_cohort= expanded_cohort)
 
                 auth_headers = get_tm_auth()
                 tm_response = get_tm_feats(auth_headers=auth_headers, project_ids=project_ids)
@@ -148,14 +147,15 @@ class VerificationDecisionTree:
                                                 tm_response,
                                                 self.geojson_dir,
                                                 project_ids,
-                                                test_project_handling= test_project_handling)
+                                                test_project_handling = test_project_handling)
 
             self.checkpoint.save("feats", tm_clean)
-            slope_statistics = opentopo_pull_wrapper(self.params, 
-                                                     self.secrets, 
-                                                     self.geojson_dir, 
-                                                     tm_clean, 
-                                                     process_in_utm_coordinates=True)
+
+            slope_statistics = copernicus_pull_wrapper(self.params,
+                                                       self.secrets,
+                                                       self.geojson_dir,
+                                                       tm_clean,
+                                                       )
             self.checkpoint.save("slope_stats", slope_statistics)
 
             # pipeline pause here to get maxar metadata
@@ -196,10 +196,12 @@ def compute_branches(params, rules_file_path, tm_clean, maxar_meta, slope_statis
     return ev
 
 def compute_project_results(params, ev):
-    """Run decision scoring."""
+    """Run decision scoring and finalize column order."""
     scored = poly_tree.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(scored)
     prj_results = proj_tree.aggregate_project_score(params, scored)
+    poly_results = place_column_after(poly_results, 'notes_base', 'baseline_decision')
+    poly_results = place_column_after(poly_results, 'notes_ev', 'ev_decision')
     return poly_results, prj_results
 
 def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False):

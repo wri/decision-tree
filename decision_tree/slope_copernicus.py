@@ -25,7 +25,6 @@ import pandas as pd
 import rasterio
 import shapely
 from exactextract import exact_extract
-from gri_shared_library.s3_tools import get_aws_session
 from odc.stac import configure_rio, stac_load
 from pystac_client import Client
 from rasterio.features import geometry_mask
@@ -33,6 +32,8 @@ from rasterio.merge import merge
 from rasterio.transform import from_bounds
 from shapely.geometry import box
 from decision_tree.constants import NODATA, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
+from decision_tree.s3_utils import get_aws_s3_client
+
 
 def _load_tiledb(secrets: dict, path: str):
     """Load tiledb parquet from S3 or local filesystem.
@@ -43,9 +44,7 @@ def _load_tiledb(secrets: dict, path: str):
     if path.startswith("s3://"):
         bucket, _, key = path.removeprefix("s3://").partition("/")
 
-        aws_profile = secrets.get("aws", {}).get("land_aws_profile")
-        aws_session = get_aws_session(profile_name=aws_profile)
-        s3_client = aws_session.client("s3")
+        s3_client = get_aws_s3_client(secrets)
         body = s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
 
         return pd.read_parquet(io.BytesIO(body), columns=["X_tile", "Y_tile", "X", "Y"])
@@ -115,9 +114,7 @@ def _tile_key(X_tile: int, Y_tile: int) -> str:
 
 
 def _s3_exists(secrets: dict, bucket: str, key: str) -> bool:
-    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
-    aws_session = get_aws_session(profile_name=aws_profile)
-    s3_client = aws_session.client("s3")
+    s3_client = get_aws_s3_client(secrets)
 
     try:
         s3_client.head_object(Bucket=bucket, Key=key)
@@ -267,9 +264,7 @@ def _compute_slope_for_tile(secrets: dict, tile: dict, dest: str, overwrite: boo
         dst.write(slope_pct.astype("float32"), 1)
 
     # Write slope TIFF to aws
-    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
-    aws_session = get_aws_session(profile_name=aws_profile)
-    s3_client = aws_session.client("s3")
+    s3_client = get_aws_s3_client(secrets)
     s3_client.upload_file(local, bucket, key)
     os.unlink(local)
 
@@ -519,9 +514,7 @@ def _download_slope_tiles_for_polygons(secrets: dict, gdf:gpd.GeoDataFrame, dest
     joined = gpd.sjoin(tiles_gdf, gdf, how="inner", predicate="intersects")
     unique = joined[["X_tile", "Y_tile"]].drop_duplicates()
 
-    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
-    aws_session = get_aws_session(profile_name=aws_profile)
-    s3_client = aws_session.client("s3")
+    s3_client = get_aws_s3_client(secrets)
 
     local_paths: list[str] = []
     tmp_dir = tempfile.mkdtemp(prefix="slope_tiles_")

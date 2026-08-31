@@ -2,7 +2,7 @@ import configparser
 import os
 from urllib.parse import urlparse
 from gri_shared_library.os_tools import create_folder
-from gri_shared_library.s3_tools import get_aws_session
+from decision_tree.s3_utils import get_aws_s3_client
 
 
 def download_geoparquet(params, secrets, tm_raw):
@@ -41,8 +41,7 @@ def download_geoparquet(params, secrets, tm_raw):
     create_folder(target_folder)
 
     # Retrieve parquet file from S3
-    aws_session = get_aws_session(profile_name=land_aws_profile)
-    s3_client = aws_session.client("s3")
+    s3_client = get_aws_s3_client(secrets)
     s3_client.download_file(bucket, key, tm_raw)
     print(f"Downloaded to {tm_raw}")
 

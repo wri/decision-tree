@@ -3,6 +3,17 @@ import boto3
 import os
 
 from botocore.exceptions import ClientError
+from gri_shared_library.s3_tools import get_aws_session
+
+
+def get_aws_s3_client(secrets: dict):
+    aws_profile = secrets.get("aws", {}).get("land_aws_profile")
+    if str(aws_profile).upper() == 'DEFAULT_CHAIN':
+        s3_client = boto3.client("s3")
+    else:
+        aws_session = get_aws_session(profile_name=aws_profile)
+        s3_client = aws_session.client("s3")
+    return s3_client
 
 
 def upload_to_s3(params, config_path, project_name, today):

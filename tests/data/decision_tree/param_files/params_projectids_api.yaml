@@ -25,11 +25,6 @@ s3:
   slope: s3://wri-restoration-geodata-ttc/slope
   overwrite_slope_cache: false  # true = recompute & re-upload every slope tile
 
-asana:
-  upload: False
-  section: Remote
-  dry_run: True
-
 criteria:
   canopy_threshold: 60          # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50              # threshold for identifying image quality

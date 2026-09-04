@@ -1,5 +1,8 @@
 # Release notes for decision-tree
 
+## 2026/08/28
+1. Removed used of Asana
+
 ## 2026/08/27
 1. Added the notes_base and notes_ev columns to the poly_results dataframe for recording additional context as to why decisions were made.
 

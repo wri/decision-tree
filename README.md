@@ -22,9 +22,7 @@ The primary functions of this code are located within `run_decision_tree.py`.
 - The notes_base and notes_ev columns on the poly_results dataframe record context as to why decisions were made such as whether a polygon was missing information.
 
 **Upload**
-- Push results to Asana  
 - Push results to S3  
-
 
 
 ## 🎯 Goals & Non-Goals
@@ -127,13 +125,10 @@ Don't actually list the config keys in plain text but describe what is needed.
 
 ```yaml
 access_token:
-opentopo_key: 
 aws:
   aws_access_key_id: 
   aws_secret_access_key:
   aws_region:
-asana:
-  pat: 
 ```
 
 

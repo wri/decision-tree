@@ -58,15 +58,11 @@ def load_secrets(secrets_path):
         aws_region = os.environ['AWS_REGION'] if 'AWS_REGION' in os.environ else 'us-east-1'
         aws = {"aws_access_key_id": aws_access_key_id, "aws_secret_access_key": aws_secret_access_key, "aws_region": aws_region}
 
-        asana_pat = os.environ['ASANA_PAT'] if 'ASANA_PAT' in os.environ else 'not_defined'
-        asana = {"asana_pat": asana_pat}
-
         tm_access_token = os.environ['TM_ACCESS_TOKEN'] if 'TM_ACCESS_TOKEN' in os.environ else 'not_defined'
         tm_token = {"tm_access_token": tm_access_token}
 
         secrets_json = {
             "aws" : aws,
-            "asana" : asana,
             "tm_api" : tm_token
         }
 

@@ -17,7 +17,7 @@ _OPS = {
     "==": operator.eq,
 }
 
-def parse_condition(value, actual):
+def parse_condition(value: str | float | int, actual: float | int) -> bool:
     """
     Evaluate a simple condition string like '>=1', '<2', or a direct equality value.
 
@@ -73,7 +73,7 @@ def _image_timing_tier(row):
         return 'none'
 
 
-def apply_rules_baseline(rules_file_path: str, df: pd.DataFrame):
+def apply_rules_baseline(rules_file_path: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     Decision tree for baseline classification.
     
@@ -201,7 +201,7 @@ def apply_rules_baseline(rules_file_path: str, df: pd.DataFrame):
 
     return df
 
-def apply_rules_ev(params, rules_file_path, df):
+def apply_rules_ev(params: str, rules_file_path: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     Decision tree for early verification (EV) classification.
 

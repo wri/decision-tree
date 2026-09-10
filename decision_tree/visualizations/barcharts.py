@@ -14,7 +14,7 @@ def style_axis(ax,
                hide_bottom: bool = None,
                grid_color: str = '#DDDDDD',
                tick_format: str = None,
-               fontsize: int = None):
+               fontsize: int = None) -> None:
     """
     Applies consistent styling to the axes, including labels and gridlines.
 
@@ -76,7 +76,7 @@ def portfolio_breakdown_polygon(
     fontsize: int         = 14,
     title: str            = None,
     style_kwargs: dict    = None
-):
+) -> tuple[plt.Figure, plt.Axes, dict, dict]:
     """
     Grouped horizontal bar chart of counts + proportions for each decision category.
     Bottom bar = baseline_decision
@@ -180,7 +180,7 @@ def portfolio_breakdown_project(
     fontsize: int          = 14,
     title: str             = None,
     style_kwargs: dict     = None
-):
+) -> tuple[plt.Figure, plt.Axes, dict, dict]:
     """
     Grouped horizontal bar chart of PROJECT counts + proportions for each decision category.
     Bottom bar = ev_project_label
@@ -283,7 +283,7 @@ def plot_decision_proportions(df: pd.DataFrame,
                                 title: str           = None,
                                 threshold: float     = None,   
                                 style_kwargs: dict   = None
-                            ):
+                            ) -> None:
     """
     For each project, draws two side-by-side stacked bars (baseline vs EV) 
     of decision proportions.
@@ -419,7 +419,7 @@ def baseline_counts(
     title: str               = " ",
     style_kwargs: dict       = None,
     annotate_offset: float   = 0.01,          # fraction of max count, used to offset labels
-):
+) -> tuple[plt.Figure, plt.Axes, pd.Series, pd.Series]:
     """
     Horizontal bar chart of BASELINE project counts for three grouped categories:
 
@@ -542,7 +542,7 @@ def plot_project_scores_dumbbell(
     style_kwargs: dict = None,
     annotate: bool     = True,       # annotate with "baseline"/"ev" strings
     label_offset: float = 0.5        # x-offset (data units) for annotation text
-):
+) -> None:
     """
     Horizontal plot where EACH project row shows a faint line from 0 to 100
     and two markers placed at the baseline and EV scores.

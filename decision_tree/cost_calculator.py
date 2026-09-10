@@ -4,7 +4,7 @@ import pandas as pd
 from decision_tree.constants import COST_FIELD, COST_REMOTE
 
 
-def calc_cost_to_verify(df, decimals=1):
+def calc_cost_to_verify(df: pd.DataFrame, decimals: int = 1) -> pd.DataFrame:
     """
     Using the remote vs field verification assignment and the polygon area,
     calculate the baseline and EV verification costs for the project.

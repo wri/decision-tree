@@ -1,5 +1,7 @@
 import ast
 import os
+
+import pandas as pd
 import yaml
 from gri_shared_library.constants import TreeCountProjectPhaseDayRange
 
@@ -56,15 +58,11 @@ def load_secrets(secrets_path: str = None) -> dict:
         aws_region = os.environ['AWS_REGION'] if 'AWS_REGION' in os.environ else 'us-east-1'
         aws = {"aws_access_key_id": aws_access_key_id, "aws_secret_access_key": aws_secret_access_key, "aws_region": aws_region}
 
-        asana_pat = os.environ['ASANA_PAT'] if 'ASANA_PAT' in os.environ else 'not_defined'
-        asana = {"asana_pat": asana_pat}
-
         tm_access_token = os.environ['TM_ACCESS_TOKEN'] if 'TM_ACCESS_TOKEN' in os.environ else 'not_defined'
         tm_token = {"tm_access_token": tm_access_token}
 
         secrets_json = {
             "aws" : aws,
-            "asana" : asana,
             "tm_api" : tm_token
         }
 
@@ -112,3 +110,47 @@ def resolve_indicator_window_range(params: dict, window_name: str) -> tuple[int,
             raise ValueError(f"Invalid endline_range specification ({endline_range}) in params file.")
     else:
         raise ValueError(f"Invalid window_name specification in params file.")
+
+
+def append_note(df, idx, label, col='notes'):
+    """
+    Append `label` to the given notes column instead of overwriting whatever
+    is already there. Notes accumulate as a list (e.g. 'missing-plantstart;
+    ttc-bad-year'); existing labels are not duplicated.
+
+    Parameters:
+    - df (pd.DataFrame): DataFrame with the target notes column.
+    - idx: either a single row index (updates df.at[idx, col]) or a
+      boolean mask aligned to df.index (vectorized update for many rows).
+    - label (str): note label to append, e.g. 'missing-ttc', 'ttc-bad-year'.
+    - col (str): which notes column to update, e.g. 'notes_base', 'notes_ev'.
+      Defaults to 'notes' for backward compatibility.
+    """
+    def _merge(current):
+        if pd.isna(current) or current == '':
+            return label
+        parts = [p.strip() for p in str(current).split(';')]
+        return current if label in parts else f"{current}; {label}"
+
+    if isinstance(idx, pd.Series):
+        # boolean mask - vectorized update across matching rows
+        if not idx.any():
+            return
+        df.loc[idx, col] = df.loc[idx, col].apply(_merge)
+    else:
+        # single row index
+        df.at[idx, col] = _merge(df.at[idx, col])
+
+
+def place_column_after(df, col, anchor):
+    """
+    Move `col` to sit immediately after `anchor` in df's column order.
+    No-op if either column is missing (e.g. an intermediate/test df that
+    doesn't have the column yet).
+    """
+    if col not in df.columns or anchor not in df.columns:
+        return df
+    series = df.pop(col)
+    loc = df.columns.get_loc(anchor) + 1
+    df.insert(loc, col, series)
+    return df

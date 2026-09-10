@@ -25,11 +25,6 @@ s3:
   slope: s3://wri-restoration-geodata-ttc/slope
   overwrite_slope_cache: false  # true = recompute & re-upload every slope tile
 
-asana:
-  upload: False
-  section: Remote
-  dry_run: True
-
 criteria:
   canopy_threshold: 60          # threshold for identifying open vs closed canopy projects
   cloud_thresh: 50              # threshold for identifying image quality
@@ -43,8 +38,8 @@ criteria:
   slope_thresh: 20
 
 outfile: # file paths are relative to the project root
-  data_version: 04-13-2026 #Date in MM-DD-YYYY format
-  experiment_id: exp7
+  data_version: 08-18-2026 #Date in MM-DD-YYYY format
+  experiment_id: exp1
   cohort: c2
   project_data_folder: 'data'
   # file paths are relative to the project_data_folder under the project root

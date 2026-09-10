@@ -19,11 +19,10 @@ The primary functions of this code are located within `run_decision_tree.py`.
 - Apply the weighted scoring approach at the polygon level  
 - Calculate the cost to monitor the project  
 - Aggregate polygon scores to derive project score  
+- The notes_base and notes_ev columns on the poly_results dataframe record context as to why decisions were made such as whether a polygon was missing information.
 
 **Upload**
-- Push results to Asana  
 - Push results to S3  
-
 
 
 ## 🎯 Goals & Non-Goals
@@ -126,13 +125,10 @@ Don't actually list the config keys in plain text but describe what is needed.
 
 ```yaml
 access_token:
-opentopo_key: 
 aws:
   aws_access_key_id: 
   aws_secret_access_key:
   aws_region:
-asana:
-  pat: 
 ```
 
 

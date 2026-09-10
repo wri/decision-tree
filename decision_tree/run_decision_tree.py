@@ -10,12 +10,11 @@ import decision_tree.cost_calculator as price
 import decision_tree.polygon_decisions as poly_tree
 import decision_tree.process_api_results as clean
 import decision_tree.project_decisions as proj_tree
-import decision_tree.update_asana as update_asana
 from decision_tree.api_utils import download_geoparquet
 from decision_tree.canopy_cover import apply_canopy_classification
 from decision_tree.image_availability import analyze_image_availability
 from decision_tree.slope_copernicus import copernicus_pull_wrapper, apply_slope_classification
-from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml
+from decision_tree.tools import convert_to_os_path, load_secrets, get_tm_auth, load_yaml, place_column_after
 from decision_tree.constants import RULES, TestProjectHandling
 
 class Checkpointer:
@@ -148,12 +147,7 @@ class VerificationDecisionTree:
                                                 tm_response,
                                                 self.geojson_dir,
                                                 project_ids,
-                                                test_project_handling= test_project_handling)
-
-            # verify that results contain ttc columns
-            ttc_cols = [c for c in tm_clean.columns if c.startswith('ttc_')]
-            if len(ttc_cols) == 0:
-                raise ValueError(f"The tm_clean does not contain any 'ttc_' column.")
+                                                test_project_handling = test_project_handling)
 
             self.checkpoint.save("feats", tm_clean)
 
@@ -184,8 +178,6 @@ class VerificationDecisionTree:
         self.checkpoint.save("prj_score", prj_results, always=True)
 
         # uploads
-        if self.params['asana']['upload']:
-            update_asana.update_asana_status_by_gid(self.params, self.secrets, self.prj_score)
         if self.params['s3']['upload']:
             raise Exception("The upload to S3 option is currently not supported.")
             # TODO The function call signature needs to be corrected.
@@ -204,10 +196,12 @@ def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame,
     return ev
 
 def compute_project_results(params: dict, ev: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run decision scoring."""
+    """Run decision scoring and finalize column order."""
     scored = poly_tree.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(scored)
     prj_results = proj_tree.aggregate_project_score(params, scored)
+    poly_results = place_column_after(poly_results, 'notes_base', 'baseline_decision')
+    poly_results = place_column_after(poly_results, 'notes_ev', 'ev_decision')
     return poly_results, prj_results
 
 def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False) -> VerificationDecisionTree | None:

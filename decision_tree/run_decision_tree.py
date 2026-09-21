@@ -121,7 +121,7 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self, project_ids: list[str] = None, test_project_handling = TestProjectHandling.EXCLUDE):
+    def run_decision_tree(self, project_ids: list[str] | None = None, test_project_handling = TestProjectHandling.EXCLUDE):
         if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
             raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
 
@@ -186,7 +186,8 @@ class VerificationDecisionTree:
         return poly_results, prj_results 
 
 
-def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: pd.DataFrame, slope_statistics: pd.DataFrame) -> pd.DataFrame:
+def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: str,
+                     slope_statistics: pd.DataFrame) -> pd.DataFrame:
     """Run decision tree branch logic."""
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)
@@ -204,7 +205,7 @@ def compute_project_results(params: dict, ev: pd.DataFrame) -> tuple[pd.DataFram
     poly_results = place_column_after(poly_results, 'notes_ev', 'ev_decision')
     return poly_results, prj_results
 
-def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False) -> VerificationDecisionTree | None:
+def main(params_file_path: str, secrets_file_path: str | None = None, parse_only: bool = False) -> VerificationDecisionTree | None:
     workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
     if parse_only:
         return workflow

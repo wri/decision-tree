@@ -14,16 +14,16 @@ import regex as re
 # ------------------------------
 # Consistent axis styling helper (from user)
 # ------------------------------
-def style_axis(ax, 
-               xlabel: str = None, 
-               ylabel: str = None, 
-               title: str = None,
-               y_grid: bool = None,
-               x_grid: bool = None,
-               hide_bottom: bool = None,
+def style_axis(ax,
+               xlabel: Optional[str] = None,
+               ylabel: Optional[str] = None,
+               title: Optional[str] = None,
+               y_grid: Optional[bool] = None,
+               x_grid: Optional[bool] = None,
+               hide_bottom: Optional[bool] = None,
                grid_color: str = '#DDDDDD',
-               tick_format: str = None,
-               fontsize: int = None) -> None:
+               tick_format: Optional[str] = None,
+               fontsize: Optional[int] = None) -> None:
     """Applies consistent styling to the axes, including labels and gridlines."""
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -144,7 +144,7 @@ def plot_portfolio_share(df: pd.DataFrame,
 # 2) EV leaderboard (past only)
 # ------------------------------
 def plot_ev_field_share_by_project_past(df: pd.DataFrame,
-                                        figsize: Tuple[float,float] = None,
+                                        figsize: Optional[Tuple[float,float]] = None,
                                         title: Optional[str] = None,
                                         fontsize: Optional[int] = 12,
                                         year_cutoff: int = 2025) -> Tuple[plt.Figure, plt.Axes]:
@@ -178,7 +178,7 @@ def plot_ev_field_share_by_project_past(df: pd.DataFrame,
 # 3) Baseline leaderboard (past only)
 # ------------------------------
 def plot_baseline_field_share_by_project_past(df: pd.DataFrame,
-                                              figsize: Tuple[float,float] = None,
+                                              figsize: Optional[Tuple[float,float]] = None,
                                               title: Optional[str] = None,
                                               fontsize: Optional[int] = 12,
                                               year_cutoff: int = 2025) -> Tuple[plt.Figure, plt.Axes]:

@@ -186,8 +186,7 @@ class VerificationDecisionTree:
         return poly_results, prj_results 
 
 
-def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: str,
-                     slope_statistics: pd.DataFrame) -> pd.DataFrame:
+def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: str, slope_statistics: pd.DataFrame) -> pd.DataFrame:
     """Run decision tree branch logic."""
     branch_images = analyze_image_availability(params, tm_clean, maxar_meta)
     branch_canopy = apply_canopy_classification(params, branch_images)

@@ -168,9 +168,9 @@ def extract_tree_cover_years(row_dict: dict) -> dict:
     """
     ttc_values = row_dict.get("ttc") or {}
     if isinstance(ttc_values, dict):
-        items = ttc_values.items()
+        items = list(ttc_values.items())
     elif isinstance(ttc_values, (list, tuple)):
-        items = ttc_values
+        items = list(ttc_values)
     else:
         raise TypeError(f"Expected a dict or list of TTC pairs, got {type(ttc_values)}")
 

@@ -74,7 +74,7 @@ def load_yaml(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def resolve_indicator_window_range(params: dict, window_name: str) -> tuple[int, int] | None:
+def resolve_indicator_window_range(params: dict, window_name: str) -> tuple[int, int]:
     criteria = params.get('criteria', {})
     if window_name.lower() == 'baseline':
         baseline_range = criteria.get('baseline_range')

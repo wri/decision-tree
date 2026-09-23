@@ -201,7 +201,7 @@ def apply_rules_baseline(rules_file_path: str, df: pd.DataFrame) -> pd.DataFrame
 
     return df
 
-def apply_rules_ev(params: str, rules_file_path: str, df: pd.DataFrame) -> pd.DataFrame:
+def apply_rules_ev(params: dict, rules_file_path: str, df: pd.DataFrame) -> pd.DataFrame:
     """
     Decision tree for early verification (EV) classification.
 

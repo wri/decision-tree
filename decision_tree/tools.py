@@ -47,7 +47,7 @@ def convert_to_os_path(target_dir: str, path_str: str) -> str:
     return normalized_path
 
 
-def load_secrets(secrets_path: str = None) -> dict:
+def load_secrets(secrets_path: str | None = None) -> dict:
     if secrets_path and os.path.isfile(secrets_path):
         with open(secrets_path, "r") as f:
             secrets_json = yaml.safe_load(f)
@@ -74,7 +74,7 @@ def load_yaml(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def resolve_indicator_window_range(params: dict, window_name: str) -> tuple[int, int] | None:
+def resolve_indicator_window_range(params: dict, window_name: str) -> tuple[int, int]:
     criteria = params.get('criteria', {})
     if window_name.lower() == 'baseline':
         baseline_range = criteria.get('baseline_range')

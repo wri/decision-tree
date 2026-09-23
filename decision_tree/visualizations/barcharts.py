@@ -5,16 +5,16 @@ from matplotlib import patches as mpatches
 from decision_tree.visualizations.visuals_config import DECISION_ORDER, DECISION_COLORS
 
 
-def style_axis(ax, 
-               xlabel: str = None, 
-               ylabel: str = None, 
-               title: str = None,
-               y_grid: bool = None,
-               x_grid: bool = None,
-               hide_bottom: bool = None,
+def style_axis(ax,
+               xlabel: str | None = None,
+               ylabel: str | None = None,
+               title: str | None = None,
+               y_grid: bool | None = None,
+               x_grid: bool | None = None,
+               hide_bottom: bool | None = None,
                grid_color: str = '#DDDDDD',
-               tick_format: str = None,
-               fontsize: int = None) -> None:
+               tick_format: str | None = None,
+               fontsize: int | None = None) -> None:
     """
     Applies consistent styling to the axes, including labels and gridlines.
 
@@ -74,8 +74,8 @@ def portfolio_breakdown_polygon(
     bar_height: float     = 0.6,
     annotate_offset: float= 0.01,
     fontsize: int         = 14,
-    title: str            = None,
-    style_kwargs: dict    = None
+    title: str | None     = None,
+    style_kwargs: dict | None = None
 ) -> tuple[plt.Figure, plt.Axes, dict, dict]:
     """
     Grouped horizontal bar chart of counts + proportions for each decision category.
@@ -178,8 +178,8 @@ def portfolio_breakdown_project(
     bar_height: float      = 0.6,
     annotate_offset: float = 0.01,
     fontsize: int          = 14,
-    title: str             = None,
-    style_kwargs: dict     = None
+    title: str | None      = None,
+    style_kwargs: dict | None = None
 ) -> tuple[plt.Figure, plt.Axes, dict, dict]:
     """
     Grouped horizontal bar chart of PROJECT counts + proportions for each decision category.
@@ -280,9 +280,9 @@ def plot_decision_proportions(df: pd.DataFrame,
                                 sort_by              = None,
                                 group_height: float  = 0.8,
                                 figsize: tuple       = (24, 12),
-                                title: str           = None,
-                                threshold: float     = None,   
-                                style_kwargs: dict   = None
+                                title: str | None    = None,
+                                threshold: float | None = None,
+                                style_kwargs: dict | None = None
                             ) -> None:
     """
     For each project, draws two side-by-side stacked bars (baseline vs EV) 
@@ -417,7 +417,7 @@ def baseline_counts(
     bar_height: float        = 0.6,
     fontsize: int            = 14,
     title: str               = " ",
-    style_kwargs: dict       = None,
+    style_kwargs: dict | None = None,
     annotate_offset: float   = 0.01,          # fraction of max count, used to offset labels
 ) -> tuple[plt.Figure, plt.Axes, pd.Series, pd.Series]:
     """
@@ -537,9 +537,9 @@ def plot_project_scores_dumbbell(
     baseline_col: str = "baseline_project_score_0_100",
     ev_col: str       = "ev_project_score_0_100",
     label_col: str    = "project_name",
-    figsize: tuple    = None,
+    figsize: tuple | None = None,
     title: str        = " ",
-    style_kwargs: dict = None,
+    style_kwargs: dict | None = None,
     annotate: bool     = True,       # annotate with "baseline"/"ev" strings
     label_offset: float = 0.5        # x-offset (data units) for annotation text
 ) -> None:

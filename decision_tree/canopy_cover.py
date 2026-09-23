@@ -7,7 +7,7 @@ from gri_shared_library.constants import TCC_BASELINE_OFFSET_YEARS, TCC_EI_OFFSE
 from decision_tree.tools import resolve_indicator_window_range, append_note
 
 
-def apply_canopy_classification(params, df):
+def apply_canopy_classification(params: dict, df: pd.DataFrame) -> pd.DataFrame:
     """
     Assigns canopy classification for baseline and early verification
     based on the available ttc values and plantstart year.
@@ -46,7 +46,7 @@ def apply_canopy_classification(params, df):
     # identify any missing ttc, flag in notes and assign class to NaN
     ttc_cols = [col for col in df.columns if col.startswith('ttc_') and col[4:].isdigit() and len(col[4:]) == 4]
     null_mask = df[ttc_cols].isna().all(axis=1)  
-    append_note(df, null_mask, 'missing-ttc', col='notes_base')  
+    append_note(df, null_mask, 'missing-ttc', col='notes_base')
     append_note(df, null_mask, 'missing-ttc', col='notes_ev')
     df.loc[null_mask, ['baseline_canopy', 'ev_canopy']] = np.nan
 

@@ -4,15 +4,15 @@ import pandas as pd
 from decision_tree.tools import resolve_indicator_window_range
 
 
-def analyze_image_availability(params,
-                               proj_df, 
-                               maxar_fp: str):
+def analyze_image_availability(params: dict,
+                               proj_df: pd.DataFrame,
+                               maxar_fp: str) -> pd.DataFrame:
     """
-    Assesses image availability for baseline & early verification per 
+    Assesses image availability for baseline & early verification per
     project/polygon based on user defined windows.
 
     Parameters:
-    - params - string path to the params.yaml which contains criteria for the decision
+    - params - parsed params.yaml dict which contains criteria for the decision
     - proj_df (pd.DataFrame): DataFrame containing project characteristics.
     - maxar_fp - string path to the maxar_fp
 

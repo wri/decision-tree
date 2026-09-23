@@ -1,4 +1,6 @@
-DECISION_ORDER = [
+from typing import Final
+
+DECISION_ORDER: Final[list[str]] = [
     "strong remote",
     "weak remote",
     "strong field",
@@ -8,7 +10,7 @@ DECISION_ORDER = [
     "mangrove",
 ]
 
-DECISION_COLORS = {
+DECISION_COLORS: Final[dict[str, str]] = {
     "strong remote": "#2E8F2E",        # dark green
     "weak remote":   "#7DCE7D",        # light green
     "strong field":  "#800080",        # dark purple

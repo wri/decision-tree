@@ -28,13 +28,14 @@ from exactextract import exact_extract
 from gri_shared_library.s3_tools import get_aws_session
 from odc.stac import configure_rio, stac_load
 from pystac_client import Client
+from pyproj import CRS
 from rasterio.features import geometry_mask
 from rasterio.merge import merge
 from rasterio.transform import from_bounds
 from shapely.geometry import box
 from decision_tree.constants import NODATA, HALF_TILE_DEG, DEM_COLLECTION, EARTH_SEARCH_V1, DEFAULT_TILEDB_PATH
 
-def _load_tiledb(secrets: dict, path: str):
+def _load_tiledb(secrets: dict, path: str) -> pd.DataFrame:
     """Load tiledb parquet from S3 or local filesystem.
     Args:
       secrets: Parsed secrets.yaml file for AWS access.
@@ -359,7 +360,7 @@ def _compute_stats_numpy(gdf: pd.DataFrame, mosaic, transform, steep_threshold: 
     return results
 
 
-def _compute_stats_exactextract(gdf: pd.DataFrame, mosaic, transform, crs, steep_threshold: float) -> dict[str, dict]:
+def _compute_stats_exactextract(gdf: pd.DataFrame, mosaic: np.ndarray, transform, crs: CRS, steep_threshold: float) -> dict[str, dict]:
     """Fractional-coverage weighting at polygon edges (higher precision).
 
     Writes two in-memory rasters to temp GeoTIFFs:
@@ -544,7 +545,7 @@ def copernicus_pull_wrapper(
     feats_df: pd.DataFrame,
     precision: str = "numpy",
     max_workers: int = 8,
-):
+) -> pd.DataFrame:
     """
     Copernicus-DEM slope statistics, returned as a feats_df merge.
 
@@ -639,7 +640,7 @@ def copernicus_pull_wrapper(
     return comb
 
 
-def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats):
+def apply_slope_classification(params: dict, df: pd.DataFrame, slope_stats: pd.DataFrame) -> pd.DataFrame:
     """
     each polygon already has a pre-computed number identifying the percentage of the polygon's
     area that has a steep slope (>threshold). this function converts that number into simple

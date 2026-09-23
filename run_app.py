@@ -1,7 +1,7 @@
 from decision_tree.run_decision_tree import VerificationDecisionTree
 
 
-def main(params_file_path: str, secrets_file_path: str = None, parse_only: bool = False, checkpoint: bool = False):
+def main(params_file_path: str, secrets_file_path: str | None = None, parse_only: bool = False, checkpoint: bool = False):
     workflow = VerificationDecisionTree(params_file_path, secrets_file_path, checkpoint)
     if parse_only:
         return workflow

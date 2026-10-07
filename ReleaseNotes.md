@@ -1,5 +1,9 @@
 # Release notes for decision-tree
 
+## 2026/10/07
+1. Split tests into folders for unit and integration
+2. Modified workflow to only execute unit tests
+
 ## 2026/08/28
 1. Removed used of Asana
 

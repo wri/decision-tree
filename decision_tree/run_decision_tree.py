@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 from gri_shared_library.geoparquet_tools import get_project_ids_from_geoparquet
 from gri_shared_library.os_tools import create_folder
-from tm_api_utils.tm_features import get_tm_feats
+from gri_shared_library.tm_api_tools import get_tm_feats
 
 import decision_tree.cost_calculator as price
 import decision_tree.polygon_decisions as poly_tree

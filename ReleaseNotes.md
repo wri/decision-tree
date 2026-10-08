@@ -1,5 +1,8 @@
 # Release notes for decision-tree
 
+## 2026/10/08
+1. Switched dependency from the deprecated terramatch-researcher-api repo to shared-library repo
+
 ## 2026/08/28
 1. Removed used of Asana
 

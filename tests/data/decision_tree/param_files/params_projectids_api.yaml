@@ -6,7 +6,8 @@
 # Update paths, thresholds, scoring rules, and API settings here.
 #
 # Notes:
-# - 'mode' indicates where the pipeline begins. Options: full, partial, score
+# - 'mode' indicates where the polygon step begins. Options: full, projectids, score
+#   (the project step ignores mode; it always reads the polygon output file)
 # File storage: files are named according to the 'data_version', 'experiment_id' and 'cohort'
 #   - 'data version' identifies cached inputs by the date they were downloaded
 #   - 'experiment id' tracks different experiments using same data version

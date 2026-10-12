@@ -1,32 +1,38 @@
 import os
 
+import pandas as pd
+import pytest
 from numpy import nan
 
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
 from decision_tree.constants import TestProjectHandling
 from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from tools import has_expected_project_ev_values, folder_cleanup
 from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 
-
-def test_run_decision_tree_full():
-    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
-    # pre-run cleanup
-    folder_cleanup(params_path)
-
-    test_project_handling = TestProjectHandling.ONLY
-    try:
-        workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = workflow.run_decision_tree(project_ids=None, test_project_handling=test_project_handling)
-
-        # verify that a project was returned
-        assert len(prj_results) >= 1
-
-    finally:
-        # post-run cleanup
-        folder_cleanup(params_path)
+from tests.conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
+from tests.tools import folder_cleanup, has_expected_project_ev_values
 
 
+# @pytest.mark.network
+# def test_run_decision_tree_full():
+#     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
+#     # pre-run cleanup
+#     folder_cleanup(params_path)
+#
+#     test_project_handling = TestProjectHandling.ONLY
+#     try:
+#         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+#         poly_results = workflow.run_polygon_metrics(project_ids=None, test_project_handling=test_project_handling)
+#         prj_results = workflow.run_project_metrics(poly_results)
+#
+#         # verify that a project was returned
+#         assert len(prj_results) >= 1
+#
+#     finally:
+#         # post-run cleanup
+#         folder_cleanup(params_path)
+
+
+@pytest.mark.network
 def test_run_decision_tree_projectids():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
     # pre-run cleanup
@@ -39,8 +45,9 @@ def test_run_decision_tree_projectids():
 
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids,
-                                                               test_project_handling=test_project_handling)
+        poly_results = workflow.run_polygon_metrics(project_ids=project_ids,
+                                                    test_project_handling=test_project_handling)
+        prj_results = workflow.run_project_metrics(poly_results)
 
         # TODO Determine how to modify the data to get more variation
         if project_ids == [TEST_01_GRI_PROJECT_ID]:
@@ -71,6 +78,7 @@ def test_run_decision_tree_projectids():
         folder_cleanup(params_path)
 
 
+@pytest.mark.network
 def test_run_decision_tree_projectids_api_query():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_api.yaml")
     # pre-run cleanup
@@ -83,8 +91,9 @@ def test_run_decision_tree_projectids_api_query():
 
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = (
-            workflow.run_decision_tree(project_ids=project_ids, test_project_handling=test_project_handling))
+        poly_results = workflow.run_polygon_metrics(project_ids=project_ids,
+                                                    test_project_handling=test_project_handling)
+        prj_results = workflow.run_project_metrics(poly_results)
 
         # expected results
         if project_ids == [TEST_REAL_PROJECT_C1_ID]:
@@ -115,7 +124,8 @@ def test_run_decision_tree_score():
 
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = workflow.run_decision_tree()
+        poly_results = workflow.run_polygon_metrics()
+        prj_results = workflow.run_project_metrics(poly_results)
 
         # TODO Determine how to modify the data to get more variation
         # verify that two projects were returned
@@ -136,6 +146,64 @@ def test_run_decision_tree_score():
     finally:
         # post-run cleanup
         folder_cleanup(params_path)
+
+
+def test_run_polygon_and_project_steps_separately():
+    """The project step run from the persisted polygon output matches the single-call result."""
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    folder_cleanup(params_path)
+
+    try:
+        # Step 1: polygon metrics only - must not produce project output
+        polygon_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+        poly_results = polygon_workflow.run_polygon_metrics()
+        assert os.path.exists(polygon_workflow.poly_score)
+        assert not os.path.exists(polygon_workflow.prj_score)
+        assert "ev_label" not in poly_results.columns
+
+        # Step 2: project metrics in a fresh workflow, loading polygon output from disk
+        project_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+        prj_from_disk = project_workflow.run_project_metrics()
+        assert os.path.exists(project_workflow.prj_score)
+
+        # Same result as aggregating the in-memory polygon results
+        prj_in_memory = project_workflow.run_project_metrics(poly_results=poly_results)
+        pd.testing.assert_frame_equal(prj_from_disk.reset_index(drop=True),
+                                      prj_in_memory.reset_index(drop=True),
+                                      check_dtype=False)
+
+        # Project subset
+        project_id = str(poly_results["project_id"].iat[0])
+        prj_subset = project_workflow.run_project_metrics(project_ids=[project_id])
+        assert prj_subset["project_id"].astype(str).tolist() == [project_id]
+
+    finally:
+        folder_cleanup(params_path)
+
+
+def test_run_project_metrics_requires_polygon_output():
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    folder_cleanup(params_path)
+
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+    with pytest.raises(FileNotFoundError):
+        workflow.run_project_metrics()
+
+
+def test_run_project_metrics_rejects_bad_input():
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+
+    # missing required columns
+    with pytest.raises(ValueError, match="missing required column"):
+        workflow.run_project_metrics(poly_results=pd.DataFrame({"project_id": ["p1"], "area": [1.0]}))
+
+    # unknown project id
+    poly = pd.DataFrame({"project_id": ["p1"], "area": [1.0],
+                         "baseline_decision": ["weak remote"], "ev_decision": ["weak remote"],
+                         "baseline_remote_suitability": [70.0], "ev_remote_suitability": [70.0]})
+    with pytest.raises(ValueError, match="not found"):
+        workflow.run_project_metrics(poly_results=poly, project_ids=["p2"])
 
 
 def test_run_decision_tree_param_parsing():

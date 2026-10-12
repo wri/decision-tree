@@ -1,5 +1,10 @@
 # Release notes for decision-tree
 
+## 2026/10/09
+1. Added run_polygon_metrics and run_project_metrics methods and removed run_decision_tree function.
+2. Updated tests for modified functions.
+3. Added other unit tests 
+
 ## 2026/10/07
 1. Split tests into folders for unit and integration
 2. Modified workflow to only execute unit tests

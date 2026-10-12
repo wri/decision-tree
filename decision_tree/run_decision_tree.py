@@ -121,7 +121,68 @@ class VerificationDecisionTree:
             "prj_score":    self.prj_score,
         }
 
-    def run_decision_tree(self, project_ids: list[str] | None = None, test_project_handling = TestProjectHandling.EXCLUDE):
+    # ------------------------------------------------------------------
+    # Step 1: polygon-level metrics (automated; runs when inputs are available)
+    # ------------------------------------------------------------------
+    def run_polygon_metrics(self,
+                            project_ids: list[str] | None = None,
+                            test_project_handling: TestProjectHandling = TestProjectHandling.EXCLUDE) -> pd.DataFrame:
+        """
+        Generate polygon-level decisions, remote-suitability scores and verification costs.
+
+        Intended to be triggered automatically once the input data (TerraMatch snapshot,
+        Maxar image metadata, slope tiles) is available. The polygon output is always
+        written to `poly_score`, which is the hand-off file for run_project_metrics().
+        """
+        ev = self._compute_tree_results(project_ids, test_project_handling)
+        poly_results = compute_polygon_results(self.params, ev)
+        self.checkpoint.save("poly_score", poly_results, always=True)
+        self._upload_outputs()
+        return poly_results
+
+    # ------------------------------------------------------------------
+    # Step 2: project-level metrics (operator-triggered)
+    # ------------------------------------------------------------------
+    def run_project_metrics(self,
+                            poly_results: pd.DataFrame | None = None,
+                            project_ids: list[str] | None = None) -> pd.DataFrame:
+        """
+        Aggregate polygon-level results into project-level labels and confidence scores.
+
+        Intended to be triggered by an operator. Does not ingest data, compute slope or
+        apply rules; it only reads the polygon output produced by run_polygon_metrics().
+        The 'mode' parameter does not apply to this step.
+
+        Args:
+            poly_results: polygon results to aggregate. When None, the persisted
+                `poly_score` file for the configured cohort/data_version/experiment_id is loaded.
+            project_ids: optional subset of projects to aggregate. Note that the
+                project output file is overwritten with only this subset.
+        """
+        if poly_results is None:
+            poly_results = self.checkpoint.load("poly_score")
+
+        _validate_poly_results(self.params, poly_results)
+
+        if project_ids:
+            available = set(poly_results["project_id"].astype(str))
+            missing = [pid for pid in project_ids if pid not in available]
+            if missing:
+                raise ValueError(f"Project id(s) not found in polygon results: {missing}")
+            poly_results = poly_results[poly_results["project_id"].astype(str).isin(project_ids)]
+
+        prj_results = compute_project_results(self.params, poly_results)
+        self.checkpoint.save("prj_score", prj_results, always=True)
+        self._upload_outputs()
+        return prj_results
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+    def _compute_tree_results(self,
+                              project_ids: list[str] | None,
+                              test_project_handling: TestProjectHandling) -> pd.DataFrame:
+        """Acquire input data (or load cached tree results in 'score' mode) and apply the decision-tree rules."""
         if self.mode in ["full", "score"] and not (project_ids is None or project_ids == []):
             raise ValueError(f"The project_id parameter cannot be specified for the '{self.mode}' mode.")
 
@@ -129,6 +190,11 @@ class VerificationDecisionTree:
             raise ValueError("The project_id parameter must be specified for 'projectids' mode")
 
         if self.mode in ("full", "projectids"):
+            # Fail fast before any downloads if a required local input is missing.
+            if not Path(self.maxar_meta).exists():
+                raise FileNotFoundError(f"Maxar image metadata not found at {self.maxar_meta}; "
+                                        f"polygon metrics cannot be generated until it is available.")
+
             print(f"Running in {self.mode.upper()} mode — acquiring prj data.")
             download_geoparquet(self.params, self.secrets, self.tm_raw)
 
@@ -158,11 +224,10 @@ class VerificationDecisionTree:
                                                        )
             self.checkpoint.save("slope_stats", slope_statistics)
 
-            # pipeline pause here to get maxar metadata
-            ev = compute_branches(self.params, 
-                                  self.rules, 
-                                  tm_clean, 
-                                  self.maxar_meta, 
+            ev = compute_branches(self.params,
+                                  self.rules,
+                                  tm_clean,
+                                  self.maxar_meta,
                                   slope_statistics)
             self.checkpoint.save("tree_results", ev)
 
@@ -172,18 +237,13 @@ class VerificationDecisionTree:
         else:
             raise ValueError(f"Invalid mode: {self.mode}")
 
-        # Get results
-        poly_results, prj_results = compute_project_results(self.params, ev)
-        self.checkpoint.save("poly_score", poly_results, always=True)
-        self.checkpoint.save("prj_score", prj_results, always=True)
+        return ev
 
-        # uploads
+    def _upload_outputs(self) -> None:
         if self.params['s3']['upload']:
             raise Exception("The upload to S3 option is currently not supported.")
             # TODO The function call signature needs to be corrected.
             # upload_to_s3(self.prj_score, self.params, self.secrets)
-
-        return poly_results, prj_results 
 
 
 def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: str, slope_statistics: pd.DataFrame) -> pd.DataFrame:
@@ -195,20 +255,53 @@ def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame,
     ev = poly_tree.apply_rules_ev(params, rules_file_path, baseline)
     return ev
 
-def compute_project_results(params: dict, ev: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run decision scoring and finalize column order."""
+
+def compute_polygon_results(params: dict, ev: pd.DataFrame) -> pd.DataFrame:
+    """Polygon-level scoring and cost to verify, with notes columns placed next to their decisions."""
     scored = poly_tree.apply_scoring(params, ev)
     poly_results = price.calc_cost_to_verify(scored)
-    prj_results = proj_tree.aggregate_project_score(params, scored)
     poly_results = place_column_after(poly_results, 'notes_base', 'baseline_decision')
     poly_results = place_column_after(poly_results, 'notes_ev', 'ev_decision')
-    return poly_results, prj_results
+    return poly_results
 
-def main(params_file_path: str, secrets_file_path: str | None = None, parse_only: bool = False) -> VerificationDecisionTree | None:
-    workflow = VerificationDecisionTree(params_file_path, secrets_file_path)
+
+def compute_project_results(params: dict, poly_results: pd.DataFrame) -> pd.DataFrame:
+    """Project-level aggregation of polygon results."""
+    return proj_tree.aggregate_project_score(params, poly_results)
+
+
+def _validate_poly_results(params: dict, poly_results: pd.DataFrame) -> None:
+    """Confirm the polygon results contain the columns the project aggregation depends on."""
+    area_col = (params or {}).get("scoring", {}).get("area_col", "area")
+    required = {"project_id", area_col,
+                "baseline_decision", "ev_decision",
+                "baseline_remote_suitability", "ev_remote_suitability"}
+    missing = sorted(required - set(poly_results.columns))
+    if missing:
+        raise ValueError(f"Polygon results are missing required column(s) for project aggregation: {missing}. "
+                         f"Re-run the polygon step to regenerate them.")
+
+
+STEPS = ("polygon", "project", "all")
+
+
+def main(params_file_path: str,
+         secrets_file_path: str | None = None,
+         parse_only: bool = False,
+         step: str = "all",
+         project_ids: list[str] | None = None,
+         checkpoint: bool = False) -> VerificationDecisionTree | None:
+    workflow = VerificationDecisionTree(params_file_path, secrets_file_path, checkpoint)
     if parse_only:
         return workflow
-    else:
-        workflow.run_decision_tree(None)
-        return None
 
+    if step == "polygon":
+        workflow.run_polygon_metrics(project_ids)
+    elif step == "project":
+        workflow.run_project_metrics(project_ids=project_ids)
+    elif step == "all":
+        poly_results = workflow.run_polygon_metrics(project_ids)
+        workflow.run_project_metrics(poly_results)
+    else:
+        raise ValueError(f"Invalid step '{step}'. Options: {', '.join(STEPS)}")
+    return None

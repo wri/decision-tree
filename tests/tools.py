@@ -48,9 +48,30 @@ def _get_folders(directory, exclude):
     ]
 
 
-def folder_cleanup(params_path):
+TEST_DATA_ROOT_PARTS = ("tests", "data")
+
+
+def _resolve_cleanup_dir(params_path):
+    """
+    Resolve the project_data_folder from a params file and refuse anything that is not
+    strictly inside tests/data, so a mistyped params file cannot wipe real data.
+    """
     params = load_yaml(params_path)
-    data_dir = os.path.join(get_project_root_dir(), params['outfile']['project_data_folder'])
+    root = get_project_root_dir()
+    allowed = os.path.realpath(os.path.join(root, *TEST_DATA_ROOT_PARTS))
+    data_dir = os.path.realpath(os.path.join(root, params['outfile']['project_data_folder']))
+    try:
+        inside = os.path.commonpath([data_dir, allowed]) == allowed and data_dir != allowed
+    except ValueError:  # e.g. different drives on Windows
+        inside = False
+    if not inside:
+        raise ValueError(f"Refusing to clean '{data_dir}': project_data_folder in {params_path} "
+                         f"must be a sub-folder of '{allowed}'.")
+    return data_dir
+
+
+def folder_cleanup(params_path):
+    data_dir = _resolve_cleanup_dir(params_path)
     keeper_folders = ["imagery_availability", "tree_output"]
     scratch_folders = _get_folders(data_dir, keeper_folders)
     for folder in scratch_folders:

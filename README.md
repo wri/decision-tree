@@ -25,6 +25,34 @@ The primary functions of this code are located within `run_decision_tree.py`.
 - Push results to S3  
 
 
+## ▶️ Pipeline Steps
+
+The pipeline is split into two independently triggered steps:
+
+| Step | Trigger | Entry point | Reads | Writes |
+|------|---------|-------------|-------|--------|
+| Polygon metrics | Automatic, when input data is available | `run_polygon_metrics()` / `--step polygon` | TerraMatch data, Maxar metadata, slope (or cached `tree_results` in `score` mode) | `poly_decision` file |
+| Project metrics | Operator | `run_project_metrics()` / `--step project` | `poly_decision` file | `prj_decision` file |
+
+`--step all` (the default) runs both steps back-to-back, passing the polygon results to the project step in memory. The `mode` parameter only applies to the polygon step.
+The project step locates the polygon output via `cohort`, `data_version` and `experiment_id` in `params.yaml`, and accepts `--project_ids` to aggregate a subset.
+
+```bash
+python run_app.py --params_yaml_path params.yaml --secrets_yaml_path secrets.yaml --step polygon
+python run_app.py --params_yaml_path params.yaml --secrets_yaml_path secrets.yaml --step project
+```
+
+
+## 🧪 Running Tests
+
+Tests that need network access and credentials (TerraMatch API, S3, Copernicus DEM) are marked `network`.
+
+```bash
+pytest -m "not network"   # offline: unit tests and score-mode integration tests
+pytest                    # everything (requires secrets.yaml or environment credentials)
+```
+
+
 ## 🎯 Goals & Non-Goals
 
 * **Goals**: create an individual verification score for each project in the TerraFund portfolio.

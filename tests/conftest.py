@@ -5,7 +5,7 @@ from pathlib import Path
 from decision_tree.constants import PROJECT_ROOT
 
 # Block any directory that contains the remote repo checkout
-BLOCKED = {"terramatch-researcher-api", "tm-api-utils"}
+BLOCKED = {"terramatch-researcher-api"}
 
 def pytest_ignore_collect(path=None, config=None, collection_path=None):
     # pytest >= 8 passes collection_path: Path

@@ -411,7 +411,7 @@ requires-dist = [
     { name = "fastparquet" },
     { name = "fiona" },
     { name = "geopandas" },
-    { name = "gri-shared-library", git = "https://github.com/wri/gri-shared-library.git?branch=GDP-162" },
+    { name = "gri-shared-library", git = "https://github.com/wri/gri-shared-library.git?branch=develop" },
     { name = "matplotlib" },
     { name = "odc-stac" },
     { name = "pandas" },
@@ -584,21 +584,17 @@ wheels = [
 
 [[package]]
 name = "gri-shared-library"
-version = "0.2.0"
-source = { git = "https://github.com/wri/gri-shared-library.git?branch=GDP-162#6dcf57cc1f2ef9194588b42c12308915962f299f" }
+version = "0.1.0"
+source = { git = "https://github.com/wri/gri-shared-library.git?branch=develop#bea0aa729cd5de19ca0bba0ccb3bff3c90c4cb44" }
 dependencies = [
     { name = "boto3" },
     { name = "botocore" },
     { name = "duckdb" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "pydantic" },
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "pyyaml" },
-    { name = "requests" },
-    { name = "shapely" },
-    { name = "tqdm" },
 ]
 
 [[package]]

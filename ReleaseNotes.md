@@ -2,8 +2,9 @@
 
 ## 2026/10/09
 1. Added run_polygon_metrics and run_project_metrics methods and removed run_decision_tree function.
-2. Updated tests for modified functions.
-3. Added other unit tests 
+2. run_polygon_metrics always saves poly_results to csv file for later loading by run_project_metrics.
+3. Updated tests for modified functions.
+4. Added other unit tests 
 
 ## 2026/10/07
 1. Split tests into folders for unit and integration

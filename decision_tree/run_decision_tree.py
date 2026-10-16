@@ -136,7 +136,9 @@ class VerificationDecisionTree:
         """
         ev = self._compute_tree_results(project_ids, test_project_handling)
         poly_results = compute_polygon_results(self.params, ev)
+        # Save results to local csv file
         self.checkpoint.save("poly_score", poly_results, always=True)
+        # Save results to persistent store
         self._upload_outputs()
         return poly_results
 
@@ -172,7 +174,9 @@ class VerificationDecisionTree:
             poly_results = poly_results[poly_results["project_id"].astype(str).isin(project_ids)]
 
         prj_results = compute_project_results(self.params, poly_results)
+        # Save results to local csv file
         self.checkpoint.save("prj_score", prj_results, always=True)
+        # Save results to persistent store
         self._upload_outputs()
         return prj_results
 
@@ -215,6 +219,7 @@ class VerificationDecisionTree:
                                                 project_ids,
                                                 test_project_handling = test_project_handling)
 
+            # Save feats to local csv file
             self.checkpoint.save("feats", tm_clean)
 
             slope_statistics = copernicus_pull_wrapper(self.params,
@@ -222,6 +227,7 @@ class VerificationDecisionTree:
                                                        self.geojson_dir,
                                                        tm_clean,
                                                        )
+            # Save slope_stats to local csv file
             self.checkpoint.save("slope_stats", slope_statistics)
 
             ev = compute_branches(self.params,
@@ -229,6 +235,8 @@ class VerificationDecisionTree:
                                   tm_clean,
                                   self.maxar_meta,
                                   slope_statistics)
+
+            # Save tree_results to local csv file
             self.checkpoint.save("tree_results", ev)
 
         elif self.mode == "score":

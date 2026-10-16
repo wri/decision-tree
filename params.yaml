@@ -19,10 +19,16 @@ mode: full  # options: full, score, projectids
 tm_source: geoparquet # {geoparquet|API}
 
 s3:
-  upload: false
+  # control upload of poly_score and prj_score to persistent AWS store
+  upload: false  # TODO: The upload to S3 option is currently not supported.
+  # ynder WRI account
+  # geojson of polygon boundaries: https://restoration-monitoring.s3.us-east-1.amazonaws.com/tree_verification/output/project_data/
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
+  # ynder land-research account
+  # geoparquet of polygon definitions: https://wri-restoration-geodata.s3.us-east-1.amazonaws.com/terramatch/snapshot/
   geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
+  # tif of slopes: https://wri-restoration-geodata-ttc.s3.us-east-1.amazonaws.com/slope/
   slope: s3://wri-restoration-geodata-ttc/slope
   overwrite_slope_cache: false  # true = recompute & re-upload every slope tile
 

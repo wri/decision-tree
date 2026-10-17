@@ -134,12 +134,13 @@ class VerificationDecisionTree:
         Maxar image metadata, slope tiles) is available. The polygon output is always
         written to `poly_score`, which is the hand-off file for run_project_metrics().
         """
+        run_datetime = _now_utc()  # one value for every row this run uploads
         ev = self._compute_tree_results(project_ids, test_project_handling)
         poly_results = compute_polygon_results(self.params, ev)
         # Save results to local csv file
         self.checkpoint.save("poly_score", poly_results, always=True)
         # Save results to persistent store
-        self._upload_outputs()
+        self._upload_outputs(run_datetime, poly_results=poly_results)
         return poly_results
 
     # ------------------------------------------------------------------
@@ -156,13 +157,19 @@ class VerificationDecisionTree:
         The 'mode' parameter does not apply to this step.
 
         Args:
-            poly_results: polygon results to aggregate. When None, the persisted
-                `poly_score` file for the configured cohort/data_version/experiment_id is loaded.
+            poly_results: polygon results to aggregate. When None they are loaded: from the
+                RDS polygon table when rds.upload is true (the most recent row of each polygon
+                in the configured cohort), otherwise from the persisted `poly_score` file for
+                the configured cohort/data_version/experiment_id.
             project_ids: optional subset of projects to aggregate. Note that the
                 project output file is overwritten with only this subset.
         """
+        run_datetime = _now_utc()  # one value for every row this run uploads
         if poly_results is None:
-            poly_results = self.checkpoint.load("poly_score")
+            if self._rds_enabled():
+                poly_results = self._load_latest_poly_results()
+            else:
+                poly_results = self.checkpoint.load("poly_score")
 
         _validate_poly_results(self.params, poly_results)
 
@@ -177,7 +184,7 @@ class VerificationDecisionTree:
         # Save results to local csv file
         self.checkpoint.save("prj_score", prj_results, always=True)
         # Save results to persistent store
-        self._upload_outputs()
+        self._upload_outputs(run_datetime, prj_results=prj_results)
         return prj_results
 
     # ------------------------------------------------------------------
@@ -247,11 +254,85 @@ class VerificationDecisionTree:
 
         return ev
 
-    def _upload_outputs(self) -> None:
-        if self.params['s3']['upload']:
-            raise Exception("The upload to S3 option is currently not supported.")
-            # TODO The function call signature needs to be corrected.
-            # upload_to_s3(self.prj_score, self.params, self.secrets)
+    def _upload_outputs(self,
+                        run_datetime: datetime.datetime,
+                        poly_results: pd.DataFrame | None = None,
+                        prj_results: pd.DataFrame | None = None) -> None:
+        """Upload results to RDS when params rds.upload is true."""
+        if not self._rds_enabled():
+            return
+        settings, connection = self._rds_config()
+
+        if poly_results is not None and not poly_results.empty:
+            print("Poly_results uploading to RDS database.")
+        if prj_results is not None and not prj_results.empty:
+            print("Prj_results uploading to RDS database.")
+
+        # Imported here so psycopg/AWS CLI are only needed when RDS upload is enabled.
+        from decision_tree.rds_tunnel_no_tf import upload_results
+
+        summary = upload_results(
+            poly_results=poly_results,
+            prj_results=prj_results,
+            run_datetime=run_datetime,
+            cohort=self.cohort,
+            **settings,
+            **connection,
+        )
+        print(f"[rds] uploaded {summary.poly_rows} polygon row(s), {summary.prj_rows} project row(s) "
+              f"(run_datetime={summary.run_datetime:%Y-%m-%d %H:%M:%S} UTC)")
+
+    def _load_latest_poly_results(self) -> pd.DataFrame:
+        """Most recent row of each polygon of the configured cohort, from the RDS polygon table."""
+        settings, connection = self._rds_config()
+        from decision_tree.rds_tunnel_no_tf import read_latest_poly_results
+
+        # Rows carry the expanded cohort name (e.g. 'terrafund-cohort-2') or the short one ('c2').
+        cohorts = [self.cohort, _expanded_cohort(self.cohort)]
+        print(f"[rds] loading latest polygon results for cohort {self.cohort} "
+              f"from {settings['schema']}.{settings['poly_table']}")
+        poly_results = read_latest_poly_results(
+            cohorts=cohorts,
+            env=settings['env'],
+            database=settings['database'],
+            schema=settings['schema'],
+            poly_table=settings['poly_table'],
+            **connection,
+        )
+        if poly_results.empty:
+            raise ValueError(f"No polygon results for cohort {self.cohort} in "
+                             f"{settings['schema']}.{settings['poly_table']}; run the polygon step first.")
+        latest = poly_results['run_datetime'].max()
+        print(f"[rds] loaded {len(poly_results)} polygon(s); newest run_datetime {latest:%Y-%m-%d %H:%M:%S} UTC")
+        return poly_results
+
+    def _rds_enabled(self) -> bool:
+        return bool((self.params.get('rds') or {}).get('upload'))
+
+    def _rds_config(self) -> tuple[dict, dict]:
+        """(table settings from params.yaml rds, connection settings from the secrets file aws)."""
+        settings = _required(self.params.get('rds') or {},
+                             ('env', 'database', 'schema', 'poly_table', 'prj_table'),
+                             where="params.yaml rds")
+        aws_secrets = (self.secrets or {}).get('aws') or {}
+        if not aws_secrets.get('bastion_id_for_rds'):
+            raise ValueError("rds.upload is true but aws.bastion_id_for_rds is not set in the secrets file.")
+        connection = {"bastion_id": aws_secrets['bastion_id_for_rds'],
+                      "aws_profile": aws_secrets.get('land_aws_profile')}
+        return settings, connection
+
+
+def _expanded_cohort(cohort: str) -> str:
+    """'c1' -> 'terrafund-cohort-1'; anything else -> 'terrafund-cohort-2' (as in _compute_tree_results)."""
+    return 'terrafund-cohort-1' if cohort == 'c1' else 'terrafund-cohort-2'
+
+
+def _required(section: dict, keys: tuple[str, ...], where: str) -> dict:
+    """Return {key: section[key]} for keys, raising one clear error listing any that are missing."""
+    missing = [k for k in keys if section.get(k) in (None, "")]
+    if missing:
+        raise ValueError(f"Missing setting(s) in {where}: {', '.join(missing)}")
+    return {k: section[k] for k in keys}
 
 
 def compute_branches(params: dict, rules_file_path: str, tm_clean: pd.DataFrame, maxar_meta: str, slope_statistics: pd.DataFrame) -> pd.DataFrame:
@@ -276,6 +357,11 @@ def compute_polygon_results(params: dict, ev: pd.DataFrame) -> pd.DataFrame:
 def compute_project_results(params: dict, poly_results: pd.DataFrame) -> pd.DataFrame:
     """Project-level aggregation of polygon results."""
     return proj_tree.aggregate_project_score(params, poly_results)
+
+
+def _now_utc() -> datetime.datetime:
+    """Current time in UTC with no time zone, to the whole second (for the run_datetime column)."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0)
 
 
 def _validate_poly_results(params: dict, poly_results: pd.DataFrame) -> None:

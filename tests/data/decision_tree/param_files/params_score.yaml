@@ -19,12 +19,23 @@ mode: score  # options: full, score, projectids
 tm_source: geoparquet # {geoparquet|API}
 
 s3:
-  upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
   geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
   slope: s3://wri-restoration-geodata-ttc/slope
   overwrite_slope_cache: false  # true = recompute & re-upload every slope tile
+
+rds:
+  # control upload of poly_results and prj_results to the RDS PostgreSQL database
+  # (via SSM tunnel through the bastion; needs AWS CLI v2 + Session Manager plugin + psycopg)
+  # bastion id and AWS profile come from secrets.yaml aws: bastion_id_for_rds, land_aws_profile;
+  # the AWS region is the one configured for land_aws_profile
+  upload: false
+  env: lr                       # secret /gri/{env}/app-db-url
+  database: indicators
+  schema: public
+  poly_table: kenn_test_poly_results
+  prj_table: kenn_test_prj_results
 
 criteria:
   canopy_threshold: 60          # threshold for identifying open vs closed canopy projects

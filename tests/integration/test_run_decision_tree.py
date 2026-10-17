@@ -5,7 +5,7 @@ import pytest
 from numpy import nan
 
 from decision_tree.constants import TestProjectHandling
-from decision_tree.run_decision_tree import VerificationDecisionTree, main
+from decision_tree.run_decision_tree import VerificationDecisionTree, compute_project_results, main
 from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 
 from tests.conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
@@ -77,6 +77,55 @@ def test_run_decision_tree_projectids():
         # post-run cleanup
         folder_cleanup(params_path)
 
+
+
+@pytest.mark.network
+def test_run_decision_tree_projectids_rds():
+    """Polygon results go to RDS; the project step reads them back from the RDS polygon table.
+
+    Needs AWS access: secrets.yaml aws.bastion_id_for_rds and aws.land_aws_profile, and the
+    RDS tables named in params_projectids_rds.yaml.
+    """
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_rds.yaml")
+    folder_cleanup(params_path)
+
+    project_ids = [TEST_01_GRI_PROJECT_ID]
+    test_project_handling = TestProjectHandling.ONLY
+
+    try:
+        # Step 1: polygon metrics; rds.upload is true, so the rows are uploaded to the poly_table
+        polygon_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+        assert polygon_workflow.params["rds"]["upload"] is True
+        poly_results = polygon_workflow.run_polygon_metrics(project_ids=project_ids,
+                                                            test_project_handling=test_project_handling)
+
+        # Remove the local poly_score CSV so the project step can only get its input from RDS
+        folder_cleanup(params_path)
+        assert not os.path.exists(polygon_workflow.poly_score)
+
+        # Step 2: project metrics in a fresh workflow, with no poly_results passed in
+        project_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+        prj_results = project_workflow.run_project_metrics(project_ids=project_ids)
+
+        # Same project result as aggregating the in-memory polygon results
+        # (RDS stores REAL, so compare numbers approximately)
+        prj_in_memory = compute_project_results(project_workflow.params, poly_results)
+        pd.testing.assert_frame_equal(prj_results.reset_index(drop=True),
+                                      prj_in_memory.reset_index(drop=True),
+                                      check_dtype=False, rtol=1e-4)
+
+        # Same expected values as test_run_decision_tree_projectids
+        sample_poly_id = 'a09e8e9f-f0f6-438a-95ac-aa5457082d46'
+        has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
+                                       expected_poly_baseline_suitability=60.0,
+                                       expected_poly_baseline_total=61.2,
+                                       expected_poly_ev_total=61.2,
+                                       expected_project_count=1,
+                                       expected_project_ev_label='weak field',
+                                       expected_pct_area_scored=1.0)
+
+    finally:
+        folder_cleanup(params_path)
 
 @pytest.mark.network
 def test_run_decision_tree_projectids_api_query():

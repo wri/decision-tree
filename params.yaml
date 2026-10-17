@@ -19,8 +19,6 @@ mode: full  # options: full, score, projectids
 tm_source: geoparquet # {geoparquet|API}
 
 s3:
-  # control upload of poly_score and prj_score to persistent AWS store
-  upload: false  # TODO: The upload to S3 option is currently not supported.
   # ynder WRI account
   # geojson of polygon boundaries: https://restoration-monitoring.s3.us-east-1.amazonaws.com/tree_verification/output/project_data/
   bucket_name: restoration-monitoring
@@ -31,6 +29,18 @@ s3:
   # tif of slopes: https://wri-restoration-geodata-ttc.s3.us-east-1.amazonaws.com/slope/
   slope: s3://wri-restoration-geodata-ttc/slope
   overwrite_slope_cache: false  # true = recompute & re-upload every slope tile
+
+rds:
+  # control upload of poly_results and prj_results to the RDS PostgreSQL database
+  # (via SSM tunnel through the bastion; needs AWS CLI v2 + Session Manager plugin + psycopg)
+  # bastion id and AWS profile come from secrets.yaml aws: bastion_id_for_rds, land_aws_profile;
+  # the AWS region is the one configured for land_aws_profile
+  upload: false
+  env: lr                       # secret /gri/{env}/app-db-url
+  database: indicators
+  schema: public
+  poly_table: kenn_test_poly_results
+  prj_table: kenn_test_prj_results
 
 criteria:
   canopy_threshold: 60          # threshold for identifying open vs closed canopy projects

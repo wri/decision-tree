@@ -10,11 +10,13 @@ Covers:
   - Mode / project_id validation in the polygon step
   - Fail-fast when Maxar metadata is missing
   - main() step dispatch
-  - S3 upload flag
+  - RDS upload flag
   - Saved polygon output round-trips to the same project result as in-memory data
 """
 
+import datetime
 import os
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
@@ -101,10 +103,51 @@ class TestProjectStep:
         workflow.run_project_metrics(poly_results=poly)
         assert os.path.exists(workflow.prj_score)
 
-    def test_upload_flag_raises(self, workflow):
-        workflow.params["s3"]["upload"] = True
+    def test_rds_upload_uses_params_and_secrets(self, workflow):
+        workflow.params["rds"]["upload"] = True
+        workflow.secrets = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
         poly = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0)
-        with pytest.raises(Exception, match="not supported"):
+        summary = SimpleNamespace(poly_rows=0, prj_rows=2, run_datetime=datetime.datetime(2026, 1, 1))
+        with mock.patch("decision_tree.rds_tunnel_no_tf.upload_results", return_value=summary) as upload:
+            prj = workflow.run_project_metrics(poly_results=poly)
+        kwargs = upload.call_args.kwargs
+        assert kwargs["prj_results"] is prj and kwargs["poly_results"] is None
+        assert kwargs["bastion_id"] == "i-test" and kwargs["aws_profile"] == "p"
+        assert "region" not in kwargs  # region comes from land_aws_profile
+        for key in ("env", "database", "schema", "poly_table", "prj_table"):
+            assert kwargs[key] == workflow.params["rds"][key]
+
+    def test_reads_latest_poly_results_from_rds_when_enabled(self, workflow):
+        workflow.params["rds"]["upload"] = True
+        workflow.secrets = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
+        from_db = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0,
+                                         run_datetime=pd.Timestamp("2026-01-01"))
+        summary = SimpleNamespace(poly_rows=0, prj_rows=2, run_datetime=datetime.datetime(2026, 1, 2))
+        with mock.patch("decision_tree.rds_tunnel_no_tf.read_latest_poly_results",
+                        return_value=from_db) as read, \
+             mock.patch("decision_tree.rds_tunnel_no_tf.upload_results", return_value=summary), \
+             mock.patch.object(workflow.checkpoint, "load") as csv_load:
+            prj = workflow.run_project_metrics()
+        assert not csv_load.called
+        kwargs = read.call_args.kwargs
+        assert kwargs["cohorts"] == [workflow.cohort, "terrafund-cohort-2" if workflow.cohort != "c1"
+                                     else "terrafund-cohort-1"]
+        assert kwargs["poly_table"] == workflow.params["rds"]["poly_table"]
+        assert len(prj) == 2
+
+    def test_empty_rds_poly_table_raises(self, workflow):
+        workflow.params["rds"]["upload"] = True
+        workflow.secrets = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
+        with mock.patch("decision_tree.rds_tunnel_no_tf.read_latest_poly_results",
+                        return_value=pd.DataFrame()):
+            with pytest.raises(ValueError, match="run the polygon step first"):
+                workflow.run_project_metrics()
+
+    def test_rds_upload_requires_bastion_id(self, workflow):
+        workflow.params["rds"]["upload"] = True
+        workflow.secrets = {"aws": {"land_aws_profile": "p"}}
+        poly = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0)
+        with pytest.raises(ValueError, match="bastion_id_for_rds"):
             workflow.run_project_metrics(poly_results=poly)
 
 

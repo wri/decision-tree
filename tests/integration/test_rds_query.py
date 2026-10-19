@@ -8,7 +8,7 @@ import os
 import pytest
 
 from decision_tree.constants import PROJECT_ROOT
-from decision_tree.rds_tunnel_no_tf import rds_connection
+from decision_tree.rds_dao import rds_connection
 from decision_tree.tools import load_secrets, load_yaml
 
 

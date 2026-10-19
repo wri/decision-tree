@@ -82,6 +82,20 @@ def _tree_results() -> pd.DataFrame:
     return df
 
 
+PROJECT_IDS = ["p1", "p2"]
+RDS_SECRETS = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
+
+
+def _poly() -> pd.DataFrame:
+    """Polygon results with the columns the project step needs."""
+    return _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0)
+
+
+def _poly_from_rds() -> pd.DataFrame:
+    """Polygon results as read back from RDS (with run_datetime)."""
+    return _poly().assign(run_datetime=pd.Timestamp("2026-01-01"))
+
+
 # ---------------------------------------------------------------------------
 # Project step
 # ---------------------------------------------------------------------------
@@ -89,27 +103,69 @@ class TestProjectStep:
     @pytest.mark.parametrize("mode", ["full", "projectids", "score"])
     def test_does_not_acquire_inputs(self, workflow, no_acquisition, mode):
         workflow.mode = mode
-        workflow.checkpoint.save("poly_score", _tree_results().assign(
-            baseline_remote_suitability=50.0, ev_remote_suitability=50.0), always=True)
-
-        prj = workflow.run_project_metrics()
+        workflow.secrets = RDS_SECRETS
+        with mock.patch("decision_tree.rds_dao.read_latest_poly_results",
+                        return_value=_poly_from_rds()):
+            prj = workflow.run_project_metrics(project_ids=PROJECT_IDS)
 
         assert len(prj) == 2
         for name, m in no_acquisition.items():
             assert not m.called, f"project step called {name}"
 
+    @pytest.mark.parametrize("project_ids", [None, [], "p1"])
+    def test_project_ids_are_required(self, workflow, project_ids):
+        with pytest.raises(ValueError, match="project_ids is required"):
+            workflow.run_project_metrics(project_ids=project_ids, poly_results=_poly())
+
     def test_writes_project_output(self, workflow):
-        poly = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0)
-        workflow.run_project_metrics(poly_results=poly)
+        workflow.run_project_metrics(PROJECT_IDS, poly_results=_poly())
         assert os.path.exists(workflow.prj_score)
+
+    def test_supplied_poly_results_skip_rds(self, workflow):
+        with mock.patch("decision_tree.rds_dao.read_latest_poly_results") as read:
+            prj = workflow.run_project_metrics(["p2"], poly_results=_poly())
+        assert not read.called
+        assert prj["project_id"].tolist() == ["p2"]
+
+    def test_unknown_project_in_supplied_poly_results_raises(self, workflow):
+        with pytest.raises(ValueError, match="not found in polygon results"):
+            workflow.run_project_metrics(["p1", "p9"], poly_results=_poly())
+
+    def test_reads_latest_poly_results_from_rds_for_the_project_ids(self, workflow):
+        # reading does not depend on rds.upload, which only controls saving
+        assert workflow.params["rds"]["upload"] is False
+        workflow.secrets = RDS_SECRETS
+        with mock.patch("decision_tree.rds_dao.read_latest_poly_results",
+                        return_value=_poly_from_rds()) as read, \
+             mock.patch("decision_tree.rds_dao.upload_results") as upload, \
+             mock.patch.object(workflow.checkpoint, "load") as csv_load:
+            prj = workflow.run_project_metrics(project_ids=PROJECT_IDS)
+        assert not csv_load.called
+        assert not upload.called  # rds.upload is false
+        kwargs = read.call_args.kwargs
+        assert kwargs["project_ids"] == PROJECT_IDS
+        assert kwargs["poly_table"] == workflow.params["rds"]["poly_table"]
+        assert kwargs["bastion_id"] == "i-test" and kwargs["aws_profile"] == "p"
+        assert sorted(prj["project_id"]) == PROJECT_IDS
+
+    def test_project_missing_from_rds_raises(self, workflow):
+        workflow.secrets = RDS_SECRETS
+        only_p1 = _poly_from_rds().query("project_id == 'p1'")
+        with mock.patch("decision_tree.rds_dao.read_latest_poly_results", return_value=only_p1):
+            with pytest.raises(ValueError, match=r"No polygon results in .* for project id\(s\): \['p2'\]"):
+                workflow.run_project_metrics(project_ids=PROJECT_IDS)
+
+    def test_rds_read_requires_bastion_id(self, workflow):
+        workflow.secrets = {"aws": {"land_aws_profile": "p"}}
+        with pytest.raises(ValueError, match="bastion_id_for_rds"):
+            workflow.run_project_metrics(project_ids=PROJECT_IDS)
 
     def test_rds_upload_uses_params_and_secrets(self, workflow):
         workflow.params["rds"]["upload"] = True
-        workflow.secrets = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
-        poly = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0)
+        workflow.secrets = RDS_SECRETS
         summary = SimpleNamespace(poly_rows=0, prj_rows=2, run_datetime=datetime.datetime(2026, 1, 1))
-        with mock.patch("decision_tree.rds_tunnel_no_tf.upload_results", return_value=summary) as upload:
-            prj = workflow.run_project_metrics(poly_results=poly)
+        with mock.patch("decision_tree.rds_dao.upload_results", return_value=summary) as upload:
+            prj = workflow.run_project_metrics(PROJECT_IDS, poly_results=_poly())
         kwargs = upload.call_args.kwargs
         assert kwargs["prj_results"] is prj and kwargs["poly_results"] is None
         assert kwargs["bastion_id"] == "i-test" and kwargs["aws_profile"] == "p"
@@ -117,38 +173,11 @@ class TestProjectStep:
         for key in ("env", "database", "schema", "poly_table", "prj_table"):
             assert kwargs[key] == workflow.params["rds"][key]
 
-    def test_reads_latest_poly_results_from_rds_when_enabled(self, workflow):
-        workflow.params["rds"]["upload"] = True
-        workflow.secrets = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
-        from_db = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0,
-                                         run_datetime=pd.Timestamp("2026-01-01"))
-        summary = SimpleNamespace(poly_rows=0, prj_rows=2, run_datetime=datetime.datetime(2026, 1, 2))
-        with mock.patch("decision_tree.rds_tunnel_no_tf.read_latest_poly_results",
-                        return_value=from_db) as read, \
-             mock.patch("decision_tree.rds_tunnel_no_tf.upload_results", return_value=summary), \
-             mock.patch.object(workflow.checkpoint, "load") as csv_load:
-            prj = workflow.run_project_metrics()
-        assert not csv_load.called
-        kwargs = read.call_args.kwargs
-        assert kwargs["cohorts"] == [workflow.cohort, "terrafund-cohort-2" if workflow.cohort != "c1"
-                                     else "terrafund-cohort-1"]
-        assert kwargs["poly_table"] == workflow.params["rds"]["poly_table"]
-        assert len(prj) == 2
-
-    def test_empty_rds_poly_table_raises(self, workflow):
-        workflow.params["rds"]["upload"] = True
-        workflow.secrets = {"aws": {"bastion_id_for_rds": "i-test", "land_aws_profile": "p"}}
-        with mock.patch("decision_tree.rds_tunnel_no_tf.read_latest_poly_results",
-                        return_value=pd.DataFrame()):
-            with pytest.raises(ValueError, match="run the polygon step first"):
-                workflow.run_project_metrics()
-
     def test_rds_upload_requires_bastion_id(self, workflow):
         workflow.params["rds"]["upload"] = True
         workflow.secrets = {"aws": {"land_aws_profile": "p"}}
-        poly = _tree_results().assign(baseline_remote_suitability=50.0, ev_remote_suitability=50.0)
         with pytest.raises(ValueError, match="bastion_id_for_rds"):
-            workflow.run_project_metrics(poly_results=poly)
+            workflow.run_project_metrics(PROJECT_IDS, poly_results=_poly())
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +191,22 @@ class TestPolygonStep:
         assert not os.path.exists(workflow.prj_score)
         for col in ["baseline_remote_suitability", "ev_remote_suitability", "baseline_cost", "ev_cost"]:
             assert col in poly.columns
+
+    @pytest.mark.parametrize("save", [False, True])
+    def test_intermediates_follow_save_local_intermediates(self, tmp_path, save):
+        params = rdt.load_yaml(PARAMS_SCORE)
+        params["outfile"]["save_local_intermediates"] = save
+        with mock.patch.object(rdt, "load_yaml", return_value=params):
+            wf = VerificationDecisionTree(PARAMS_SCORE, secrets_path=None)
+        assert wf.checkpoint.enabled is save
+
+    @pytest.mark.parametrize("value", [None, "yes"])
+    def test_save_local_intermediates_must_be_boolean(self, value):
+        params = rdt.load_yaml(PARAMS_SCORE)
+        params["outfile"]["save_local_intermediates"] = value
+        with mock.patch.object(rdt, "load_yaml", return_value=params):
+            with pytest.raises(ValueError, match="save_local_intermediates"):
+                VerificationDecisionTree(PARAMS_SCORE, secrets_path=None)
 
     def test_notes_columns_follow_their_decisions(self, workflow):
         _tree_results().to_csv(workflow.tree_results, index=False)
@@ -200,15 +245,18 @@ class TestPolygonStep:
 # Hand-off between steps
 # ---------------------------------------------------------------------------
 class TestHandOff:
-    def test_saved_polygon_output_gives_same_project_result(self, workflow):
+    def test_polygon_output_read_back_from_rds_gives_same_project_result(self, workflow):
         _tree_results().to_csv(workflow.tree_results, index=False)
+        workflow.secrets = RDS_SECRETS
         poly_in_memory = workflow.run_polygon_metrics()
 
-        prj_from_disk = workflow.run_project_metrics()
+        with mock.patch("decision_tree.rds_dao.read_latest_poly_results",
+                        return_value=poly_in_memory.assign(run_datetime=pd.Timestamp("2026-01-01"))):
+            prj_from_rds = workflow.run_project_metrics(project_ids=PROJECT_IDS)
         prj_in_memory = compute_project_results(workflow.params, poly_in_memory)
 
-        assert set(prj_from_disk["base_label"]) != {"not available"}, "fixture should produce real labels"
-        pd.testing.assert_frame_equal(prj_from_disk.reset_index(drop=True),
+        assert set(prj_from_rds["base_label"]) != {"not available"}, "fixture should produce real labels"
+        pd.testing.assert_frame_equal(prj_from_rds.reset_index(drop=True),
                                       prj_in_memory.reset_index(drop=True),
                                       check_dtype=False)
 
@@ -222,8 +270,8 @@ class TestHandOff:
 
     def test_project_subset(self, workflow):
         _tree_results().to_csv(workflow.tree_results, index=False)
-        workflow.run_polygon_metrics()
-        prj = workflow.run_project_metrics(project_ids=["p2"])
+        poly = workflow.run_polygon_metrics()
+        prj = workflow.run_project_metrics(project_ids=["p2"], poly_results=poly)
         assert prj["project_id"].tolist() == ["p2"]
 
 
@@ -239,17 +287,22 @@ class TestMainDispatch:
     def test_step_calls_only_its_methods(self, step, expected):
         methods = ["run_polygon_metrics", "run_project_metrics"]
         with mock.patch.multiple(VerificationDecisionTree, **{m: mock.DEFAULT for m in methods}) as mocks:
-            rdt.main(PARAMS_SCORE, None, step=step)
+            rdt.main(PARAMS_SCORE, None, step=step, project_ids=["p1"])
         for name, m in mocks.items():
             assert m.called == (name in expected), f"step={step}: {name} called={m.called}"
 
     def test_all_passes_in_memory_polygon_results_to_project_step(self):
-        sentinel = pd.DataFrame({"project_id": ["p1"]})
+        sentinel = pd.DataFrame({"project_id": ["p2", "p1", "p2"]})
         with mock.patch.object(VerificationDecisionTree, "run_polygon_metrics", return_value=sentinel) as poly, \
              mock.patch.object(VerificationDecisionTree, "run_project_metrics") as prj:
             rdt.main(PARAMS_SCORE, None, step="all", project_ids=None)
         poly.assert_called_once_with(None)
-        prj.assert_called_once_with(sentinel)
+        # no project ids given (full/score mode): every project the polygon step produced
+        prj.assert_called_once_with(project_ids=["p1", "p2"], poly_results=sentinel)
+
+    def test_project_step_requires_project_ids(self):
+        with pytest.raises(ValueError, match="project_ids is required"):
+            rdt.main(PARAMS_SCORE, None, step="project", project_ids=None)
 
     def test_project_ids_are_passed_through(self):
         with mock.patch.object(VerificationDecisionTree, "run_project_metrics") as m:

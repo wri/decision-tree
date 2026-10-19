@@ -2,9 +2,17 @@
 
 ## 2026/10/09
 1. Added run_polygon_metrics and run_project_metrics methods and removed run_decision_tree function.
-2. run_polygon_metrics always saves poly_results to csv file for later loading by run_project_metrics.
+2. run_polygon_metrics always saves poly_results to a local csv file.
 3. Updated tests for modified functions.
-4. Added other unit tests 
+4. Added other unit tests
+5. Added rds_dao.py for saving results to and reading them from RDS via an SSM tunnel through the bastion (requires AWS CLI v2, Session Manager plugin, psycopg).
+6. params.yaml
+   1. Added rds section; rds.upload controls saving results to RDS (replaces s3.upload).
+   2. Added outfile.save_local_intermediates (replaces the checkpoint argument and --checkpoint option).
+   3. Added aws.bastion_id_for_rds; RDS uses aws.land_aws_profile and its region.
+7. run_project_metrics requires project_ids; if poly_results is not supplied, the latest polygons are read from RDS. 
+8. All rows from one run share a single run_datetime. 
+9. Added RDS unit and integration tests (integration tests delete their RDS rows); moved test_rds_query.py to integration; re-enabled test_run_decision_tree_full.
 
 ## 2026/10/07
 1. Split tests into folders for unit and integration

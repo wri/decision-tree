@@ -1,6 +1,9 @@
+import contextlib
 import os
 import shutil
+from unittest import mock
 
+import pandas as pd
 import pytest
 from gri_shared_library.os_tools import get_project_root_dir
 
@@ -77,3 +80,57 @@ def folder_cleanup(params_path):
     for folder in scratch_folders:
         folder_dir = os.path.join(data_dir, folder)
         shutil.rmtree(folder_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# RDS helpers for integration tests
+# ---------------------------------------------------------------------------
+def fetch_rds_rows(workflow, table_key: str, project_ids: list[str], run_datetime) -> pd.DataFrame:
+    """Rows of the RDS table params rds.<table_key> for these projects at one run_datetime."""
+    from psycopg import sql
+    from decision_tree.rds_dao import rds_connection
+
+    settings, connection = workflow._rds_config()
+    query = sql.SQL("SELECT * FROM {}.{} WHERE project_id = ANY(%s) AND run_datetime = %s").format(
+        sql.Identifier(settings["schema"]), sql.Identifier(settings[table_key]))
+    with rds_connection(settings["database"], env=settings["env"], **connection) as conn:
+        cur = conn.execute(query, (list(project_ids), run_datetime))
+        columns = [d.name for d in cur.description]
+        return pd.DataFrame(cur.fetchall(), columns=columns)
+
+
+@contextlib.contextmanager
+def rds_rows_cleanup(workflow, project_ids: list[str]):
+    """Record every run_datetime the pipeline uses inside the block; on exit, delete the rows
+    those runs wrote for these projects from the RDS polygon and project tables.
+
+    Yields the list of recorded run_datetimes (in call order). Only rows matching both the
+    project ids and a recorded run_datetime are deleted, so other runs' data is untouched.
+    """
+    import decision_tree.run_decision_tree as rdt
+    from psycopg import sql
+    from decision_tree.rds_dao import rds_connection
+
+    run_datetimes: list = []
+    real_now = rdt._now_utc
+
+    def recording_now():
+        value = real_now()
+        run_datetimes.append(value)
+        return value
+
+    try:
+        with mock.patch.object(rdt, "_now_utc", side_effect=recording_now):
+            yield run_datetimes
+    finally:
+        if run_datetimes:
+            settings, connection = workflow._rds_config()
+            with rds_connection(settings["database"], env=settings["env"], **connection) as conn:
+                with conn.transaction():
+                    for table_key in ("poly_table", "prj_table"):
+                        conn.execute(
+                            sql.SQL("DELETE FROM {}.{} WHERE project_id = ANY(%s) AND run_datetime = ANY(%s)")
+                            .format(sql.Identifier(settings["schema"]), sql.Identifier(settings[table_key])),
+                            (list(project_ids), list(set(run_datetimes))),
+                        )
+

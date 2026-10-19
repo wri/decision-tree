@@ -14,6 +14,9 @@
 8. All rows from one run share a single run_datetime. 
 9. Added RDS unit and integration tests (integration tests delete their RDS rows); moved test_rds_query.py to integration; re-enabled test_run_decision_tree_full.
 
+## 2026/10/08
+1. Switched dependency from the deprecated terramatch-researcher-api repo to shared-library repo
+
 ## 2026/10/07
 1. Split tests into folders for unit and integration
 2. Modified workflow to only execute unit tests

@@ -31,15 +31,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Checkout private dependency repo
-      - name: Checkout private repo
-        uses: actions/checkout@v4
-        with:
-          repository: wri/terramatch-researcher-api
-          ref: develop
-          token: ${{ env.KENNC_REPO_PAT }}
-          path: terramatch-researcher-api
-
       # Install Python + uv
       - name: Install UV
         uses: astral-sh/setup-uv@v6

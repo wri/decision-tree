@@ -37,8 +37,8 @@ rds:
   env: lr                       # secret /gri/{env}/app-db-url
   database: indicators
   schema: public
-  poly_table: kenn_test_poly_results
-  prj_table: kenn_test_prj_results
+  poly_table: decision_tree_poly_results_log
+  prj_table: decision_tree_prj_results_log
 
 criteria:
   canopy_threshold: 60          # threshold for identifying open vs closed canopy projects

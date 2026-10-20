@@ -8,7 +8,7 @@ Library module. The pipeline calls :func:`upload_results` from
 
     upload_results(poly_results=poly_df, run_datetime=run_dt, cohort="c2",
                    env="lr", database="indicators", schema="public",
-                   poly_table="kenn_test_poly_results", prj_table="kenn_test_prj_results",
+                   poly_table="decision_tree_poly_results_log", prj_table="decision_tree_prj_results_log",
                    bastion_id="i-0123456789abcdef0", aws_profile=None)
 
 All settings are passed in by the caller; the pipeline reads them from ``params.yaml``
@@ -30,6 +30,11 @@ How it connects (same flow as ``open_tunnel.sh`` + ``db_url.sh``, minus Terrafor
    host:port through the bastion. The tunnel is closed when the call returns.
 4. Connect with psycopg to the requested database.
 
+Tables: :func:`write_results` first creates the polygon and project tables with
+``CREATE TABLE IF NOT EXISTS`` (definitions below, from local_create_sql_tables.sql), so a
+new database or schema works without manual setup. The polygon table's geometry column is a
+PostGIS ``geometry``, so the database needs the PostGIS extension.
+
 How rows are written:
 
 - The target table's columns and types are read from ``information_schema`` at upload
@@ -38,7 +43,7 @@ How rows are written:
 - Derived columns: ``run_datetime`` (same value for every row of a run),
   ``ttc_by_year`` (JSON built from the ``ttc_<year>`` columns), ``cohort`` (filled
   from the ``cohort`` argument when the DataFrame has no cohort values) and
-  ``geometry`` (shapely objects are written as WKT).
+  ``geometry`` (shapely objects or WKT, written as PostGIS geometry with SRID 4326).
 - Values are checked before anything is sent: text longer than the column allows,
   integers out of range, unparseable booleans/JSON and duplicate primary keys raise
   ``ValueError`` naming the column. Non-integer values headed for an integer column
@@ -83,12 +88,79 @@ __all__ = [
     "UploadSummary",
     "upload_results",
     "write_results",
+    "ensure_tables",
     "read_latest_poly_results",
     "read_latest_rows",
     "rds_connection",
 ]
 
 logger = logging.getLogger(__name__)
+
+GEOMETRY_SRID = 4326  # TerraMatch polygons are WGS 84 lon/lat
+
+# Table definitions (from local_create_sql_tables.sql); the table names come from params.yaml.
+POLY_TABLE_COLUMNS = """
+    cohort   VARCHAR(100),
+    project_id   VARCHAR(100),
+    poly_id   VARCHAR(100),
+    site_id   VARCHAR(100),
+    project_name   VARCHAR(100),
+    geometry   geometry,
+    plantstart   DATE,
+    practice   VARCHAR(100),
+    target_sys   VARCHAR(100),
+    area   REAL,
+    ttc_by_year   JSON,
+    baseline_img_count   SMALLINT,
+    baseline_ext_img_count   SMALLINT,
+    ev_img_count   SMALLINT,
+    plantstart_dt   DATE,
+    baseline_year   SMALLINT,
+    baseline_canopy   VARCHAR(100),
+    ev_canopy   VARCHAR(100),
+    slope_area   REAL,
+    slope   VARCHAR(100),
+    img_tier   VARCHAR(100),
+    baseline_decision   VARCHAR(100),
+    notes_base   TEXT,
+    ev_decision   VARCHAR(100),
+    notes_ev   VARCHAR(100),
+    baseline_canopy_missing   BOOLEAN,
+    ev_canopy_missing   BOOLEAN,
+    baseline_img_missing   BOOLEAN,
+    ev_img_missing   BOOLEAN,
+    slope_missing   BOOLEAN,
+    baseline_remote_suitability   REAL,
+    baseline_remote_suitability_wtd   REAL,
+    ev_remote_suitability   REAL,
+    ev_remote_suitability_wtd   REAL,
+    baseline_cost   REAL,
+    ev_cost   REAL,
+    run_datetime   TIMESTAMP,
+    PRIMARY KEY (project_id, poly_id, run_datetime)
+"""
+
+PRJ_TABLE_COLUMNS = """
+    project_id   VARCHAR(100),
+    project_name   VARCHAR(100),
+    total_area   REAL,
+    base_conf   REAL,
+    base_label   VARCHAR(100),
+    base_pct_area_scored   REAL,
+    base_poly_frac_scored   REAL,
+    base_scored_area   REAL,
+    base_frac_mangrove   REAL,
+    base_data_quality_flag   TEXT,
+    ev_conf   REAL,
+    ev_label   VARCHAR(100),
+    ev_pct_area_scored   REAL,
+    ev_poly_frac_scored   REAL,
+    ev_scored_area   REAL,
+    ev_frac_mangrove   REAL,
+    ev_data_quality_flag TEXT,
+    run_datetime   TIMESTAMP,
+    PRIMARY KEY (project_id, run_datetime)
+"""
 
 _TTC_COL = re.compile(r"^ttc_(\d{4})$")
 _INT_RANGES = {
@@ -116,6 +188,7 @@ class _Column:
     name: str
     data_type: str          # information_schema data_type, e.g. 'character varying'
     max_length: int | None  # for varchar/char
+    udt_name: str = ""      # e.g. 'geometry' for PostGIS columns (data_type 'USER-DEFINED')
 
 
 # --------------------------------------------------------------------------- #
@@ -179,6 +252,21 @@ def upload_results(
         )
 
 
+def ensure_tables(conn: psycopg.Connection, *, schema: str, poly_table: str, prj_table: str) -> None:
+    """Create the polygon and project tables if they don't exist (existing tables are left as is)."""
+    try:
+        with conn.transaction():
+            for table, columns in ((poly_table, POLY_TABLE_COLUMNS), (prj_table, PRJ_TABLE_COLUMNS)):
+                conn.execute(sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({})").format(
+                    sql.Identifier(schema), sql.Identifier(table), sql.SQL(columns.strip())))
+    except psycopg.errors.UndefinedObject as exc:
+        if 'type "geometry" does not exist' in str(exc):
+            raise RuntimeError("The PostGIS extension is not enabled in this database, so the polygon "
+                               "table's geometry column can't be created. A database admin can enable it "
+                               "with: CREATE EXTENSION postgis;") from exc
+        raise
+
+
 def write_results(
     conn: psycopg.Connection,
     poly_results: pd.DataFrame | None = None,
@@ -192,6 +280,7 @@ def write_results(
 ) -> UploadSummary:
     """Same as :func:`upload_results`, using an already open connection."""
     run_dt = _naive_utc(run_datetime) if run_datetime else _utc_now()
+    ensure_tables(conn, schema=schema, poly_table=poly_table, prj_table=prj_table)
 
     jobs: list[tuple[str, pd.DataFrame]] = []
     if not _is_empty(poly_results):
@@ -200,22 +289,27 @@ def write_results(
         jobs.append((prj_table, _with_run_datetime(prj_results, run_dt)))
 
     # Validate and convert everything before sending any rows.
-    planned: list[tuple[str, list[str], list[tuple]]] = []
+    planned: list[tuple[str, list[str], list[tuple], list[str]]] = []
     for table, df in jobs:
         columns = _table_columns(conn, schema, table)
         names, rows = _build_rows(df, columns, table)
         _check_primary_key(conn, schema, table, names, rows)
-        planned.append((table, names, rows))
+        udt = {c.name: c.udt_name for c in columns}
+        planned.append((table, names, rows, [udt[n] for n in names]))
 
     counts: dict[str, int] = {}
     with conn.transaction():
         with conn.cursor() as cur:
-            for table, names, rows in planned:
+            for table, names, rows, udts in planned:
+                values = [
+                    sql.SQL("ST_GeomFromEWKT(%s)") if u == "geometry" else sql.Placeholder()
+                    for u in udts
+                ]
                 query = sql.SQL("INSERT INTO {}.{} ({}) VALUES ({})").format(
                     sql.Identifier(schema),
                     sql.Identifier(table),
                     sql.SQL(", ").join(map(sql.Identifier, names)),
-                    sql.SQL(", ").join(sql.Placeholder() * len(names)),
+                    sql.SQL(", ").join(values),
                 )
                 cur.executemany(query, rows)
                 counts[table] = len(rows)
@@ -293,12 +387,17 @@ def read_latest_rows(
         )
         params = tuple(list(v) for v in filters.values())
 
+    select = [
+        sql.SQL("ST_AsText({c}) AS {c}").format(c=sql.Identifier(c.name)) if c.udt_name == "geometry"
+        else sql.Identifier(c.name)
+        for c in columns
+    ]
     query = sql.SQL(
         "SELECT DISTINCT ON ({key}) {cols} FROM {schema}.{table} {where} "
         "ORDER BY {key}, {run_dt} DESC"
     ).format(
         key=sql.SQL(", ").join(map(sql.Identifier, key)),
-        cols=sql.SQL(", ").join(map(sql.Identifier, names)),
+        cols=sql.SQL(", ").join(select),
         schema=sql.Identifier(schema),
         table=sql.Identifier(table),
         where=where,
@@ -545,7 +644,7 @@ def _normalize_cohort(value: Any) -> Any:
 def _table_columns(conn: psycopg.Connection, schema: str, table: str) -> list[_Column]:
     rows = conn.execute(
         """
-        SELECT column_name, data_type, character_maximum_length
+        SELECT column_name, data_type, character_maximum_length, udt_name
         FROM information_schema.columns
         WHERE table_schema = %s AND table_name = %s
         ORDER BY ordinal_position
@@ -554,7 +653,7 @@ def _table_columns(conn: psycopg.Connection, schema: str, table: str) -> list[_C
     ).fetchall()
     if not rows:
         raise ValueError(f"Table {schema}.{table} does not exist (or is not visible to this user).")
-    return [_Column(str(n), str(t), m) for n, t, m in rows]
+    return [_Column(str(n), str(t), m, str(u)) for n, t, m, u in rows]
 
 
 def _primary_key(conn: psycopg.Connection, schema: str, table: str) -> list[str]:
@@ -654,6 +753,8 @@ def _convert_column(series: pd.Series, col: _Column, table: str) -> list[Any]:
         return _to_datetimes(series, where)
     if t in ("json", "jsonb"):
         return [_to_json(v, where) for v in series]
+    if col.udt_name == "geometry":
+        return [_to_ewkt(v, where) for v in series]
     logger.warning("%s: unhandled column type %r; values sent as-is", where, t)
     return [None if _missing(v) else v for v in series]
 
@@ -742,6 +843,20 @@ def _to_datetimes(series: pd.Series, where: str) -> list[dt.datetime | None]:
     if getattr(parsed.dt, "tz", None) is not None:
         parsed = parsed.dt.tz_convert("UTC").dt.tz_localize(None)
     return [None if pd.isna(v) else v.to_pydatetime() for v in parsed]
+
+
+def _to_ewkt(v: Any, where: str) -> str | None:
+    """shapely geometry or WKT/EWKT text -> EWKT with SRID (WGS 84 unless the value has one)."""
+    if _missing(v):
+        return None
+    wkt = v.wkt if hasattr(v, "wkt") else str(v).strip()
+    if not wkt:
+        return None
+    if wkt.upper().startswith("SRID="):
+        return wkt
+    if not re.match(r"^[A-Za-z]+\s*(Z|M|ZM)?\s*(\(|EMPTY)", wkt):
+        raise ValueError(f"{where}: value is not WKT geometry: {wkt[:60]!r}")
+    return f"SRID={GEOMETRY_SRID};{wkt}"
 
 
 def _to_json(v: Any, where: str) -> Json | None:

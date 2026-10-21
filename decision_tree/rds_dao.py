@@ -1,61 +1,19 @@
-"""RDS Data Access Object: write decision-tree outputs to, and read them back from, RDS PostgreSQL
-through an SSM bastion tunnel (no Terraform).
+"""RDS Data Access Object: write decision-tree results to, and read them from, RDS PostgreSQL.
 
-Library module. The pipeline calls :func:`upload_results` from
-``VerificationDecisionTree._upload_outputs``:
+Connects through an SSM port-forwarding tunnel via the bastion (no Terraform): the DB URL is read
+from Secrets Manager (``/gri/<env>/app-db-url``) and the tunnel closes when the call returns.
 
-    from decision_tree.rds_dao import upload_results
+- :func:`upload_results` writes polygon/project results (used by ``_upload_outputs``).
+- :func:`read_latest_poly_results` returns the newest row of each polygon of the given projects.
+- :func:`rds_connection` yields an open connection for other queries.
 
-    upload_results(poly_results=poly_df, run_datetime=run_dt, cohort="c2",
-                   env="lr", database="indicators", schema="public",
-                   poly_table="decision_tree_poly_results_log", prj_table="decision_tree_prj_results_log",
-                   bastion_id="i-0123456789abcdef0", aws_profile=None)
+Settings come from the caller (params.yaml ``rds:``, secrets.yaml ``aws:``); the AWS region is the
+one configured for ``aws_profile`` (``None`` = default credentials).
 
-All settings are passed in by the caller; the pipeline reads them from ``params.yaml``
-(``rds:`` env, database, schema, tables) and ``secrets.yaml`` (``aws:``
-bastion_id_for_rds, land_aws_profile). This module has no built-in defaults for them.
-The AWS region is the one configured for ``aws_profile`` (``region =`` in ~/.aws/config).
+Writes create the tables if missing (PostGIS required), match DataFrame columns to table columns by
+name, validate values before sending, and insert polygon and project rows in one transaction.
 
-:func:`read_latest_poly_results` reads the polygon table back (the newest row of each
-polygon of the given projects), for the project step.
-
-Use :func:`rds_connection` directly when you need an open connection for other queries,
-or :func:`write_results` / :func:`read_latest_rows` when you already have one.
-
-How it connects (same flow as ``open_tunnel.sh`` + ``db_url.sh``, minus Terraform):
-
-1. Bastion: the EC2 instance ``bastion_id``.
-2. DB URL: read ``/gri/<env>/app-db-url`` from Secrets Manager.
-3. Tunnel: ``aws ssm start-session`` port-forwards a local port to the RDS
-   host:port through the bastion. The tunnel is closed when the call returns.
-4. Connect with psycopg to the requested database.
-
-Tables: :func:`write_results` first creates the polygon and project tables with
-``CREATE TABLE IF NOT EXISTS`` (definitions below, from local_create_sql_tables.sql), so a
-new database or schema works without manual setup. The polygon table's geometry column is a
-PostGIS ``geometry``, so the database needs the PostGIS extension.
-
-How rows are written:
-
-- The target table's columns and types are read from ``information_schema`` at upload
-  time; DataFrame columns are matched to table columns by name and converted to the
-  column's type. DataFrame columns with no matching table column are skipped.
-- Derived columns: ``run_datetime`` (same value for every row of a run),
-  ``ttc_by_year`` (JSON built from the ``ttc_<year>`` columns), ``cohort`` (filled
-  from the ``cohort`` argument when the DataFrame has no cohort values) and
-  ``geometry`` (shapely objects or WKT, written as PostGIS geometry with SRID 4326).
-- Values are checked before anything is sent: text longer than the column allows,
-  integers out of range, unparseable booleans/JSON and duplicate primary keys raise
-  ``ValueError`` naming the column. Non-integer values headed for an integer column
-  are rounded with a warning.
-- Polygon and project rows are inserted in one transaction: either both land or neither.
-
-Requirements on the calling machine:
-    - AWS CLI v2 and the Session Manager plugin on PATH
-    - boto3 and psycopg (``uv add boto3 "psycopg[binary]"``)
-
-Profile: ``aws_profile`` is used for both Secrets Manager and the SSM tunnel. Pass ``None``
-to use the default boto3 credential chain (env vars, instance role, etc.).
+Requires AWS CLI v2, the Session Manager plugin, boto3 and psycopg.
 """
 
 from __future__ import annotations

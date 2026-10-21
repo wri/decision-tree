@@ -6,7 +6,8 @@
 # Update paths, thresholds, scoring rules, and API settings here.
 #
 # Notes:
-# - 'mode' indicates where the pipeline begins. Options: full, partial, score
+# - 'mode' indicates where the polygon step begins. Options: full, projectids, score
+#   (the project step ignores mode; it always reads the polygon output file)
 # File storage: files are named according to the 'data_version', 'experiment_id' and 'cohort'
 #   - 'data version' identifies cached inputs by the date they were downloaded
 #   - 'experiment id' tracks different experiments using same data version
@@ -18,12 +19,23 @@ mode: full  # options: full, score, projectids
 tm_source: geoparquet # {geoparquet|API}
 
 s3:
-  upload: false
   bucket_name: restoration-monitoring
   folder_prefix: tree_verification/output/project_data
   geoparquet: s3://wri-restoration-geodata/terramatch/snapshot/{data_version}-polygons-prod.geoparquet
   slope: s3://wri-restoration-geodata-ttc/slope
   overwrite_slope_cache: false  # true = recompute & re-upload every slope tile
+
+rds:
+  # control upload of poly_results and prj_results to the RDS PostgreSQL database
+  # (via SSM tunnel through the bastion; needs AWS CLI v2 + Session Manager plugin + psycopg)
+  # bastion id and AWS profile come from secrets.yaml aws: bastion_id_for_rds, land_aws_profile;
+  # the AWS region is the one configured for land_aws_profile
+  upload: false
+  env: lr                       # secret /gri/{env}/app-db-url
+  database: indicators
+  schema: public
+  poly_table: decision_tree_poly_results_log
+  prj_table: decision_tree_prj_results_log
 
 criteria:
   canopy_threshold: 60          # threshold for identifying open vs closed canopy projects
@@ -42,6 +54,7 @@ outfile: # file paths are relative to the project root
   experiment_id: exp1
   cohort: c2
   project_data_folder: 'tests/data/decision_tree/test_projects'
+  save_local_intermediates: false  # true = also write feats, slope_stats and tree_results CSVs
   # file paths are relative to the project_data_folder under the project root
   portfolio: portfolio_csvs/prj_ids_{cohort}_{data_version}.csv
   geojsons: geojsons/

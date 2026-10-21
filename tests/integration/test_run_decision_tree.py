@@ -1,14 +1,18 @@
 import os
 
+import pandas as pd
+import pytest
 from numpy import nan
 
-from conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
 from decision_tree.constants import TestProjectHandling
-from decision_tree.run_decision_tree import VerificationDecisionTree, main
-from tools import has_expected_project_ev_values, folder_cleanup
+from decision_tree.run_decision_tree import VerificationDecisionTree, compute_project_results, main
 from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID, TEST_REAL_PROJECT_C1_ID
 
+from tests.conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
+from tests.tools import folder_cleanup, has_expected_project_ev_values, rds_rows_cleanup
 
+
+@pytest.mark.network
 def test_run_decision_tree_full():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_full.yaml")
     # pre-run cleanup
@@ -17,7 +21,8 @@ def test_run_decision_tree_full():
     test_project_handling = TestProjectHandling.ONLY
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = workflow.run_decision_tree(project_ids=None, test_project_handling=test_project_handling)
+        poly_results = workflow.run_polygon_metrics(project_ids=None, test_project_handling=test_project_handling)
+        prj_results = workflow.run_project_metrics(project_ids=sorted(poly_results["project_id"].astype(str).unique()), poly_results=poly_results)
 
         # verify that a project was returned
         assert len(prj_results) >= 1
@@ -27,6 +32,7 @@ def test_run_decision_tree_full():
         folder_cleanup(params_path)
 
 
+@pytest.mark.network
 def test_run_decision_tree_projectids():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids.yaml")
     # pre-run cleanup
@@ -39,8 +45,9 @@ def test_run_decision_tree_projectids():
 
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = workflow.run_decision_tree(project_ids=project_ids,
-                                                               test_project_handling=test_project_handling)
+        poly_results = workflow.run_polygon_metrics(project_ids=project_ids,
+                                                    test_project_handling=test_project_handling)
+        prj_results = workflow.run_project_metrics(project_ids=project_ids, poly_results=poly_results)
 
         # TODO Determine how to modify the data to get more variation
         if project_ids == [TEST_01_GRI_PROJECT_ID]:
@@ -71,6 +78,58 @@ def test_run_decision_tree_projectids():
         folder_cleanup(params_path)
 
 
+
+@pytest.mark.network
+def test_run_decision_tree_projectids_rds():
+    """Polygon results go to RDS; the project step reads them back from the RDS polygon table.
+
+    Needs AWS access: secrets.yaml aws.bastion_id_for_rds and aws.land_aws_profile, and the
+    RDS tables named in params_projectids_rds.yaml. The RDS rows it writes are deleted on teardown.
+    """
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_rds.yaml")
+    folder_cleanup(params_path)
+
+    project_ids = [TEST_01_GRI_PROJECT_ID]
+    test_project_handling = TestProjectHandling.ONLY
+
+    polygon_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+    try:
+        with rds_rows_cleanup(polygon_workflow, project_ids):
+            # Step 1: polygon metrics; rds.upload is true, so the rows are uploaded to the poly_table
+            assert polygon_workflow.params["rds"]["upload"] is True
+            poly_results = polygon_workflow.run_polygon_metrics(project_ids=project_ids,
+                                                                test_project_handling=test_project_handling)
+
+            # Remove the local poly_score CSV so the project step can only get its input from RDS
+            folder_cleanup(params_path)
+            assert not os.path.exists(polygon_workflow.poly_score)
+
+            # Step 2: project metrics in a fresh workflow, with no poly_results passed in
+            project_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+            prj_results = project_workflow.run_project_metrics(project_ids=project_ids)
+
+            # Same project result as aggregating the in-memory polygon results
+            # (RDS stores REAL, so compare numbers approximately)
+            prj_in_memory = compute_project_results(project_workflow.params, poly_results)
+            pd.testing.assert_frame_equal(prj_results.reset_index(drop=True),
+                                          prj_in_memory.reset_index(drop=True),
+                                          check_dtype=False, rtol=1e-4)
+
+            # Same expected values as test_run_decision_tree_projectids
+            sample_poly_id = 'a09e8e9f-f0f6-438a-95ac-aa5457082d46'
+            has_expected_project_ev_values(poly_results, prj_results, sample_poly_id,
+                                           expected_poly_baseline_suitability=60.0,
+                                           expected_poly_baseline_total=61.2,
+                                           expected_poly_ev_total=61.2,
+                                           expected_project_count=1,
+                                           expected_project_ev_label='weak field',
+                                           expected_pct_area_scored=1.0)
+
+    finally:
+        folder_cleanup(params_path)
+
+
+@pytest.mark.network
 def test_run_decision_tree_projectids_api_query():
     params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_api.yaml")
     # pre-run cleanup
@@ -83,8 +142,9 @@ def test_run_decision_tree_projectids_api_query():
 
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = (
-            workflow.run_decision_tree(project_ids=project_ids, test_project_handling=test_project_handling))
+        poly_results = workflow.run_polygon_metrics(project_ids=project_ids,
+                                                    test_project_handling=test_project_handling)
+        prj_results = workflow.run_project_metrics(project_ids=project_ids, poly_results=poly_results)
 
         # expected results
         if project_ids == [TEST_REAL_PROJECT_C1_ID]:
@@ -115,7 +175,9 @@ def test_run_decision_tree_score():
 
     try:
         workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
-        poly_results, prj_results = workflow.run_decision_tree()
+        poly_results = workflow.run_polygon_metrics()
+        project_ids = sorted(poly_results["project_id"].astype(str).unique())
+        prj_results = workflow.run_project_metrics(project_ids=project_ids, poly_results=poly_results)
 
         # TODO Determine how to modify the data to get more variation
         # verify that two projects were returned
@@ -136,6 +198,61 @@ def test_run_decision_tree_score():
     finally:
         # post-run cleanup
         folder_cleanup(params_path)
+
+
+def test_run_polygon_and_project_steps_separately():
+    """The polygon step writes polygon output only; the project step aggregates it (all or a subset).
+
+    The hand-off through the RDS polygon table is covered by test_run_decision_tree_projectids_rds.
+    """
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    folder_cleanup(params_path)
+
+    try:
+        # Step 1: polygon metrics only - must not produce project output
+        polygon_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+        poly_results = polygon_workflow.run_polygon_metrics()
+        assert os.path.exists(polygon_workflow.poly_score)
+        assert not os.path.exists(polygon_workflow.prj_score)
+        assert "ev_label" not in poly_results.columns
+
+        # Step 2: project metrics in a fresh workflow, from the polygon results
+        project_ids = sorted(poly_results["project_id"].astype(str).unique())
+        project_workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+        prj_results = project_workflow.run_project_metrics(project_ids=project_ids, poly_results=poly_results)
+        assert os.path.exists(project_workflow.prj_score)
+        assert sorted(prj_results["project_id"].astype(str)) == project_ids
+
+        # Project subset
+        prj_subset = project_workflow.run_project_metrics(project_ids=project_ids[:1], poly_results=poly_results)
+        assert prj_subset["project_id"].astype(str).tolist() == project_ids[:1]
+
+    finally:
+        folder_cleanup(params_path)
+
+
+def test_run_project_metrics_requires_project_ids():
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+    with pytest.raises(ValueError, match="project_ids is required"):
+        workflow.run_project_metrics(project_ids=[])
+
+
+def test_run_project_metrics_rejects_bad_input():
+    params_path = os.path.join(DT_TEST_PARAMS_DIR, "params_score.yaml")
+    workflow = main(params_path, SECRETS_FILE_PATH, parse_only=True)
+
+    # missing required columns
+    with pytest.raises(ValueError, match="missing required column"):
+        workflow.run_project_metrics(project_ids=["p1"],
+                                     poly_results=pd.DataFrame({"project_id": ["p1"], "area": [1.0]}))
+
+    # unknown project id
+    poly = pd.DataFrame({"project_id": ["p1"], "area": [1.0],
+                         "baseline_decision": ["weak remote"], "ev_decision": ["weak remote"],
+                         "baseline_remote_suitability": [70.0], "ev_remote_suitability": [70.0]})
+    with pytest.raises(ValueError, match="not found"):
+        workflow.run_project_metrics(poly_results=poly, project_ids=["p2"])
 
 
 def test_run_decision_tree_param_parsing():

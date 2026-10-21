@@ -56,7 +56,9 @@ def load_secrets(secrets_path: str | None = None) -> dict:
         aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID'] if 'AWS_ACCESS_KEY_ID' in os.environ else 'not_defined'
         aws_secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY'] if 'AWS_SECRET_ACCESS_KEY' in os.environ else 'not_defined'
         aws_region = os.environ['AWS_REGION'] if 'AWS_REGION' in os.environ else 'us-east-1'
-        aws = {"aws_access_key_id": aws_access_key_id, "aws_secret_access_key": aws_secret_access_key, "aws_region": aws_region}
+        bastion_id_for_rds = os.environ.get('BASTION_ID_FOR_RDS')
+        aws = {"aws_access_key_id": aws_access_key_id, "aws_secret_access_key": aws_secret_access_key, "aws_region": aws_region,
+               "bastion_id_for_rds": bastion_id_for_rds}
 
         tm_access_token = os.environ['TM_ACCESS_TOKEN'] if 'TM_ACCESS_TOKEN' in os.environ else 'not_defined'
         tm_token = {"tm_access_token": tm_access_token}

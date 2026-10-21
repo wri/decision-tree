@@ -134,3 +134,22 @@ def rds_rows_cleanup(workflow, project_ids: list[str]):
                             (list(project_ids), list(set(run_datetimes))),
                         )
 
+
+def delete_rds_project_rows(workflow, project_ids: list[str]) -> None:
+    """Delete every row for these projects from the RDS polygon and project tables.
+
+    Only for test-only project ids that no real run uses.
+    """
+    from psycopg import sql
+    from decision_tree.rds_dao import rds_connection
+
+    settings, connection = workflow._rds_config()
+    with rds_connection(settings["database"], env=settings["env"], **connection) as conn:
+        with conn.transaction():
+            for table_key in ("poly_table", "prj_table"):
+                conn.execute(
+                    sql.SQL("DELETE FROM {}.{} WHERE project_id = ANY(%s)")
+                    .format(sql.Identifier(settings["schema"]), sql.Identifier(settings[table_key])),
+                    (list(project_ids),),
+                )
+

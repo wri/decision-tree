@@ -7,17 +7,21 @@
 Teardown removes the local files and deletes exactly the RDS rows these runs wrote.
 Needs secrets.yaml aws.bastion_id_for_rds and aws.land_aws_profile.
 """
+import datetime
 import os
+import uuid
+from unittest import mock
 
 import pandas as pd
 import pytest
 
+import decision_tree.rds_dao as rds_dao
 from decision_tree.constants import TestProjectHandling
-from decision_tree.run_decision_tree import main
+from decision_tree.run_decision_tree import compute_project_results, main
 from gri_shared_library.constants_for_tests import TEST_01_GRI_PROJECT_ID
 
 from tests.conftest import DT_TEST_PARAMS_DIR, SECRETS_FILE_PATH
-from tests.tools import fetch_rds_rows, folder_cleanup, rds_rows_cleanup
+from tests.tools import delete_rds_project_rows, fetch_rds_rows, folder_cleanup, rds_rows_cleanup
 
 PARAMS_PATH = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_outputs.yaml")
 PROJECT_IDS = [TEST_01_GRI_PROJECT_ID]
@@ -79,3 +83,85 @@ def test_intermediates_saved_locally_and_results_saved_to_rds(workflow):
     # Teardown of the RDS rows really removed them
     assert fetch_rds_rows(workflow, "poly_table", PROJECT_IDS, poly_run).empty
     assert fetch_rds_rows(workflow, "prj_table", PROJECT_IDS, prj_run).empty
+
+
+# ---------------------------------------------------------------------------
+# Project step uses the latest row of every polygon, not just the latest run's
+# ---------------------------------------------------------------------------
+RDS_PARAMS_PATH = os.path.join(DT_TEST_PARAMS_DIR, "params_projectids_rds.yaml")
+
+
+@pytest.fixture
+def synthetic_project():
+    """A made-up project id unique to this test run; all its RDS rows are deleted on teardown."""
+    folder_cleanup(RDS_PARAMS_PATH)
+    wf = main(RDS_PARAMS_PATH, SECRETS_FILE_PATH, parse_only=True)
+    project_id = f"test-latest-polygons-{uuid.uuid4().hex[:12]}"
+    yield wf, project_id
+    delete_rds_project_rows(wf, [project_id])
+    folder_cleanup(RDS_PARAMS_PATH)
+
+
+def _synthetic_polygons(project_id: str) -> pd.DataFrame:
+    """Five polygons with the columns the project aggregation needs."""
+    return pd.DataFrame({
+        "project_id": project_id,
+        "poly_id": [f"{project_id}-poly-{i}" for i in range(5)],
+        "project_name": "TEST_LATEST_POLYGONS",
+        "target_sys": "agroforest",
+        "area": [5.0, 3.0, 1.0, 0.5, 2.0],
+        "baseline_decision": ["weak remote", "strong remote", "weak field", "weak remote", "strong remote"],
+        "ev_decision": ["weak remote", "strong remote", "weak field", "weak remote", "strong remote"],
+        "baseline_remote_suitability": 60.0,
+        "ev_remote_suitability": 60.0,
+    })
+
+
+@pytest.mark.network
+def test_project_step_uses_latest_row_of_every_polygon(synthetic_project):
+    workflow, project_id = synthetic_project
+    settings, connection = workflow._rds_config()
+    table_settings = {k: settings[k] for k in ("env", "database", "schema", "poly_table", "prj_table")}
+
+    def upload(polygons, run_datetime):
+        rds_dao.upload_results(poly_results=polygons, run_datetime=run_datetime, cohort=workflow.cohort,
+                               **table_settings, **connection)
+
+    run1 = datetime.datetime(2000, 1, 1, 9)
+    run2 = datetime.datetime(2000, 1, 1, 10)
+    polygons = _synthetic_polygons(project_id)
+
+    # Run 1: all five polygons
+    upload(polygons, run1)
+    # Run 2: only two of them, with changed values
+    rerun = polygons.iloc[:2].copy()
+    rerun["baseline_decision"] = rerun["ev_decision"] = "strong field"
+    rerun["baseline_remote_suitability"] = rerun["ev_remote_suitability"] = 10.0
+    upload(rerun, run2)
+
+    # Record the polygon rows the project step reads from RDS
+    read_back = {}
+    real_read = rds_dao.read_latest_poly_results
+
+    def recording_read(**kwargs):
+        read_back["polygons"] = real_read(**kwargs)
+        return read_back["polygons"]
+
+    with mock.patch.object(rds_dao, "read_latest_poly_results", side_effect=recording_read):
+        prj_results = workflow.run_project_metrics(project_ids=[project_id])
+    used = read_back["polygons"]
+
+    # Every polygon of the project is used, each at its newest version
+    assert sorted(used["poly_id"]) == sorted(polygons["poly_id"])
+    used = used.set_index("poly_id")
+    assert (used.loc[rerun["poly_id"], "run_datetime"] == run2).all()
+    untouched = polygons.loc[~polygons["poly_id"].isin(rerun["poly_id"]), "poly_id"]
+    assert (used.loc[untouched, "run_datetime"] == run1).all()
+    assert (used.loc[rerun["poly_id"], "baseline_decision"] == "strong field").all()
+
+    # The project result is the aggregation of exactly those rows
+    expected_polygons = pd.concat([rerun, polygons[polygons["poly_id"].isin(untouched)]])
+    expected = compute_project_results(workflow.params, expected_polygons)
+    pd.testing.assert_frame_equal(prj_results.reset_index(drop=True), expected.reset_index(drop=True),
+                                  check_dtype=False, rtol=1e-5)
+
